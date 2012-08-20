@@ -100,10 +100,10 @@ Not supported:
     "foo/index"}}`.
 
 The Montage modules debug-mode run-time loads modules asynchronously and
-calculates their transitive dependencies heuristically--by statically
-scanning for ``require`` calls using a simple regular expression.
-Montage can load cross-origin scripts in debug-mode if the CORS headers
-are set on the remote server.
+calculates their transitive dependencies heuristically&mdash;by
+statically scanning for ``require`` calls using a simple regular
+expression.  Montage can load cross-origin scripts in debug-mode if the
+CORS headers are set on the remote server.
 
 Take a look at the Montage Optimizer to optimize applications for
 production.  The optimizer can bundle packages with all of the dependent
