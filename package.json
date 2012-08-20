@@ -1,0 +1,9 @@
+{
+    "name": "mr",
+    "version": "0.0.0",
+    "main": "require",
+    "dependencies": {
+        "q": "*",
+        "qs": "*"
+    }
+}
