@@ -60,15 +60,15 @@ some of the extensions from NodeJS and NPM.
     (modules with dependencies that in turn ultimately depend their own
     exports) can redefine their exports object by assigning to
     ``module.exports``.
--   **dependencies**: If a package declares a package dependency
-    using NPM’s ``dependencies`` property, Montage looks for that
-    package in the package’s ``node_modules`` subdirectory.  Montage
-    does not presently support cases where a dependency is in a common
-    dependency’s ``node_modules`` directory.  Unlike NPM, with Montage
-    packages, you can override the location of the ``node_modules``
-    directory with the ``directories.packages`` property, or use
-    mappings to find individual packages in alternate locations or give
-    them different local names.
+-   **dependencies**: If a package declares a package dependency using
+    NPM’s ``dependencies`` property, Montage looks for that package in
+    the package’s ``node_modules`` subdirectory.  Montage Require also
+    supports the case where a package with the same name is already
+    loaded by a parent package.  Unlike NPM, with Montage packages, you
+    can override the location of the ``node_modules`` directory with the
+    ``directories.packages`` property, or use mappings to find
+    individual packages in alternate locations or give them different
+    local names.
 
 Extensions:
 
