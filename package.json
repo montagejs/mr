@@ -8,5 +8,8 @@
     "dependencies": {
         "q": "*",
         "qs": "*"
+    },
+    "directories": {
+        "packages": "packages"
     }
 }

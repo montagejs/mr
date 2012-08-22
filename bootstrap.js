@@ -28,7 +28,7 @@
         var pending = {
             "require": "require.js",
             "require/browser": "browser.js",
-            "promise": "node_modules/q/q.js"
+            "promise": "packages/q/q.js"
         };
 
         // TODO preloading of optimized bundles
