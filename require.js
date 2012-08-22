@@ -37,10 +37,6 @@
         var Promise = (require)("q");
         var URL = (require)("url");
         definition(exports, Promise, URL);
-        require("./node");
-        if (require.main == module) {
-            exports.main();
-        }
     } else {
         throw new Error("Can't support require on this platform");
     }
@@ -60,8 +56,8 @@
 
         // Configuration defaults:
         config = config || {};
-        config.location = URL.resolve(config.location || Require.getLocation(), ".");
-        config.lib = URL.resolve(config.location, config.lib || ".");
+        config.location = URL.resolve(config.location || Require.getLocation(), "./");
+        config.lib = URL.resolve(config.location, config.lib || "./");
         config.paths = config.paths || [config.lib];
         config.mappings = config.mappings || {}; // EXTENSION
         config.exposedConfigs = config.exposedConfigs || Require.exposedConfigs;
@@ -98,7 +94,7 @@
             var module = getModuleDescriptor(id);
             module.exports = exports;
             module.location = URL.resolve(config.location, id);
-            module.directory = URL.resolve(module.location, ".");
+            module.directory = URL.resolve(module.location, "./");
             module.injected = true;
             delete module.redirect;
             delete module.mappingRedirect;
@@ -187,7 +183,7 @@
                 );
             }
 
-            module.directory = URL.resolve(module.location, "."); // EXTENSION
+            module.directory = URL.resolve(module.location, "./"); // EXTENSION
             module.exports = {};
 
             // Execute the factory function:
@@ -317,9 +313,7 @@
         var descriptions =
             config.descriptions =
                 config.descriptions || {};
-        descriptions[location] = Promise.fcall(function () {
-            return description;
-        });
+        descriptions[location] = Promise.resolve(description);
     };
 
     Require.injectPackageDescriptionLocation = function (location, descriptionLocation, config) {
@@ -503,7 +497,7 @@
         // directories
         description.directories = description.directories || {};
         description.directories.lib =
-            description.directories.lib === void 0 ? "." : description.directories.lib;
+            description.directories.lib === void 0 ? "./" : description.directories.lib;
         var lib = description.directories.lib;
         // lib
         config.lib = URL.resolve(location, "./" + lib);

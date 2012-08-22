@@ -2,6 +2,9 @@
     "name": "mr",
     "version": "0.0.1",
     "main": "require",
+    "bin": {
+        "mr": "bin/mr"
+    },
     "dependencies": {
         "q": "*",
         "qs": "*"
