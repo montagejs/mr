@@ -70,6 +70,7 @@
         config.makeCompiler = config.makeCompiler || Require.makeCompiler;
         config.compile = config.compile || config.makeCompiler(config);
         config.parseDependencies = config.parseDependencies || Require.parseDependencies;
+        config.read = config.read || Require.read;
 
         // Modules: { exports, id, location, directory, factory, dependencies,
         // dependees, text, type }

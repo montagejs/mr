@@ -383,6 +383,10 @@ all packages in a fresh module system.
 -   **lint**: an optional event handler that accepts a `module` if its
     `text` is invalid JavaScript.  There is no default value.  `lint` is
     used by `Require.LintCompiler` middleware.
+-   **read**: an optional resource reader, a function that must accept a
+    fully qualified URL and return a promise for the content of that
+    resource as a string.  The default reader depends on whether Montage
+    Require is running in a browser or on Node.
 
 Montage Require then adds shared state for all packages to the `config`.
 

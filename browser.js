@@ -122,7 +122,7 @@ Require.Compiler = function (config) {
 
 Require.XhrLoader = function (config) {
     return function (url, module) {
-        return Require.read(url)
+        return config.read(url)
         .then(function (text) {
             module.type = "javascript";
             module.text = text;
