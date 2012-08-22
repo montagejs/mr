@@ -162,7 +162,12 @@ How It Works
 In broad strokes, Montage Require uses so-called "XML" HTTP requests to
 fetch modules, then uses a regular expression to scan for `require`
 calls within each JavaScript module, then executes the module with some
-variation of `eval`.
+variation of `eval`.  Then, with the Montage Optimizer, `mop`, Montage
+Require can also serve as the runtime for loading modules with bundled
+script-injection with no alteration to the source code of an
+application.  With script-injection, XHR and `eval` are not necessary,
+so applications are suitable for production, cross-domain, and with
+content security policies (CSP) that forbid `eval`.
 
 In slightly thinner strokes, Montage Require has an asynchronous phase
 and a synchronous phase.  In the asynchronous "loading" phase, Montage
