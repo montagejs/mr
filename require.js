@@ -69,6 +69,7 @@
         config.load = config.load || config.makeLoader(config);
         config.makeCompiler = config.makeCompiler || Require.makeCompiler;
         config.compile = config.compile || config.makeCompiler(config);
+        config.parseDependencies = config.parseDependencies || Require.parseDependencies;
 
         // Modules: { exports, id, location, directory, factory, dependencies,
         // dependees, text, type }
@@ -621,7 +622,7 @@
     Require.DependenciesCompiler = function(config, compile) {
         return function(module) {
             if (!module.dependencies && module.text !== void 0) {
-                module.dependencies = Require.parseDependencies(module.text);
+                module.dependencies = config.parseDependencies(module.text);
             }
             compile(module);
             if (module && !module.dependencies) {
@@ -654,7 +655,9 @@
             try {
                 compile(module);
             } catch (error) {
-                config.lint(module);
+                Promise.nextTick(function () {
+                    config.lint(module);
+                });
                 throw error;
             }
         };
