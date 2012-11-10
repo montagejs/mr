@@ -5,11 +5,13 @@
     "bin": {
         "mr": "bin/mr"
     },
-    "dependencies": {
-        "q": "*",
-        "qs": "*"
+    "mappings": {
+        "q": {
+            "name": "q",
+            "location": "packages/q"
+        }
     },
-    "directories": {
-        "packages": "packages"
+    "devDependencies": {
+        "qs": "0.5.x"
     }
 }
