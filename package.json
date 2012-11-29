@@ -1,6 +1,6 @@
 {
     "name": "mr",
-    "version": "0.0.2",
+    "version": "0.0.4",
     "main": "require",
     "bin": {
         "mr": "bin/mr"
