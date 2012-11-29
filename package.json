@@ -11,6 +11,9 @@
             "location": "packages/q"
         }
     },
+    "dependencies": {
+        "q": "0.8.x >=0.8.11"
+    },
     "devDependencies": {
         "qs": "0.5.x"
     }
