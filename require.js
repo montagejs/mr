@@ -282,7 +282,7 @@
             };
 
             require.hasPackage = function (dependency) {
-                return config.getPackage(dependency, config);
+                return config.hasPackage(dependency, config);
             };
 
             require.getPackage = function (dependency) {
