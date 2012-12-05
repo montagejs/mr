@@ -496,7 +496,7 @@
         // overlay
         var overlay = description.overlay || {};
         var layer;
-        Require.overlays.forEach(function (engine) {
+        (config.overlays || Require.overlays).forEach(function (engine) {
             if (overlay[engine]) {
                 var layer = overlay[engine];
                 for (var name in layer) {
