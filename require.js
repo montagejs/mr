@@ -554,11 +554,6 @@
                     name: name,
                     version: dependencies[name]
                 };
-            } else if (typeof console === "object") {
-                console.warn(
-                    "Dependency for " + JSON.stringify(name) + " " +
-                    "overriden by mapping in " + JSON.stringify(location)
-                );
             }
         });
         Object.keys(mappings).forEach(function (name) {
