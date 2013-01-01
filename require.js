@@ -708,7 +708,7 @@
 
     Require.JsonCompiler = function (config, compile) {
         return function (module) {
-            var json = module.id.match(/\.json$/);
+            var json = module.location.match(/\.json$/);
             if (json) {
                 module.exports = JSON.parse(module.text);
                 return module;
