@@ -52,7 +52,8 @@ describe("Require", function () {
         "not-found",
         "comments",
         "identify",
-        "dev-dependencies"
+        "dev-dependencies",
+        "case-sensitive"
     ].forEach(function (test) {
         it(test, function () {
             var spec = this;

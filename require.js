@@ -76,14 +76,15 @@
         // up through loading and execution, ultimately serving as the
         // ``module`` free variable inside the corresponding module.
         function getModuleDescriptor(id) {
-            if (!has(modules, id)) {
-                modules[id] = {
+            var lookupId = id.toLowerCase();
+            if (!has(modules, lookupId)) {
+                modules[lookupId] = {
                     id: id,
                     display: (config.name || config.location) + "#" + id, // EXTENSION
                     require: require
                 };
             }
-            return modules[id];
+            return modules[lookupId];
         }
 
         // for preloading modules by their id and exports, useful to
@@ -159,6 +160,14 @@
         // module "exports" object.
         function getExports(topId, viaId) {
             var module = getModuleDescriptor(topId);
+
+            // check for consistent case convention
+            if (module.id !== topId) {
+                throw new Error(
+                    "Can't require " + JSON.stringify(module.id) +
+                    " by alternate spelling " + JSON.stringify(topId)
+                );
+            }
 
             // handle redirects
             if (module.redirect !== void 0) {
