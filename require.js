@@ -558,19 +558,24 @@
 
         // mappings, link this package to other packages.
         var mappings = description.mappings || {};
-        // dependencies
-        var dependencies = description.dependencies || {};
-        Object.keys(dependencies).forEach(function (name) {
-            if (!mappings[name]) {
-                // dependencies are equivalent to name and version mappings,
-                // though the version predicate string is presently ignored
-                // (TODO)
-                mappings[name] = {
-                    name: name,
-                    version: dependencies[name]
-                };
-            }
+        // dependencies, devDependencies
+        [description.dependencies, description.devDependencies]
+        .forEach(function (dependencies) {
+            if (!dependencies)
+                return;
+            Object.keys(dependencies).forEach(function (name) {
+                if (!mappings[name]) {
+                    // dependencies are equivalent to name and version mappings,
+                    // though the version predicate string is presently ignored
+                    // (TODO)
+                    mappings[name] = {
+                        name: name,
+                        version: dependencies[name]
+                    };
+                }
+            });
         });
+        // mappings
         Object.keys(mappings).forEach(function (name) {
             var mapping = mappings[name] = normalizeDependency(
                 mappings[name],
@@ -578,7 +583,6 @@
                 name
             );
         });
-
         config.mappings = mappings;
 
         return config;
@@ -708,7 +712,7 @@
 
     Require.JsonCompiler = function (config, compile) {
         return function (module) {
-            var json = module.location.match(/\.json$/);
+            var json = (module.location || "").match(/\.json$/);
             if (json) {
                 module.exports = JSON.parse(module.text);
                 return module;
