@@ -1,2 +1,3 @@
 .npmignore
 .tmp
+node_modules/qs
