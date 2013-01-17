@@ -141,3 +141,13 @@ Verifies that `require.identify(id, require2)` can reverse-lookup the
 identifier for a module in another package, by its id as known in the
 other package.
 
+## redirects
+
+Verifies that a package can describe redirects from one module
+identifier to an alternative.
+
+## redirects-package
+
+Verifies that a package can describe redirects from one module
+identifier to an alternative in a dependency package.
+
