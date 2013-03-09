@@ -154,6 +154,8 @@
                     dependees[topId] = true;
                     return deepLoad(depId, topId, loading);
                 }));
+            }, function (error) {
+                module.error = error;
             });
         }
 
@@ -168,6 +170,11 @@
                     "Can't require " + JSON.stringify(module.id) +
                     " by alternate spelling " + JSON.stringify(topId)
                 );
+            }
+
+            // check for load error
+            if (module.error) {
+                throw module.error;
             }
 
             // handle redirects
@@ -262,14 +269,7 @@
                 var topId = resolve(id, viaId);
                 var module = getModuleDescriptor(id);
                 return deepLoad(topId, viaId)
-                // conconditionally require the module, but if there's an
-                // error, throw it in a separate turn so it gets logged
                 .then(function () {
-                    return require(topId);
-                }, function (error) {
-                    Promise.nextTick(function () {
-                        throw error;
-                    });
                     return require(topId);
                 });
             };
