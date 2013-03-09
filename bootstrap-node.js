@@ -35,7 +35,7 @@ var bootstrap = function () {
     });
 };
 
-var findPackage = function (directory, callback) {
+function findPackage(directory, callback) {
     if (directory == PATH.dirname(directory))
         return callback("Can't find package");
     var packageJson = PATH.join(directory, "package.json");

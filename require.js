@@ -37,6 +37,7 @@
         var Promise = (require)("q");
         var URL = (require)("url");
         definition(exports, Promise, URL);
+        (require)("./node");
     } else {
         throw new Error("Can't support require on this platform");
     }
