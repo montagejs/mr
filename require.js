@@ -167,14 +167,20 @@
             // check for consistent case convention
             if (module.id !== topId) {
                 throw new Error(
-                    "Can't require " + JSON.stringify(module.id) +
+                    "Can't require module " + JSON.stringify(module.id) +
                     " by alternate spelling " + JSON.stringify(topId)
                 );
             }
 
             // check for load error
             if (module.error) {
-                throw module.error;
+                var error = new Error(
+                    "Can't require module " + JSON.stringify(module.id) +
+                    " via " + JSON.stringify(viaId) +
+                    " because " + module.error.message
+                );
+                error.cause = module.error;
+                throw error;
             }
 
             // handle redirects
