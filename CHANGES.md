@@ -1,3 +1,7 @@
+## 0.12.9
+
+ - Update Q from v0.8.12 to v0.9.0
+
 ## 0.12.8
 
  - Defer throwing load errors to execution (Fixes #14)
