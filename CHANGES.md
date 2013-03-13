@@ -1,5 +1,18 @@
 <!-- vim:ts=4:sts=4:sw=4:et:tw=60 -->
 
+## 0.9.2
+
+ - Pass through progress notifications when using `timeout`. #229 @omares
+ - Pass through progress notifications when using `delay`.
+ - Fix `nbind` to actually bind the `thisArg`. #232 @davidpadbury
+
+## 0.9.1
+
+ - Made the AMD detection compatible with the RequireJS optimizer's `namespace`
+   option. #225 @terinjokes
+ - Fix side effects from `valueOf`, and thus from `isFulfilled`, `isRejected`,
+   and `isPending`. #226 @benjamn
+
 ## 0.9.0
 
 This release removes many layers of deprecated methods and brings Q closer to

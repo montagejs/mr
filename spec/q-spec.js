@@ -880,6 +880,37 @@ describe("promise states", function () {
         expect(promise.isRejected()).toBe(false);
         expect(promise.isPending()).toBe(true);
     });
+
+    it("of isFulfilled side effects", function () {
+        var deferred = Q.defer();
+        var finished = false;
+
+        waitsFor(function () {
+            return finished;
+        });
+
+        var parentPromise = deferred.promise;
+
+        var childPromise = parentPromise.then(function (value) {
+            expect(parentPromise.isFulfilled()).toBe(true);
+            expect(childPromise.isFulfilled()).toBe(false);
+
+            return parentPromise.then(function (value) {
+                finished = true;
+                return value + 1;
+            });
+        });
+
+        deferred.resolve(1);
+
+        runs(function () {
+            expect(childPromise.isPending()).toBe(false);
+            expect(childPromise.isRejected()).toBe(false);
+            expect(childPromise.isFulfilled()).toBe(true);
+            expect(childPromise.valueOf()).toBe(2);
+        });
+    });
+
 });
 
 describe("propagation", function () {
@@ -1513,6 +1544,114 @@ describe("timeout", function () {
             }
         );
     });
+
+    it("should pass through progress notifications", function () {
+        var deferred = Q.defer();
+
+        var progressValsSeen = [];
+        var promise = Q.timeout(deferred.promise, 100).then(function () {
+            expect(progressValsSeen).toEqual([1, 2, 3]);
+        }, undefined, function (progressVal) {
+            progressValsSeen.push(progressVal);
+        });
+
+        Q.delay(5).then(function () { deferred.notify(1); });
+        Q.delay(15).then(function () { deferred.notify(2); });
+        Q.delay(25).then(function () { deferred.notify(3); });
+        Q.delay(35).then(function () { deferred.resolve(); });
+
+        return promise;
+    });
+});
+
+describe("delay", function () {
+    it("should delay fulfillment", function () {
+        var promise = Q.resolve(5).delay(50);
+
+        setTimeout(function () {
+            expect(promise.isPending()).toBe(true);
+        }, 40);
+
+        return promise;
+    });
+
+    it("should delay rejection", function () {
+        var promise = Q.reject(5).delay(50);
+
+        setTimeout(function () {
+            expect(promise.isPending()).toBe(true);
+        }, 40);
+
+        return promise.then(undefined, function () { });
+    });
+
+    it("should treat a single argument as a time", function () {
+        var promise = Q.delay(50);
+
+        setTimeout(function () {
+            expect(promise.isPending()).toBe(true);
+        }, 40);
+
+        return promise;
+    });
+
+    it("should treat two arguments as a value + a time", function () {
+        var promise = Q.delay("what", 50);
+
+        setTimeout(function () {
+            expect(promise.isPending()).toBe(true);
+        }, 40);
+
+        return promise.then(function (value) {
+            expect(value).toBe("what");
+        });
+    });
+
+    it("should delegate to faster passed promises, slowing them down", function () {
+        var promise1 = Q.delay("what", 30);
+        var promise2 = Q.delay(promise1, 50);
+
+        setTimeout(function () {
+            expect(promise1.isPending()).toBe(false);
+            expect(promise2.isPending()).toBe(true);
+        }, 40);
+
+        return promise2.then(function (value) {
+            expect(value).toBe("what");
+        });
+    });
+
+    it("should delegate to slower passed promises, staying at their speed", function () {
+        var promise1 = Q.delay("what", 70);
+        var promise2 = Q.delay(promise1, 50);
+
+        setTimeout(function () {
+            expect(promise1.isPending()).toBe(true);
+            expect(promise2.isPending()).toBe(true);
+        }, 60);
+
+        return promise2.then(function (value) {
+            expect(value).toBe("what");
+        });
+    });
+
+    it("should pass through progress notifications from passed promises", function () {
+        var deferred = Q.defer();
+
+        var progressValsSeen = [];
+        var promise = Q.delay(deferred.promise, 100).then(function () {
+            expect(progressValsSeen).toEqual([1, 2, 3]);
+        }, undefined, function (progressVal) {
+            progressValsSeen.push(progressVal);
+        });
+
+        Q.delay(5).then(function () { deferred.notify(1); });
+        Q.delay(15).then(function () { deferred.notify(2); });
+        Q.delay(25).then(function () { deferred.notify(3); });
+        Q.delay(35).then(function () { deferred.resolve(); });
+
+        return promise;
+    });
 });
 
 describe("thenResolve", function () {
@@ -1780,11 +1919,23 @@ describe("node support", function () {
     describe("nbind", function () {
 
         it("binds this, and mixes partial application with complete application", function () {
-            return Q.nbind(function (a, b, c, d, callback) {
-                callback(null, this + a + b + c + d);
-            }, 1, 2).call(3, 4, 5)
-            .then(function (fifteen) {
-                expect(fifteen).toBe(15);
+            return Q.nbind(function (a, b, c, callback) {
+                console.log(this, arguments);
+                callback(null, this + a + b + c);
+            }, 1, 2).call(3 /* effectively ignored as fn bound to 1 */, 4, 5)
+            .then(function (twelve) {
+                expect(twelve).toBe(12);
+            });
+        });
+
+        it("second arg binds this", function() {
+            var expectedThis = { test: null };
+
+            return Q.nbind(function(callback) {
+                callback(null, this);
+            }, expectedThis).call()
+            .then(function(actualThis) {
+                expect(actualThis).toEqual(expectedThis);
             });
         });
 
