@@ -1,3 +1,13 @@
+## 0.12.7
+
+ - Support returned exports in bootstrapping
+ - Export more Node utilities (when used on Node)
+    - Require.urlToPath -> Require.locationToPath(location)
+    - Add Require.filePathToLocation(path)
+    - Add Require.directoryPathToLocation(path)
+    - Add Require.findPackagePath(directory)
+    - Add Require.findPackageLocationAndModuleId(path)
+
 ## 0.12.6
 
  - Add support for `production` mode. Currently causes Mr to ignore
