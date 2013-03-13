@@ -1,3 +1,8 @@
+## 0.12.8
+
+ - Defer throwing load errors to execution (Fixes #14)
+ - Update bootstrapping for latest Q
+
 ## 0.12.7
 
  - Support returned exports in bootstrapping
