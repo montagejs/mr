@@ -1,4 +1,8 @@
-## 0.12.9
+## 0.12.10
+
+ - Update Q from v0.9.0 to v0.9.2
+
+ ## 0.12.9
 
  - Update Q from v0.8.12 to v0.9.0
 
