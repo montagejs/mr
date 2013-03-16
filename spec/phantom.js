@@ -16,13 +16,12 @@ var browser = wd.promiseRemote("127.0.0.1", 8910);
 
 var connect = require("connect");
 
-// Big enough range that collisions with existing test servers are unlikely
-var httpServerPort = Math.floor(Math.random() * 65000 - 2000) + 2000;
-var testPageUrl = "http://127.0.0.1:" + httpServerPort + "/spec/run.html";
 var server = connect()
   .use(connect.static(PATH.resolve(__dirname, ".."), { maxAge: 24*60*60*1000 }))
-  .listen(httpServerPort);
+  .listen(0);
 
+var httpServerPort = server.address().port;
+var testPageUrl = "http://127.0.0.1:" + httpServerPort + "/spec/run.html";
 console.log("Test page at " + testPageUrl);
 
 // wait for Ghost Driver to start running
