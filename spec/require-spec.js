@@ -59,7 +59,8 @@ describe("Require", function () {
         "case-sensitive",
         "inject-dependency",
         "inject-mapping",
-        "script-injection"
+        "script-injection",
+        "sibling-dependencies"
     ].forEach(function (test) {
         it(test, function () {
             var spec = this;
