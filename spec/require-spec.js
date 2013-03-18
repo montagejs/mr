@@ -83,7 +83,8 @@ describe("Require", function () {
                     assert: function (guard, message) {
                         console.log(test + ":", guard ? "PASS" : "FAIL", message);
                         expect(!!guard).toBe(true);
-                    }
+                    },
+                    expect: expect
                 });
 
                 return pkg.async("program");
