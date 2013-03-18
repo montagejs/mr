@@ -396,7 +396,7 @@
         config = Object.create(config || null);
         var loadingPackages = config.loadingPackages = config.loadingPackages || {};
         var loadedPackages = config.packages = {};
-        var registry = config.registry = config.registry || Object.create(null);
+        var registry = config.registry = config.registry || null;
         config.mainPackageLocation = location;
 
         config.hasPackage = function (dependency) {
@@ -450,6 +450,10 @@
         };
 
         var pkg = config.loadPackage(dependency);
+        pkg.then(function (require) {
+            // config.loadPackage creates a new registry which we need here
+            config.registry = require.config.registry;
+        });
         pkg.location = location;
         pkg.async = function (id, callback) {
             return pkg.then(function (require) {
@@ -533,7 +537,7 @@
         // not apply to child packages
         var modules = config.modules = config.modules || {};
 
-        var registry = config.registry;
+        var registry = config.registry = Object.create(config.registry);
         if (config.name !== void 0 && !registry[config.name]) {
             registry[config.name] = config.location;
         }
