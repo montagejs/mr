@@ -59,7 +59,8 @@ describe("Require", function () {
         "case-sensitive",
         "inject-dependency",
         "inject-mapping",
-        "script-injection"
+        "script-injection",
+        "sibling-dependencies"
     ].forEach(function (test) {
         it(test, function () {
             var spec = this;
@@ -83,7 +84,8 @@ describe("Require", function () {
                     assert: function (guard, message) {
                         console.log(test + ":", guard ? "PASS" : "FAIL", message);
                         expect(!!guard).toBe(true);
-                    }
+                    },
+                    expect: expect
                 });
 
                 return pkg.async("program");
