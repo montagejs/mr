@@ -1,3 +1,17 @@
+/**
+ * Inject dependencies into a module.
+ * @param  {function} parentRequire     Your require.
+ * @param  {String} sandboxId           The module id to load
+ * @param  {Object} sandboxDependencies An object mapping from module ids
+ * relative to the sandboxId module, to the exports that should be returned.
+ * @return {Promise}                     A promise for the exports
+ * @example
+ * var mockFileReader = sandbox(require, "./file-reader", {
+ *     "fs": {
+ *         "readFile": function () { return "content"; }
+ *     }
+ * });
+ */
 module.exports = function (parentRequire, sandboxId, sandboxDependencies) {
     var topId = parentRequire.resolve(sandboxId);
     var originalModule = parentRequire.getModuleDescriptor(topId);
