@@ -3,6 +3,9 @@
         "mr": "../..",
         "q": "../../packages/q"
     },
+    "redirects": {
+        "d": "a"
+    },
 
     "dependencies": {
         "dependency": "*"
