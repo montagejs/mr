@@ -53,6 +53,7 @@ if (COVERAGE) {
     var fileTree = Apps.FileTree;
 }
 
+var TESTS_FAILED = {};
 var POLL_TIME = 250;
 
 var phantom = spawn("phantomjs", ["--webdriver=127.0.0.1:8910"], {
@@ -100,15 +101,23 @@ Q.delay(2000)
     return browser.execute("return [jsApiReporter.suites(), jsApiReporter.results()]");
 })
 .spread(function (suites, results) {
-    var failures = log(suites, results);
-    console.log();
+    var info = log(suites, results);
 
-    if (failures.length) {
+    if (info.failures.length) {
         console.log("\nFailures:\n");
-        console.log(failures.join("\n\n"));
-        console.log("\n");
+        console.log(info.failures.join("\n\n"));
+    }
 
-        throw failures.length + " failures";
+    var msg = '';
+        msg += info.specsCount + ' test' + ((info.specsCount === 1) ? '' : 's') + ', ';
+        msg += info.totalCount + ' assertion' + ((info.totalCount === 1) ? '' : 's') + ', ';
+        msg += info.failedCount + ' failure' + ((info.failedCount === 1) ? '' : 's');
+
+    console.log();
+    console.log(msg);
+
+    if (info.failures.length) {
+        throw TESTS_FAILED;
     }
 })
 .then(function () {
@@ -136,34 +145,45 @@ Q.delay(2000)
 .finally(function () {
     phantom.kill();
 })
+.fail(function (err) {
+    if (err === TESTS_FAILED) {
+        process.exit(1);
+    }
+    throw err;
+})
 .done();
 
-function log(suites, results, name, failures) {
+function log(suites, results, name, info) {
     name = name || "";
-    failures = failures || [];
+    info = info || {specsCount: 0, totalCount: 0, failedCount: 0, failures: []};
 
     for (var i = 0, len = suites.length; i < len; i++) {
         var suite = suites[i];
         if (suite.type === "spec") {
             var result = results[suite.id];
+
+            info.specsCount++;
+            info.totalCount += result.messages.length;
             if (result.result === "passed") {
                 util.print(".");
             } else {
                 util.print("F");
-                failures.push(
-                    name + suite.name + "\n" +
-                    result.messages.map(function (msg) {
-                        return "\t" + msg.message;
-                    }).join("\n")
-                );
+                var msg = suite.name + "\n";
+                for (var j = 0; j < result.messages.length; j++) {
+                    var message = result.messages[j];
+                    if (message.passed_) continue;
+                    info.failedCount++;
+                    msg += "\t" + message.message + "\n";
+                }
+                info.failures.push(msg);
             }
         }
 
         if (suite.children.length) {
-            log(suite.children, results, name + suite.name + " ", failures);
+            log(suite.children, results, name + suite.name + " ", info);
         }
     }
 
-    return failures;
+    return info;
 }
 
