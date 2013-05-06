@@ -15,10 +15,12 @@
             callbackIfReady();
         }
 
-        // this permits bootstrap.js to be injected after domready
-        document.addEventListener("DOMContentLoaded", domLoad, true);
-        if (document.readyState === "interactive") {
+        // this permits bootstrap.js to be injected after DOMContentLoaded
+        // http://jsperf.com/readystate-boolean-vs-regex/2
+        if (/interactive|complete/.test(document.readyState)) {
             domLoad();
+        } else {
+            document.addEventListener("DOMContentLoaded", domLoad, true);
         }
 
         // determine which scripts to load
