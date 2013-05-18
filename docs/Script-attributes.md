@@ -1,8 +1,7 @@
 Script attributes
 =================
 
-data-module
------------
+### data-module
 
 `data-module` instructs Mr to `require` the given module after it
 has finished bootstrapping and the DOM content has loaded.
@@ -13,8 +12,7 @@ has finished bootstrapping and the DOM content has loaded.
 
 will load `package.json` and then `index.js`.
 
-data-auto-package
------------------
+### data-auto-package
 
 `data-auto-package` indicates that there is no `package.json` for this
 application, and instructs Mr to pretend that an empty one exists
@@ -26,8 +24,7 @@ in the same directory as the HTML document.
 
 will load just `index.js`.
 
-data-package
-------------
+### data-package
 
 `data-package` indicates that there is a `package.json` and that it can be
 found at the given location.  The default location is the same directory as
@@ -52,8 +49,7 @@ additional options.
 These options are added automatically by Mop and should not be added or
 modified manually.
 
-data-bootstrap
---------------
+### data-bootstrap
 
 Indicates that this script element is the `bootstrap.js` script and denotes
 the location of that script.
@@ -62,8 +58,7 @@ This is normally inferred from being a script with a `bootstrap.js` file name,
 but thw optimizer replaces the `<script>` tag with a bundle with a different
 name.
 
-`data-bootstrap-hash`, `data-application-hash`, `data-q-hash`
--------------------------------------------------------------
+### data-bootstrap-hash, data-application-hash, data-q-hash
 
 The optimizer converts all resources into script-injection form, by
 changing `.js` modules to `.load.js` scripts with `define(hash, id,
