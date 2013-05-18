@@ -21,10 +21,11 @@ module to load:
 ```
 
 Start writing your code in `index.js`, using the `require` function as you
-would in Node. Have a look at the [demo](./demo) for working example.
+would in Node. Have a look at the [demo](https://github.com/montagejs/mr/tree/master/demo)
+for working example.
 
 You can place your `package.json` in a different location, or avoid having one
-at all, with other [script tag attributes](./docs/Script-attribute.md).
+at all, with other [script tag attributes](https://github.com/montagejs/mr/tree/master/docs/Script-attribute.md).
 
 ## Optimization
 
@@ -35,17 +36,17 @@ in phases, and can generate HTML5 application cache manifests.
 
 ## Documentation
 
-Mr is [compatible with Node and npm](./docs/Node-compatability.md), although
+Mr is [compatible with Node and npm](https://github.com/montagejs/mr/tree/master/docs/Node-compatability.md), although
 there are some differences.
 
 There is documentation for:
 
- - [`package.json` properties](./docs/Package-API.md)
- - [`require` function](./docs/Require-API.md)
- - [`module` object](./docs/Module-API.md)
- - [The package `config` object](./docs/Config-API.md)
+ - [`package.json` properties](https://github.com/montagejs/mr/tree/master/docs/Package-API.md)
+ - [`require` function](https://github.com/montagejs/mr/tree/master/docs/Require-API.md)
+ - [`module` object](https://github.com/montagejs/mr/tree/master/docs/Module-API.md)
+ - [The package `config` object](https://github.com/montagejs/mr/tree/master/docs/Config-API.md)
 
-And you may be interested in an in-depth look at [how Mr works](./docs/How-it-works.md).
+And you may be interested in an in-depth look at [how Mr works](https://github.com/montagejs/mr/tree/master/docs/How-it-works.md).
 
 ## Compatibility
 
