@@ -23,7 +23,7 @@ all packages in a fresh module system.
     resource as a string.  The default reader depends on whether Montage
     Require is running in a browser or on Node.
 
-Montage Require then adds shared state for all packages to the `config`.
+Mr then adds shared state for all packages to the `config`.
 
 -   **registry**: the location of each known package by name, for those
     packages that have either designated their own name, or been named
@@ -39,7 +39,7 @@ Montage Require then adds shared state for all packages to the `config`.
     locations of their package descriptions if an alternate is injected
     with `require.injectPackageDescriptionLocation`.
 
-Then, for each package, Montage Require creates a `config` that
+Then, for each package, Mr creates a `config` that
 prototypically inherits from the master `config` and expands on that
 configuration with details synthesized from the content of the package
 description, `package.json`.  This is the config that gets passed to
@@ -73,7 +73,7 @@ description, `package.json`.  This is the config that gets passed to
     `require` function, by default `paths`, `mappings`, `location`,
     `packageDescription`, `packages`, and `modules`.
 
-Within `Require.makeRequire(config)`, Montage Require uses `makeLoader`
+Within `Require.makeRequire(config)`, Mr uses `makeLoader`
 and `makeConfig` with its own `config` to produce `config.load` and
 `config.compile` properties.  The `config.load` in particular is
 distinct and used internally by `require.load`, which memoizes and

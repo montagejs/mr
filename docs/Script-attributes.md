@@ -4,7 +4,7 @@ Script attributes
 data-module
 -----------
 
-`data-module` instructs Montage Require to `require` the given module after it
+`data-module` instructs Mr to `require` the given module after it
 has finished bootstrapping and the DOM content has loaded.
 
 ```html
@@ -17,7 +17,7 @@ data-auto-package
 -----------------
 
 `data-auto-package` indicates that there is no `package.json` for this
-application, and instructs Montage Require to pretend that an empty one exists
+application, and instructs Mr to pretend that an empty one exists
 in the same directory as the HTML document.
 
 ```html

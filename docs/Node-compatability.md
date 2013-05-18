@@ -10,7 +10,7 @@ some of the extensions from NodeJS and npm:
   `module.exports`.
 - **dependencies**: If a package declares a package dependency using
   NPM’s `dependencies` property, Montage looks for that package in
-  the package’s `node_modules` subdirectory.  Montage Require also
+  the package’s `node_modules` subdirectory.  Mr also
   supports the case where a package with the same name is already
   loaded by a parent package.  Unlike NPM, with Montage packages, you
   can override the location of the `node_modules` directory with the

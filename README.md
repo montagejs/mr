@@ -49,7 +49,7 @@ And you may be interested in an in-depth look at [how Mr works](./docs/How-it-wo
 
 ## Compatibility
 
-At present, Montage Require depends on `document.querySelector` and
+At present, Mr depends on `document.querySelector` and
 probably several other recent EcmaScript methods that might not be
 available in legacy browsers.  With your help, I intend to isolate and
 fix these bugs.
