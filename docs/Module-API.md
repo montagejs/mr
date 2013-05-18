@@ -46,14 +46,18 @@ The module object has the following properties:
 
 A module can return an exports object.
 
+**add.js**
+
 ```javascript
-// add.js
+
 return function (a, b) {
     return a + b;
 }
+```
 
-// the-answer.js
+**the-answer.js**
 
+```javascript
 // the exports of add is the returned function
 var add = require("add");
 
