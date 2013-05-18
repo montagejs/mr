@@ -41,8 +41,8 @@ there are some differences.
 There is documentation for:
 
  - [`package.json` properties](./docs/Package-API.md)
- - [`require`](./docs/Require-API.md)
- - [`module`](./docs/Module-API.md)
+ - [`require` function](./docs/Require-API.md)
+ - [`module` object](./docs/Module-API.md)
  - [The package `config` object](./docs/Config-API.md)
 
 And you may be interested in an in-depth look at [how Mr works](./docs/How-it-works.md).
@@ -60,10 +60,8 @@ At time of writing, tests pass in Chrome 21, Safari 5.1.5, and Firefox
 
 ## Maintenance
 
-Tests are in the `spec` directory.  All of the CommonJS module tests
-exist in there as well as tests for packaging and extensions.
-
-Open `spec/run.html` in a browser to verify the specs.
+Tests are in the `spec` directory. Use `npm test` to run the tests in
+PhantomJS or open `spec/run.html` in a browser.
 
 This implementation is a part from Motorola Mobility’s [Montage][] web
 application framework.  The module system was  written by Tom Robinson
