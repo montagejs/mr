@@ -111,11 +111,17 @@
                             params[name] = script.dataset[name];
                         }
                     } else if (script.attributes) {
+                        var dataRe = /^data-(.*)$/,
+                            letterAfterDash = /-([a-z])/g,
+                            upperCaseChar = function (_, c) {
+                                return c.toUpperCase();
+                            };
+
                         for (j = 0; j < script.attributes.length; j++) {
                             attr = script.attributes[j];
                             match = attr.name.match(/^data-(.*)$/);
                             if (match) {
-                                params[match[1]] = attr.value;
+                                params[match[1].replace(letterAfterDash, upperCaseChar)] = attr.value;
                             }
                         }
                     }
