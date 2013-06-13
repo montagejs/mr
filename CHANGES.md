@@ -1,5 +1,47 @@
 <!-- vim:ts=4:sts=4:sw=4:et:tw=60 -->
 
+## 0.9.5
+
+ - Introduces `inspect` for getting the state of a promise as
+   `{state: "fulfilled" | "rejected" | "pending", value | reason}`.
+ - Introduces `allSettled` which produces an array of promises states
+   for the input promises once they have all "settled".  This is in
+   accordance with a discussion on Promises/A+ that "settled" refers to
+   a promise that is "fulfilled" or "rejected".  "resolved" refers to a
+   deferred promise that has been "resolved" to another promise,
+   "sealing its fate" to the fate of the successor promise.
+ - Long stack traces are now off by default.  Set `Q.longStackSupport`
+   to true to enable long stack traces.
+ - Long stack traces can now follow the entire asynchronous history of a
+   promise, not just a single jump.
+ - Introduces `spawn` for an immediately invoked asychronous generator.
+   @jlongster
+ - Support for *experimental* synonyms `mapply`, `mcall`, `nmapply`,
+   `nmcall` for method invocation.
+
+## 0.9.4
+
+ - `isPromise` and `isPromiseAlike` now always returns a boolean 
+   (even for falsy values). #284 @lfac-pt
+ - Support for ES6 Generators in `async` #288 @andywingo
+ - Clear duplicate promise rejections from dispatch methods #238 @SLaks
+ - Unhandled rejection API #296 @domenic
+   `stopUnhandledRejectionTracking`, `getUnhandledReasons`,
+   `resetUnhandledRejections`.
+
+## 0.9.3
+
+ - Add the ability to give `Q.timeout`'s errors a custom error message. #270
+   @jgrenon
+ - Fix Q's call-stack busting behavior in Node.js 0.10, by switching from
+   `process.nextTick` to `setImmediate`. #254 #259
+ - Fix Q's behavior when used with the Mocha test runner in the browser, since
+   Mocha introduces a fake `process` global without a `nextTick` property. #267
+ - Fix some, but not all, cases wherein Q would give false positives in its
+   unhandled rejection detection (#252). A fix for other cases (#238) is
+   hopefully coming soon.
+ - Made `Q.promise` throw early if given a non-function.
+
 ## 0.9.2
 
  - Pass through progress notifications when using `timeout`. #229 @omares
