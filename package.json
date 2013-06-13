@@ -16,7 +16,7 @@
     }
   },
   "dependencies": {
-    "q": "0.9.2"
+    "q": "0.9.6"
   },
   "devDependencies": {
     "qs": "~0.5.3",
