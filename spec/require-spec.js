@@ -60,7 +60,8 @@ describe("Require", function () {
         "inject-dependency",
         "inject-mapping",
         "script-injection-dep",
-        "script-injection"
+        "script-injection",
+        "main-name"
     ].forEach(function (test) {
         it(test, function () {
             var spec = this;

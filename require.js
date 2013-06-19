@@ -575,15 +575,6 @@
                 redirect: normalizeId(description.main),
                 location: config.location
             };
-
-            if (description.name !== modules[""].redirect) {
-                modules[description.name] = {
-                    id: description.name,
-                    redirect: "",
-                    location: URL.resolve(location, description.name)
-                };
-            }
-
         }
 
         //Deal with redirects
