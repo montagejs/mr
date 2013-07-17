@@ -227,17 +227,17 @@
         }
 
         // Finds the internal identifier for a module in a subpackage
-        // The `internal` boolean parameter causes the function to return
-        // null instead of throwing an exception.  I’m guessing that
-        // throwing exceptions *and* being recursive would be too much
-        // performance evil for one function.
         // The `seen` object is a memo of the packages we have seen to avoid
-        // infinite recursion of cyclic package dependencies.
-        function identify(id2, require2, internal, seen) {
+        // infinite recursion of cyclic package dependencies. It also causes
+        // the function to return null instead of throwing an exception. I’m
+        // guessing that throwing exceptions *and* being recursive would be
+        // too much performance evil for one function.
+        function identify(id2, require2, seen) {
             var location = config.location;
             if (require2.location === location)
                 return id2;
 
+            var internal = !!seen;
             seen = seen || {};
             if (has(seen, location))
                 return null; // break the cycle of violence.
@@ -249,7 +249,7 @@
                 if (!config.hasPackage(location))
                     continue;
                 var candidate = config.getPackage(location);
-                var id1 = candidate.identify(id2, require2, true, seen);
+                var id1 = candidate.identify(id2, require2, seen);
                 if (id1 === null) {
                     continue;
                 } else if (id1 === "") {
