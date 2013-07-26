@@ -1,3 +1,7 @@
+### 0.13.2
+
+ - Use `config.read` to load `package.json` if given to `loadPackage`
+
 ### 0.13.1
 
  - Fix `require.identify` to work with cyclic package dependencies
