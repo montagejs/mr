@@ -344,7 +344,7 @@
 
             require.config = config;
 
-            require.read = Require.read;
+            require.read = config.read;
 
             return require;
         }
@@ -382,7 +382,7 @@
             } else {
                 descriptionLocation = URL.resolve(location, "package.json");
             }
-            descriptions[location] = Require.read(descriptionLocation)
+            descriptions[location] = (config.read || Require.read)(descriptionLocation)
             .then(function (json) {
                 try {
                     return JSON.parse(json);
