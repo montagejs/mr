@@ -82,7 +82,7 @@ Require.Compiler = function Compiler(config) {
 
 Require.Loader = function Loader(config, load) {
     return function (location, module) {
-        return Require.read(location)
+        return config.read(location)
         .then(function (text) {
             module.type = "javascript";
             module.text = text;
