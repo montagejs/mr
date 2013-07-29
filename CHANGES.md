@@ -1,3 +1,7 @@
+### 0.13.3
+
+ - Use `config.read` when running on Node
+
 ### 0.13.2
 
  - Use `config.read` to load `package.json` if given to `loadPackage`
