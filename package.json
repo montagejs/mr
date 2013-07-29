@@ -12,7 +12,7 @@
   ],
   "main": "require",
   "scripts": {
-    "test": "node spec/phantom.js && jshint ."
+    "test": "jasmine-node spec/node-spec.js && node spec/phantom.js && jshint ."
   },
   "bin": {
     "mr": "bin/mr"
@@ -32,7 +32,8 @@
     "joey": "~0.1.3",
     "istanbul": "~0.1.34",
     "q-io": "~1.6.4",
-    "jshint": "~2.1.4"
+    "jshint": "~2.1.4",
+    "jasmine-node": "~1.10.2"
   },
   "exclude": [
     "README.md",
