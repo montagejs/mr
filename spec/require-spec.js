@@ -61,7 +61,7 @@ describe("Require", function () {
         "inject-mapping",
         {name: "script-injection-dep", node: false},
         {name: "script-injection", node: false},
-        {name: "read", node: false}
+        "read"
     ].forEach(function (test) {
         if (typeof test === "object") {
             if (test.node === false && typeof process !== "undefined") {
