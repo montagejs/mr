@@ -1,2 +1,2 @@
 #!/usr/bin/env node --harmony_weakmaps --harmony_proxies
-require("../bootstrap-node");
+require("../node").boot().done();
