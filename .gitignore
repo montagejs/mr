@@ -8,3 +8,5 @@ report/
 node_modules/
 !test/spec/**/node_modules
 out/
+boot.js
+boot/preload-boilerplate.js
