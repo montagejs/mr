@@ -1,7 +1,7 @@
 {
     "mappings": {
         "mr": "../..",
-        "q": "../../packages/q"
+        "q": "../../node_modules/q"
     },
     "redirects": {
         "d": "a"

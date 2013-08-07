@@ -77,22 +77,19 @@ describe("Require", function () {
             var done;
             var message;
 
-            console.log(test + ":", "START");
+            //console.log(test + ":", "START");
 
-            return require.loadPackage(
-                module.directory + test + "/",
-                {}
-            )
+            return require.loadPackage(module.directory + test + "/", {})
             .then(function (pkg) {
                 pkg.inject("test", {
                     print: function (_message, level) {
-                        console.log(test + ":", _message);
+                        //console.log(test + ":", _message);
                         if (_message === "DONE") {
                             message = _message;
                         }
                     },
                     assert: function (guard, message) {
-                        console.log(test + ":", guard ? "PASS" : "FAIL", message);
+                        //console.log(test + ":", guard ? "PASS" : "FAIL", message);
                         expect(!!guard).toBe(true);
                     }
                 });
@@ -100,11 +97,9 @@ describe("Require", function () {
                 return pkg.async("program");
             })
             .then(function () {
-            }, function (reason, error) {
-                spec.fail(error || reason);
-            })
-            .fin(function () {
                 expect(message).toBe("DONE");
+            }, function (reason) {
+                spec.fail(reason);
             });
 
         });
