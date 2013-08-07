@@ -5,12 +5,39 @@
     https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
 */
 /*jshint node:true */
+
 var Require = require("./require");
 var Promise = require("bluebird");
 var FS = require("fs");
 var URL = require("url");
-var PATH = require("path");
+var Path = require("path");
+
 var globalEval = eval;
+
+module.exports = Require;
+
+Require.overlays = ["node"];
+
+Require.boot = function () {
+    var command = process.argv.slice(0, 3);
+    var args = process.argv.slice(2);
+    var program = args.shift();
+    return Require.findPackageLocationAndModuleId(program)
+    .then(function (info) {
+        return Require.loadPackage(info.location)
+        .invoke("async", info.id);
+    }, function (error) {
+        var location = Require.filePathToLocation(program);
+        var directory = URL.resolve(location, "./");
+        var file = Path.relative(directory, location);
+        var descriptions = {};
+        descriptions[directory] = Promise.resolve({});
+        return Require.loadPackage(directory, {
+            descriptions: descriptions
+        })
+        .invoke("async", file);
+    });
+};
 
 Require.getLocation = function getLocation() {
     return URL.resolve("file:///", process.cwd() + "/");
@@ -47,17 +74,17 @@ Require.read = function read(location) {
                         path.indexOf(jsIndexPrefix) === -1 // is not /index.js
                 ) {
                     path = path.replace(jsPreffix, jsIndexPrefix);
-                    
+
                     // Attempt to read if file exists
                     FS.readFile(path, "utf-8", function (error, text) {
                         if (error) {
-                            reject(new Error(error));   
+                            reject(new Error(error));
                         } else {
                             resolve(text);
                         }
                     });
                 } else {
-                    reject(new Error(error));   
+                    reject(new Error(error));
                 }
             } else {
                 resolve(text);
@@ -111,15 +138,24 @@ Require.Loader = function Loader(config, load) {
     };
 };
 
-Require.NodeLoader = function NodeLoader(config) {
-    return function nodeLoad(location, module) {
-        var id = location.slice(config.location.length);
-        id = id.substr(0,id.lastIndexOf('.'));
-        module.type = "native";
-        module.exports = require(id);
-        module.location = location;
-        return module;
-    };
+Require.NodeLoader = function NodeLoader(config, load) {
+    config.overlays = config.overlays || Require.overlays;
+    if (config.overlays.indexOf("node") >= 0) {
+        return function nodeLoad(location, module) {
+            var id = location.slice(config.location.length);
+            id = id.substr(0,id.lastIndexOf('.'));
+            module.type = "native";
+            try {
+                module.exports = require(id);
+            } catch (error) {
+                module.error = error;
+            }
+        };
+    } else {
+        return function cantLoad(location) {
+            throw new Error("Can't load: " + location + " from package " + config.name + " at " + config.location);
+        };
+    }
 };
 
 Require.makeLoader = function makeLoader(config) {
@@ -141,11 +177,19 @@ Require.makeLoader = function makeLoader(config) {
 };
 
 Require.findPackagePath = function findPackagePath(directory) {
-    if (directory === PATH.dirname(directory)) {
+    if (directory === Path.dirname(directory)) {
         return Promise.reject(new Error("Can't find package"));
     }
-    var packageJson = PATH.join(directory, "package.json");
-    return Promise.ninvoke(FS, "stat", packageJson)
+    var packageJson = Path.join(directory, "package.json");
+    return new Promise(function (resolve, reject) {
+        FS.stat(packageJson, function (err, stat) {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(stat);
+            }
+        });
+    })
     .then(function (stat) {
         return stat.isFile();
     }, function (error) {
@@ -154,17 +198,17 @@ Require.findPackagePath = function findPackagePath(directory) {
         if (isFile) {
             return directory;
         } else {
-            return Require.findPackagePath(PATH.dirname(directory));
+            return Require.findPackagePath(Path.dirname(directory));
         }
     });
 };
 
 Require.findPackageLocationAndModuleId = function findPackageLocationAndModuleId(path) {
-    path = PATH.resolve(process.cwd(), path);
-    var directory = PATH.dirname(path);
+    path = Path.resolve(process.cwd(), path);
+    var directory = Path.dirname(path);
     return Require.findPackagePath(directory)
     .then(function (packageDirectory) {
-        var modulePath = PATH.relative(packageDirectory, path);
+        var modulePath = Path.relative(packageDirectory, path);
         modulePath = modulePath.replace(/\.js$/, "");
         return {
             location: Require.directoryPathToLocation(packageDirectory),
