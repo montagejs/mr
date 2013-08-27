@@ -66,7 +66,9 @@ describe("Require", function () {
         "main",
         "sandbox",
         "compiler",
-        "translator"
+        "translator",
+        "compiler-package",
+        "translator-package"
     ].forEach(function (test) {
         if (typeof test === "object") {
             if (test.node === false && typeof process !== "undefined") {
