@@ -477,6 +477,7 @@ Require.makeRequire = function (config) {
     config.parseDependencies = config.parseDependencies || Require.parseDependencies;
     config.read = config.read || Require.read;
     config.compilers = config.compilers || {};
+    config.translators = config.translators || {};
 
     // Modules: { exports, id, location, directory, factory, dependencies,
     // dependees, text, type }
@@ -536,14 +537,29 @@ Require.makeRequire = function (config) {
                     compile(module);
                 });
             } else {
-                config.compile(module);
-                var dependencies = module.dependencies = module.dependencies || [];
-                if (module.redirect !== void 0) {
-                    dependencies.push(module.redirect);
-                }
-                if (module.extraDependencies !== void 0) {
-                    Array.prototype.push.apply(module.dependencies, module.extraDependencies);
-                }
+                return Q.fcall(function () {
+                    if (config.translators[extension]) {
+                        var translatorId = config.translators[extension];
+                        // TODO try to load translator related modules in a
+                        // parallel module system so that they do not get
+                        // bundled
+                        return deepLoad(translatorId, "", loading)
+                        .then(function () {
+                            var translate = require(translatorId);
+                            module.text = translate(module.text, module);
+                        });
+                    }
+                })
+                .then(function () {
+                    config.compile(module);
+                    var dependencies = module.dependencies = module.dependencies || [];
+                    if (module.redirect !== void 0) {
+                        dependencies.push(module.redirect);
+                    }
+                    if (module.extraDependencies !== void 0) {
+                        Array.prototype.push.apply(module.dependencies, module.extraDependencies);
+                    }
+                });
             }
         });
     });
@@ -985,6 +1001,7 @@ function configurePackage(location, description, parent) {
     config.packageDescription = description;
     config.useScriptInjection = description.useScriptInjection;
     config.compilers = description.compilers;
+    config.translators = description.translators;
 
     if (description.production !== void 0) {
         config.production = description.production;

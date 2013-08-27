@@ -62,7 +62,8 @@ describe("Require", function () {
         {name: "script-injection-dep", node: false},
         {name: "script-injection", node: false},
         "read",
-        "compiler"
+        "compiler",
+        "translator"
     ].forEach(function (test) {
         if (typeof test === "object") {
             if (test.node === false && typeof process !== "undefined") {
