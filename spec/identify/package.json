@@ -2,8 +2,6 @@
     "name": "identify",
     "dependencies": {
         "cyclic": "*",
-        "a": "*",
-        "x": "*",
-        "y": "*"
+        "x": "*"
     }
 }
