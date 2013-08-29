@@ -1,3 +1,1457 @@
+(function (modules) {
+
+    // unpack module tuples into module objects
+    for (var i = 0; i < modules.length; i++) {
+        modules[i] = new Module(modules[i][0], modules[i][1]);
+    }
+
+    function Module(dependencies, factory) {
+        this.dependencies = dependencies;
+        this.factory = factory;
+    }
+
+    Module.prototype.require = function () {
+        var module = this;
+        if (!module.exports) {
+            module.exports = {};
+            function require(id) {
+                var index = module.dependencies[id];
+                var dependency = modules[index];
+                if (!dependency)
+                    throw new Error("Bundle is missing a dependency: " + id);
+                return dependency.require();
+            }
+            module.exports = module.factory(require, module.exports, module) || module.exports;
+        }
+        return module.exports;
+    };
+
+    return modules[0].require();
+})((function (global){return[[{"../browser":1,"url":3,"q":5,"./script-params":2},function (require, exports, module){
+
+// mr boot/browser
+// ---------------
+
+"use strict";
+
+var Require = require("../browser");
+var URL = require("url");
+var Q = require("q");
+
+var params = require("./script-params")("boot.js");
+
+module.exports = boot;
+function boot(preloaded) {
+
+    var config = {preloaded: preloaded};
+    var applicationLocation = URL.resolve(window.location, params.package || ".");
+    var moduleId = params.module || "";
+
+    return Require.loadPackage({
+        location: params.location,
+        hash: params.mrHash
+    }, config)
+    .then(function (mrRequire) {
+        mrRequire.inject("mini-url", URL);
+        mrRequire.inject("require", Require);
+
+        return mrRequire.loadPackage({
+            name: "q",
+            location: params.qLocation,
+            hash: params.qHash
+        })
+        .then(function (qRequire) {
+            qRequire.inject("q", Q);
+
+            if ("autoPackage" in params) {
+                mrRequire.injectPackageDescription(applicationLocation, {});
+            }
+
+            return mrRequire.loadPackage({
+                location: applicationLocation,
+                hash: params.applicationHash
+            })
+            .invoke('async', moduleId);
+
+        });
+    });
+
+}
+
+}],[{"./require":4,"url":3,"q":5},function (require, exports, module){
+
+// mr browser
+// ----------
+
+/* <copyright>
+ This file contains proprietary software owned by Motorola Mobility, Inc.<br/>
+ No rights, expressed or implied, whatsoever to this software are provided by Motorola Mobility, Inc. hereunder.<br/>
+ (c) Copyright 2012 Motorola Mobility, Inc.  All Rights Reserved.
+ </copyright> */
+/*global montageDefine:true */
+/*jshint -W015, evil:true, camelcase:false */
+
+var Require = require("./require");
+var URL = require("url");
+var Q = require("q");
+var GET = "GET";
+var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";
+var FILE_PROTOCOL = "file:";
+
+Require.getLocation = function() {
+    return URL.resolve(window.location, ".");
+};
+
+Require.overlays = ["window", "browser", "montage"];
+
+// Determine if an XMLHttpRequest was successful
+// Some versions of WebKit return 0 for successful file:// URLs
+function xhrSuccess(req) {
+    return (req.status === 200 || (req.status === 0 && req.responseText));
+}
+
+// Due to crazy variabile availability of new and old XHR APIs across
+// platforms, this implementation registers every known name for the event
+// listeners.  The promise library ascertains that the returned promise
+// is resolved only by the first event.
+// http://dl.dropbox.com/u/131998/yui/misc/get/browser-capabilities.html
+Require.read = function (url) {
+
+    if (URL.resolve(window.location, url).indexOf(FILE_PROTOCOL) === 0) {
+        throw new Error("XHR does not function for file: protocol");
+    }
+
+    var request = new XMLHttpRequest();
+    var response = Q.defer();
+
+    function onload() {
+        if (xhrSuccess(request)) {
+            response.resolve(request.responseText);
+        } else {
+            onerror();
+        }
+    }
+
+    function onerror() {
+        response.reject(new Error("Can't XHR " + JSON.stringify(url)));
+    }
+
+    try {
+        request.open(GET, url, true);
+        if (request.overrideMimeType) {
+            request.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
+        }
+        request.onreadystatechange = function () {
+            if (request.readyState === 4) {
+                onload();
+            }
+        };
+        request.onload = request.load = onload;
+        request.onerror = request.error = onerror;
+    } catch (exception) {
+        response.reject(exception);
+    }
+
+    request.send();
+    return response.promise;
+};
+
+// By using a named "eval" most browsers will execute in the global scope.
+// http://www.davidflanagan.com/2010/12/global-eval-in.html
+// Unfortunately execScript doesn't always return the value of the evaluated expression (at least in Chrome)
+var globalEval = /*this.execScript ||*/eval;
+// For Firebug evaled code isn't debuggable otherwise
+// http://code.google.com/p/fbug/issues/detail?id=2198
+if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
+    globalEval = new Function("_", "return eval(_)");
+}
+
+var __FILE__String = "__FILE__",
+    DoubleUnderscoreString = "__",
+    globalEvalConstantA = "(function ",
+    globalEvalConstantB = "(require, exports, module) {",
+    globalEvalConstantC = "//*/\n})\n//@ sourceURL=";
+
+Require.Compiler = function (config) {
+    return function(module) {
+        if (module.factory || module.text === void 0) {
+            return module;
+        }
+        if (config.useScriptInjection) {
+            throw new Error("Can't use eval.");
+        }
+
+        // Here we use a couple tricks to make debugging better in various browsers:
+        // TODO: determine if these are all necessary / the best options
+        // 1. name the function with something inteligible since some debuggers display the first part of each eval (Firebug)
+        // 2. append the "//@ sourceURL=location" hack (Safari, Chrome, Firebug)
+        //  * http://pmuellr.blogspot.com/2009/06/debugger-friendly.html
+        //  * http://blog.getfirebug.com/2009/08/11/give-your-eval-a-name-with-sourceurl/
+        //      TODO: investigate why this isn't working in Firebug.
+        // 3. set displayName property on the factory function (Safari, Chrome)
+
+        var displayName = __FILE__String+module.location.replace(/\.\w+$|\W/g, DoubleUnderscoreString);
+
+        try {
+            module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+module.location);
+        } catch (exception) {
+            exception.message = exception.message + " in " + module.location;
+            throw exception;
+        }
+
+        // This should work and would be simpler, but Firebug does not show scripts executed via "new Function()" constructor.
+        // TODO: sniff browser?
+        // module.factory = new Function("require", "exports", "module", module.text + "\n//*/"+sourceURLComment);
+
+        module.factory.displayName = displayName;
+    };
+};
+
+Require.XhrLoader = function (config) {
+    return function (url, module) {
+        return config.read(url)
+        .then(function (text) {
+            module.type = "javascript";
+            module.text = text;
+            module.location = url;
+        });
+    };
+};
+
+var definitions = {};
+var getDefinition = function (hash, id) {
+    definitions[hash] = definitions[hash] || {};
+    definitions[hash][id] = definitions[hash][id] || Q.defer();
+    return definitions[hash][id];
+};
+// global
+montageDefine = function (hash, id, module) {
+    getDefinition(hash, id).resolve(module);
+};
+
+Require.loadScript = function (location) {
+    var script = document.createElement("script");
+    script.onload = function() {
+        script.parentNode.removeChild(script);
+    };
+    script.onerror = function (error) {
+        script.parentNode.removeChild(script);
+    };
+    script.src = location;
+    script.defer = true;
+    document.getElementsByTagName("head")[0].appendChild(script);
+};
+
+Require.ScriptLoader = function (config) {
+    var hash = config.packageDescription.hash;
+    return function (location, module) {
+        return Q.fcall(function () {
+
+            // short-cut by predefinition
+            if (definitions[hash] && definitions[hash][module.id]) {
+                return definitions[hash][module.id].promise;
+            }
+
+            if (/\.js$/.test(location)) {
+                location = location.replace(/\.js/, ".load.js");
+            } else {
+                location += ".load.js";
+            }
+
+            Require.loadScript(location);
+
+            return getDefinition(hash, module.id).promise;
+        })
+        .then(function (definition) {
+            /*jshint -W089 */
+            delete definitions[hash][module.id];
+            for (var name in definition) {
+                module[name] = definition[name];
+            }
+            module.location = location;
+            module.directory = URL.resolve(location, ".");
+            /*jshint +W089 */
+        });
+    };
+};
+
+// old version
+var loadPackageDescription = Require.loadPackageDescription;
+Require.loadPackageDescription = function (dependency, config) {
+    if (dependency.hash) { // use script injection
+        var definition = getDefinition(dependency.hash, "package.json").promise;
+        var location = URL.resolve(dependency.location, "package.json.load.js");
+
+        // The package.json might come in a preloading bundle. If so, we do not
+        // want to issue a script injection. However, if by the time preloading
+        // has finished the package.json has not arrived, we will need to kick off
+        // a request for the package.json.load.js script.
+        if (config.preloaded && config.preloaded.isPending()) {
+            config.preloaded
+            .then(function () {
+                if (definition.isPending()) {
+                    Require.loadScript(location);
+                }
+            })
+            .done();
+        } else if (definition.isPending()) {
+            // otherwise preloading has already completed and we don't have the
+            // package description, so load it
+            Require.loadScript(location);
+        }
+
+        return definition.get("exports");
+    } else {
+        // fall back to normal means
+        return loadPackageDescription(dependency, config);
+    }
+};
+
+Require.makeLoader = function (config) {
+    var Loader;
+    if (config.useScriptInjection) {
+        Loader = Require.ScriptLoader;
+    } else {
+        Loader = Require.XhrLoader;
+    }
+    return Require.MappingsLoader(
+        config,
+        Require.ExtensionsLoader(
+            config,
+            Require.PathsLoader(
+                config,
+                Require.MemoizedLoader(
+                    config,
+                    Loader(config)
+                )
+            )
+        )
+    );
+};
+
+module.exports = Require;
+
+}],[{"url":3},function (require, exports, module){
+
+// mr boot/script-params
+// ---------------------
+
+
+var URL = require("url");
+
+module.exports = getParams;
+function getParams(scriptName) {
+    var i, j,
+        match,
+        script,
+        location,
+        attr,
+        name,
+        re = new RegExp("^(.*)" + scriptName + "(?:[\\?\\.]|$)", "i");
+    var params = {};
+    // Find the <script> that loads us, so we can divine our parameters
+    // from its attributes.
+    var scripts = document.getElementsByTagName("script");
+    for (i = 0; i < scripts.length; i++) {
+        script = scripts[i];
+        // There are two distinct ways that a bootstrapping script might be
+        // identified.  In development, we can rely on the script name.  In
+        // production, the script name is produced by the optimizer and does
+        // not have a generic pattern.  However, the optimizer will drop a
+        // `data-boot-location` property on the script instead.  This will also
+        // serve to inform the boot script of the location of the loading
+        // package, albeit Montage or Mr.
+        if (script.src && (match = script.src.match(re))) {
+            location = match[1];
+        }
+        if (script.hasAttribute("data-boot-location")) {
+            location = URL.resolve(window.location, script.getAttribute("data-boot-location"));
+        }
+        if (location) {
+            if (script.dataset) {
+                for (name in script.dataset) {
+                    if (script.dataset.hasOwnProperty(name)) {
+                        params[name] = script.dataset[name];
+                    }
+                }
+            } else if (script.attributes) {
+                var dataRe = /^data-(.*)$/,
+                    letterAfterDash = /-([a-z])/g,
+                    /*jshint -W083 */
+                    upperCaseChar = function (_, c) {
+                        return c.toUpperCase();
+                    };
+                    /*jshint +W083 */
+
+                for (j = 0; j < script.attributes.length; j++) {
+                    attr = script.attributes[j];
+                    match = attr.name.match(/^data-(.*)$/);
+                    if (match) {
+                        params[match[1].replace(letterAfterDash, upperCaseChar)] = attr.value;
+                    }
+                }
+            }
+            // Permits multiple boot <scripts>; by removing as they are
+            // discovered, next one finds itself.
+            script.parentNode.removeChild(script);
+            params.location = location;
+            break;
+        }
+    }
+    return params;
+}
+
+}],[{},function (require, exports, module){
+
+// mr mini-url.js
+// --------------
+
+
+var head = document.querySelector("head"),
+    baseElement = document.createElement("base"),
+    relativeElement = document.createElement("a");
+
+baseElement.href = "";
+
+exports.resolve = function resolve(base, relative) {
+    var currentBaseElement = head.querySelector("base");
+    if (!currentBaseElement) {
+        head.appendChild(baseElement);
+        currentBaseElement = baseElement;
+    }
+    base = String(base);
+    if (!/^[\w\-]+:/.test(base)) { // isAbsolute(base)
+        throw new Error("Can't resolve from a relative location: " + JSON.stringify(base) + " " + JSON.stringify(relative));
+    }
+    var restore = currentBaseElement.href;
+    currentBaseElement.href = base;
+    relativeElement.href = relative;
+    var resolved = relativeElement.href;
+    currentBaseElement.href = restore;
+    if (currentBaseElement === baseElement) {
+        head.removeChild(currentBaseElement);
+    }
+    return resolved;
+};
+
+}],[{"q":5,"url":3},function (require, exports, module){
+
+// mr require
+// ----------
+
+
+/*
+    Based in part on Motorola Mobility’s Montage
+    Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
+    3-Clause BSD License
+    https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
+*/
+
+var Require = exports;
+var Q = require("q");
+var URL = require("url");
+
+if (!this) {
+    throw new Error("Require does not work in strict mode.");
+}
+
+var globalEval = eval; // reassigning causes eval to not use lexical scope.
+
+// Non-CommonJS speced extensions should be marked with an "// EXTENSION"
+// comment.
+
+Require.makeRequire = function (config) {
+    var require;
+
+    // Configuration defaults:
+    config = config || {};
+    config.location = URL.resolve(config.location || Require.getLocation(), "./");
+    config.lib = URL.resolve(config.location, config.lib || "./");
+    config.paths = config.paths || [config.lib];
+    config.mappings = config.mappings || {}; // EXTENSION
+    config.exposedConfigs = config.exposedConfigs || Require.exposedConfigs;
+    config.makeLoader = config.makeLoader || Require.makeLoader;
+    config.load = config.load || config.makeLoader(config);
+    config.makeCompiler = config.makeCompiler || Require.makeCompiler;
+    config.compile = config.compile || config.makeCompiler(config);
+    config.parseDependencies = config.parseDependencies || Require.parseDependencies;
+    config.read = config.read || Require.read;
+    config.compilers = config.compilers || {};
+    config.translators = config.translators || {};
+
+    // Modules: { exports, id, location, directory, factory, dependencies,
+    // dependees, text, type }
+    var modules = config.modules = config.modules || {};
+
+    // produces an entry in the module state table, which gets built
+    // up through loading and execution, ultimately serving as the
+    // ``module`` free variable inside the corresponding module.
+    function getModuleDescriptor(id) {
+        var lookupId = id.toLowerCase();
+        if (!has(modules, lookupId)) {
+            modules[lookupId] = {
+                id: id,
+                extension: Require.extension(id),
+                display: (config.name || config.location) + "#" + id, // EXTENSION
+                require: require
+            };
+        }
+        return modules[lookupId];
+    }
+
+    // for preloading modules by their id and exports, useful to
+    // prevent wasteful multiple instantiation if a module was loaded
+    // in the bootstrapping process and can be trivially injected into
+    // the system.
+    function inject(id, exports) {
+        var module = getModuleDescriptor(id);
+        module.exports = exports;
+        module.location = URL.resolve(config.location, id);
+        module.directory = URL.resolve(module.location, "./");
+        module.injected = true;
+        delete module.redirect;
+        delete module.mappingRedirect;
+    }
+
+    // Ensures a module definition is loaded, compiled, analyzed
+    var load = memoize(function (topId, viaId, loading) {
+        var module = getModuleDescriptor(topId);
+        return Q.fcall(function () {
+            // if not already loaded, already instantiated, or
+            // configured as a redirection to another module
+            if (
+                module.factory === void 0 &&
+                module.exports === void 0 &&
+                module.redirect === void 0
+            ) {
+                return Q.fcall(config.load, topId, module);
+            }
+        })
+        .then(function () {
+            // compile and analyze dependencies
+            if (config.compilers[module.extension]) {
+                var compilerId = config.compilers[module.extension];
+                return deepLoad(compilerId, "", loading)
+                .then(function () {
+                    var compile = require(compilerId);
+                    compile(module);
+                });
+            } else {
+                return Q.fcall(function () {
+                    if (config.translators[module.extension]) {
+                        var translatorId = config.translators[module.extension];
+                        // TODO try to load translator related modules in a
+                        // parallel module system so that they do not get
+                        // bundled
+                        return deepLoad(translatorId, "", loading)
+                        .then(function () {
+                            var translate = require(translatorId);
+                            module.text = translate(module.text, module);
+                        });
+                    }
+                })
+                .then(function () {
+                    config.compile(module);
+                    var dependencies = module.dependencies = module.dependencies || [];
+                    if (module.redirect !== void 0) {
+                        dependencies.push(module.redirect);
+                    }
+                    if (module.extraDependencies !== void 0) {
+                        Array.prototype.push.apply(module.dependencies, module.extraDependencies);
+                    }
+                });
+            }
+        });
+    });
+
+    // Load a module definition, and the definitions of its transitive
+    // dependencies
+    function deepLoad(topId, viaId, loading) {
+        var module = getModuleDescriptor(topId);
+        // this is a memo of modules already being loaded so we don’t
+        // data-lock on a cycle of dependencies.
+        loading = loading || {};
+        // has this all happened before?  will it happen again?
+        if (has(loading, topId)) {
+            return; // break the cycle of violence.
+        }
+        loading[topId] = true; // this has happened before
+        return load(topId, viaId)
+        .then(function () {
+            // load the transitive dependencies using the magic of
+            // recursion.
+            var dependencies = module.dependencies = module.dependencies || [];
+            return Q.all(module.dependencies.map(function (depId) {
+                depId = resolve(depId, topId);
+                // create dependees set, purely for debug purposes
+                var module = getModuleDescriptor(depId);
+                var dependees = module.dependees = module.dependees || {};
+                dependees[topId] = true;
+                return deepLoad(depId, topId, loading);
+            }));
+        }, function (error) {
+            module.error = error;
+        });
+    }
+
+    function lookup(topId, viaId) {
+        topId = resolve(topId, viaId);
+        var module = getModuleDescriptor(topId);
+
+        // check for consistent case convention
+        if (module.id !== topId) {
+            throw new Error(
+                "Can't require module " + JSON.stringify(module.id) +
+                " by alternate spelling " + JSON.stringify(topId)
+            );
+        }
+
+        // handle redirects
+        if (module.redirect !== void 0) {
+            return lookup(module.redirect, topId);
+        }
+
+        // handle cross-package linkage
+        if (module.mappingRedirect !== void 0) {
+            return module.mappingRequire.lookup(module.mappingRedirect, "");
+        }
+
+        return module;
+    }
+
+    // Initializes a module by executing the factory function with a new
+    // module "exports" object.
+    function getExports(topId, viaId) {
+        var module = getModuleDescriptor(topId);
+
+        // check for consistent case convention
+        if (module.id !== topId) {
+            throw new Error(
+                "Can't require module " + JSON.stringify(module.id) +
+                " by alternate spelling " + JSON.stringify(topId)
+            );
+        }
+
+        // check for load error
+        if (module.error) {
+            var error = module.error;
+            error.message = (
+                "Can't require module " + JSON.stringify(module.id) +
+                " via " + JSON.stringify(viaId) +
+                " because " + error.message
+            );
+            throw error;
+        }
+
+        // handle redirects
+        if (module.redirect !== void 0) {
+            return getExports(module.redirect, viaId);
+        }
+
+        // handle cross-package linkage
+        if (module.mappingRedirect !== void 0) {
+            return module.mappingRequire(module.mappingRedirect, viaId);
+        }
+
+        // do not reinitialize modules
+        if (module.exports !== void 0) {
+            return module.exports;
+        }
+
+        // do not initialize modules that do not define a factory function
+        if (module.factory === void 0) {
+            throw new Error(
+                "Can't require module " + JSON.stringify(topId) +
+                " via " + JSON.stringify(viaId) + " " + JSON.stringify(module)
+            );
+        }
+
+        module.directory = URL.resolve(module.location, "./"); // EXTENSION
+        module.exports = {};
+
+        // Execute the factory function:
+        var returnValue = module.factory.call(
+            // in the context of the module:
+            void 0, // this (defaults to global)
+            makeRequire(topId), // require
+            module.exports, // exports
+            module // module
+        );
+
+        // EXTENSION
+        if (returnValue !== void 0) {
+            module.exports = returnValue;
+        }
+
+        return module.exports;
+    }
+
+    // Finds the internal identifier for a module in a subpackage
+    // The `seen` object is a memo of the packages we have seen to avoid
+    // infinite recursion of cyclic package dependencies. It also causes
+    // the function to return null instead of throwing an exception. I’m
+    // guessing that throwing exceptions *and* being recursive would be
+    // too much performance evil for one function.
+    function identify(id2, require2, seen) {
+        var location = config.location;
+        if (require2.location === location) {
+            return id2;
+        }
+
+        var internal = !!seen;
+        seen = seen || {};
+        if (has(seen, location)) {
+            return null; // break the cycle of violence.
+        }
+        seen[location] = true;
+        /*jshint -W089 */
+        for (var name in config.mappings) {
+            var mapping = config.mappings[name];
+            location = mapping.location;
+            if (!config.hasPackage(location)) {
+                continue;
+            }
+            var candidate = config.getPackage(location);
+            var id1 = candidate.identify(id2, require2, seen);
+            if (id1 === null) {
+                continue;
+            } else if (id1 === "") {
+                return name;
+            } else {
+                return name + "/" + id1;
+            }
+        }
+        if (internal) {
+            return null;
+        } else {
+            throw new Error(
+                "Can't identify " + id2 + " from " + require2.location
+            );
+        }
+        /*jshint +W089 */
+    }
+
+    // Creates a unique require function for each module that encapsulates
+    // that module's id for resolving relative module IDs against.
+    function makeRequire(viaId) {
+
+        // Main synchronously executing "require()" function
+        var require = function(id) {
+            var topId = resolve(id, viaId);
+            return getExports(topId, viaId);
+        };
+
+        // Asynchronous "require.async()" which ensures async executation
+        // (even with synchronous loaders)
+        require.async = function(id) {
+            var topId = resolve(id, viaId);
+            var module = getModuleDescriptor(id);
+            return deepLoad(topId, viaId)
+            .then(function () {
+                return require(topId);
+            });
+        };
+
+        require.resolve = function (id) {
+            return normalizeId(resolve(id, viaId));
+        };
+
+        require.getModule = getModuleDescriptor; // XXX deprecated, use:
+        require.getModuleDescriptor = getModuleDescriptor;
+        require.lookup = lookup;
+        require.load = load;
+        require.deepLoad = deepLoad;
+
+        require.loadPackage = function (dependency, givenConfig) {
+            if (givenConfig) { // explicit configuration, fresh environment
+                return Require.loadPackage(dependency, givenConfig);
+            } else { // inherited environment
+                return config.loadPackage(dependency, config);
+            }
+        };
+
+        require.hasPackage = function (dependency) {
+            return config.hasPackage(dependency);
+        };
+
+        require.getPackage = function (dependency) {
+            return config.getPackage(dependency);
+        };
+
+        require.isMainPackage = function () {
+            return require.location === config.mainPackageLocation;
+        };
+
+        require.injectPackageDescription = function (location, description) {
+            Require.injectPackageDescription(location, description, config);
+        };
+
+        require.injectPackageDescriptionLocation = function (location, descriptionLocation) {
+            Require.injectPackageDescriptionLocation(location, descriptionLocation, config);
+        };
+
+        require.injectMapping = function (dependency, name) {
+            dependency = normalizeDependency(dependency, config, name);
+            name = name || dependency.name;
+            config.mappings[name] = dependency;
+        };
+
+        require.injectDependency = function (name) {
+            require.injectMapping({name: name}, name);
+        };
+
+        require.identify = identify;
+        require.inject = inject;
+
+        config.exposedConfigs.forEach(function(name) {
+            require[name] = config[name];
+        });
+
+        require.config = config;
+
+        require.read = config.read;
+
+        return require;
+    }
+
+    require = makeRequire("");
+    return require;
+};
+
+Require.injectPackageDescription = function (location, description, config) {
+    var descriptions =
+        config.descriptions =
+            config.descriptions || {};
+    descriptions[location] = Q.resolve(description);
+};
+
+Require.injectPackageDescriptionLocation = function (location, descriptionLocation, config) {
+    var descriptionLocations =
+        config.descriptionLocations =
+            config.descriptionLocations || {};
+    descriptionLocations[location] = descriptionLocation;
+};
+
+Require.loadPackageDescription = function (dependency, config) {
+    var location = dependency.location;
+    var descriptions =
+        config.descriptions =
+            config.descriptions || {};
+    if (descriptions[location] === void 0) {
+        var descriptionLocations =
+            config.descriptionLocations =
+                config.descriptionLocations || {};
+        var descriptionLocation;
+        if (descriptionLocations[location]) {
+            descriptionLocation = descriptionLocations[location];
+        } else {
+            descriptionLocation = URL.resolve(location, "package.json");
+        }
+        descriptions[location] = (config.read || Require.read)(descriptionLocation)
+        .then(function (json) {
+            try {
+                return JSON.parse(json);
+            } catch (error) {
+                error.message = error.message + " in " + JSON.stringify(descriptionLocation);
+                throw error;
+            }
+        });
+    }
+    return descriptions[location];
+};
+
+Require.loadPackage = function (dependency, config) {
+    dependency = normalizeDependency(dependency, config);
+    if (!dependency.location) {
+        throw new Error("Can't find dependency: " + JSON.stringify(dependency));
+    }
+    var location = dependency.location;
+    config = Object.create(config || null);
+    var loadingPackages = config.loadingPackages = config.loadingPackages || {};
+    var loadedPackages = config.packages = {};
+    var registry = config.registry = config.registry || Object.create(null);
+    config.mainPackageLocation = location;
+
+    config.hasPackage = function (dependency) {
+        dependency = normalizeDependency(dependency, config);
+        if (!dependency.location) {
+            return false;
+        }
+        var location = dependency.location;
+        return !!loadedPackages[location];
+    };
+
+    config.getPackage = function (dependency) {
+        dependency = normalizeDependency(dependency, config);
+        if (!dependency.location) {
+            throw new Error("Can't find dependency: " + JSON.stringify(dependency) + " from " + config.location);
+        }
+        var location = dependency.location;
+        if (!loadedPackages[location]) {
+            if (loadingPackages[location]) {
+                throw new Error(
+                    "Dependency has not finished loading: " + JSON.stringify(dependency)
+                );
+            } else {
+                throw new Error(
+                    "Dependency was not loaded: " + JSON.stringify(dependency)
+                );
+            }
+        }
+        return loadedPackages[location];
+    };
+
+    config.loadPackage = function (dependency, viaConfig, loading) {
+        dependency = normalizeDependency(dependency, viaConfig);
+        if (!dependency.location) {
+            throw new Error("Can't find dependency: " + JSON.stringify(dependency) + " from " + config.location);
+        }
+        var location = dependency.location;
+
+        loading = loading || {};
+        if (loading[location]) {
+            return Q();
+        }
+        loading[location] = true;
+
+        if (!loadingPackages[location]) {
+            loadingPackages[location] = Require.loadPackageDescription(dependency, config)
+            .then(function (packageDescription) {
+                var subconfig = configurePackage(
+                    location,
+                    packageDescription,
+                    config
+                );
+                var pkg = Require.makeRequire(subconfig);
+                loadedPackages[location] = pkg;
+                return Q.all(Object.keys(subconfig.mappings).map(function (prefix) {
+                    var dependency = subconfig.mappings[prefix];
+                    return config.loadPackage(subconfig.mappings[prefix], subconfig, loading);
+                }))
+                .then(function () {
+                    postConfigurePackage(subconfig);
+                })
+                .thenResolve(pkg);
+            });
+            loadingPackages[location].done();
+        }
+        return loadingPackages[location];
+    };
+
+    var pkg = config.loadPackage(dependency);
+    pkg.location = location;
+    pkg.async = function (id, callback) {
+        return pkg.then(function (require) {
+            return require.async(id, callback);
+        });
+    };
+
+    return pkg;
+};
+
+function normalizeDependency(dependency, config, name) {
+    config = config || {};
+    if (typeof dependency === "string") {
+        dependency = {
+            location: dependency
+        };
+    }
+    if (dependency.main) {
+        dependency.location = config.mainPackageLocation;
+    }
+    // if the named dependency has already been found at another
+    // location, refer to the same eventual instance
+    if (
+        dependency.name &&
+        config.registry &&
+        config.registry[dependency.name]
+    ) {
+        dependency.location = config.registry[dependency.name];
+    }
+    // default location
+    if (!dependency.location && config.packagesDirectory && dependency.name) {
+        dependency.location = URL.resolve(
+            config.packagesDirectory,
+            dependency.name + "/"
+        );
+    }
+    if (!dependency.location) {
+        return dependency; // partially completed
+    }
+    // make sure the dependency location has a trailing slash so that
+    // relative urls will resolve properly
+    if (!/\/$/.test(dependency.location)) {
+        dependency.location += "/";
+    }
+    // resolve the location relative to the current package
+    if (!Require.isAbsolute(dependency.location)) {
+        if (!config.location) {
+            throw new Error(
+                "Dependency locations must be fully qualified: " +
+                JSON.stringify(dependency)
+            );
+        }
+        dependency.location = URL.resolve(
+            config.location,
+            dependency.location
+        );
+    }
+    // register the package name so the location can be reused
+    if (dependency.name) {
+        config.registry[dependency.name] = dependency.location;
+    }
+    return dependency;
+}
+
+function configurePackage(location, description, parent) {
+
+    if (!/\/$/.test(location)) {
+        location += "/";
+    }
+
+    var config = Object.create(parent);
+    config.name = description.name;
+    config.location = location || Require.getLocation();
+    config.packageDescription = description;
+    config.useScriptInjection = description.useScriptInjection;
+    config.compilers = description.compilers;
+    config.translators = description.translators;
+
+    if (description.production !== void 0) {
+        config.production = description.production;
+    }
+
+    // explicitly mask definitions and modules, which must
+    // not apply to child packages
+    var modules = config.modules = config.modules || {};
+
+    var registry = config.registry;
+    if (config.name !== void 0 && !registry[config.name]) {
+        registry[config.name] = config.location;
+    }
+
+    // overlay
+    var overlay = description.overlay || {};
+
+    // but first, convert "browser" field, as pioneered by Browserify, to an
+    // overlay
+    if (typeof description.browser === "string") {
+        overlay.browser = {
+            redirects: {"": description.browser}
+        };
+    } else if (typeof description.browser === "object") {
+        overlay.browser = {
+            redirects: description.browser
+        };
+    }
+
+    // overlay continued...
+    var layer;
+    (config.overlays || Require.overlays).forEach(function (engine) {
+        /*jshint -W089 */
+        if (overlay[engine]) {
+            var layer = overlay[engine];
+            for (var name in layer) {
+                description[name] = layer[name];
+            }
+        }
+        /*jshint +W089 */
+    });
+    delete description.overlay;
+
+    // directories
+    description.directories = description.directories || {};
+    description.directories.lib =
+        description.directories.lib === void 0 ? "./" : description.directories.lib;
+    var lib = description.directories.lib;
+    // lib
+    config.lib = URL.resolve(location, "./" + lib);
+    var packagesDirectory = description.directories.packages || "node_modules";
+    packagesDirectory = URL.resolve(location, packagesDirectory + "/");
+    config.packagesDirectory = packagesDirectory;
+
+    // The default "main" module of a package has the same name as the
+    // package.
+    if (description.main !== void 0) {
+
+        // main, injects a definition for the main module, with
+        // only its path. makeRequire goes through special effort
+        // in deepLoad to re-initialize this definition with the
+        // loaded definition from the given path.
+        modules[""] = {
+            id: "",
+            redirect: normalizeId(description.main),
+            location: config.location
+        };
+
+        if (description.name !== modules[""].redirect) {
+            modules[description.name] = {
+                id: description.name,
+                redirect: "",
+                location: URL.resolve(location, description.name || "")
+            };
+        }
+
+    }
+
+    //Deal with redirects
+    var redirects = description.redirects;
+    if (redirects !== void 0) {
+        Object.keys(redirects).forEach(function (name) {
+            modules[name] = {
+                id: name,
+                redirect: redirects[name],
+                location: URL.resolve(location, name)
+            };
+        });
+    }
+
+    // mappings, link this package to other packages.
+    var mappings = description.mappings || {};
+    // dependencies, devDependencies if not in production, if not installed by NPM
+    [description.dependencies, description._id || description.production ? null : description.devDependencies]
+    .forEach(function (dependencies) {
+        if (!dependencies) {
+            return;
+        }
+        Object.keys(dependencies).forEach(function (name) {
+            if (!mappings[name]) {
+                // dependencies are equivalent to name and version mappings,
+                // though the version predicate string is presently ignored
+                // (TODO)
+                mappings[name] = {
+                    name: name,
+                    version: dependencies[name]
+                };
+            }
+        });
+    });
+    // mappings
+    Object.keys(mappings).forEach(function (name) {
+        var mapping = mappings[name] = normalizeDependency(
+            mappings[name],
+            config,
+            name
+        );
+    });
+    config.mappings = mappings;
+
+    return config;
+}
+
+function postConfigurePackage(config) {
+    var mappings = config.mappings;
+    var prefixes = Object.keys(mappings);
+    prefixes.forEach(function (prefix) {
+
+        var dependency = mappings[prefix];
+        if (!config.hasPackage(dependency)) {
+            return;
+        }
+        var package = config.getPackage(dependency);
+        var extensions;
+
+        // reference translators
+        var myTranslators = config.translators = config.translators || {};
+        var theirTranslators = package.config.translators;
+        extensions = Object.keys(theirTranslators);
+        extensions.forEach(function (extension) {
+            myTranslators[extension] = prefix + "/" + theirTranslators[extension];
+        });
+
+        // reference compilers
+        var myCompilers = config.compilers = config.compilers || {};
+        var theirCompilers = package.config.compilers;
+        extensions = Object.keys(theirCompilers);
+        extensions.forEach(function (extension) {
+            myCompilers[extension] = prefix + "/" + theirCompilers[extension];
+        });
+
+    });
+}
+
+// Helper functions:
+
+function has(object, property) {
+    return Object.prototype.hasOwnProperty.call(object, property);
+}
+
+// Resolves CommonJS module IDs (not paths)
+Require.resolve = resolve;
+function resolve(id, baseId) {
+    id = String(id);
+    var source = id.split("/");
+    var target = [];
+    if (source.length && source[0] === "." || source[0] === "..") {
+        var parts = baseId.split("/");
+        parts.pop();
+        source.unshift.apply(source, parts);
+    }
+    for (var i = 0, ii = source.length; i < ii; i++) {
+        /*jshint -W035 */
+        var part = source[i];
+        if (part === "" || part === ".") {
+        } else if (part === "..") {
+            if (target.length) {
+                target.pop();
+            }
+        } else {
+            target.push(part);
+        }
+        /*jshint +W035 */
+    }
+    return target.join("/");
+}
+
+Require.base = function (location) {
+    // matches Unix basename
+    return String(location)
+        .replace(/(.+?)\/+$/, "$1")
+        .match(/([^\/]+$|^\/$|^$)/)[1];
+};
+
+Require.extension = function (location) {
+    var match = /\.([^\/]+)$/.exec(location);
+    if (match) {
+        return match[1];
+    }
+};
+
+// Tests whether the location or URL is a absolute.
+Require.isAbsolute = function(location) {
+    return (/^[\w\-]+:/).test(location);
+};
+
+// Extracts dependencies by parsing code and looking for "require" (currently using a simple regexp)
+Require.parseDependencies = function(factory) {
+    var o = {};
+    String(factory).replace(/(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g, function(_, id) {
+        o[id] = true;
+    });
+    return Object.keys(o);
+};
+
+// Built-in compiler/preprocessor "middleware":
+
+Require.DependenciesCompiler = function(config, compile) {
+    return function(module) {
+        if (!module.dependencies && module.text !== void 0) {
+            module.dependencies = config.parseDependencies(module.text);
+        }
+        compile(module);
+        if (module && !module.dependencies) {
+            if (module.text || module.factory) {
+                module.dependencies = Require.parseDependencies(module.text || module.factory);
+            } else {
+                module.dependencies = [];
+            }
+        }
+        return module;
+    };
+};
+
+// Support she-bang for shell scripts by commenting it out (it is never
+// valid JavaScript syntax anyway)
+Require.ShebangCompiler = function(config, compile) {
+    return function (module) {
+        if (module.text) {
+            module.text = module.text.replace(/^#!/, "//#!");
+        }
+        compile(module);
+    };
+};
+
+Require.LintCompiler = function(config, compile) {
+    return function(module) {
+        try {
+            compile(module);
+        } catch (error) {
+            if (config.lint) {
+                // TODO: use ASAP
+                Q.nextTick(function () {
+                    config.lint(module);
+                });
+            }
+            throw error;
+        }
+    };
+};
+
+Require.exposedConfigs = [
+    "paths",
+    "mappings",
+    "location",
+    "packageDescription",
+    "packages",
+    "modules"
+];
+
+Require.makeCompiler = function(config) {
+    return Require.JsonCompiler(
+        config,
+        Require.ShebangCompiler(
+            config,
+            Require.DependenciesCompiler(
+                config,
+                Require.LintCompiler(
+                    config,
+                    Require.Compiler(config)
+                )
+            )
+        )
+    );
+};
+
+Require.JsonCompiler = function (config, compile) {
+    return function (module) {
+        var json = (module.location || "").match(/\.json$/);
+        if (json) {
+            module.exports = JSON.parse(module.text);
+            return module;
+        } else {
+            return compile(module);
+        }
+    };
+};
+
+// Built-in loader "middleware":
+
+// Using mappings hash to load modules that match a mapping.
+Require.MappingsLoader = function(config, load) {
+    config.mappings = config.mappings || {};
+    config.name = config.name;
+
+    // finds a mapping to follow, if any
+    return function (id, module) {
+        var mappings = config.mappings;
+        var prefixes = Object.keys(mappings);
+        var length = prefixes.length;
+
+        if (Require.isAbsolute(id)) {
+            return load(id, module);
+        }
+        // TODO: remove this when all code has been migrated off of the autonomous name-space problem
+        if (
+            config.name !== void 0 &&
+            id.indexOf(config.name) === 0 &&
+            id.charAt(config.name.length) === "/"
+        ) {
+            console.warn("Package reflexive module ignored:", id);
+        }
+        var i, prefix;
+        for (i = 0; i < length; i++) {
+            prefix = prefixes[i];
+            if (
+                id === prefix ||
+                id.indexOf(prefix) === 0 &&
+                id.charAt(prefix.length) === "/"
+            ) {
+                /*jshint -W083 */
+                var mapping = mappings[prefix];
+                var rest = id.slice(prefix.length + 1);
+                return config.loadPackage(mapping, config)
+                .then(function (mappingRequire) {
+                    /*jshint +W083 */
+                    module.mappingRedirect = rest;
+                    module.mappingRequire = mappingRequire;
+                    return mappingRequire.deepLoad(rest, config.location);
+                });
+            }
+        }
+        return load(id, module);
+    };
+};
+
+Require.ExtensionsLoader = function(config, load) {
+    var extensions = config.extensions || ["js"];
+    var loadWithExtension = extensions.reduceRight(function (next, extension) {
+        return function (id, module) {
+            return load(id + "." + extension, module)
+            .fail(function (error) {
+                if (/^Can't find /.test(error.message)) {
+                    return next(id, module);
+                } else {
+                    throw error;
+                }
+            });
+        };
+    }, function (id, module) {
+        throw new Error(
+            "Can't find " + JSON.stringify(id) + " with extensions " +
+            JSON.stringify(extensions) + " in package at " +
+            JSON.stringify(config.location)
+        );
+    });
+    return function (id, module) {
+        if (Require.base(id).indexOf(".") !== -1) {
+            // already has an extension
+            return load(id, module);
+        } else {
+            return loadWithExtension(id, module);
+        }
+    };
+};
+
+// Attempts to load using multiple base paths (or one absolute path) with a
+// single loader.
+Require.PathsLoader = function(config, load) {
+    var loadFromPaths = config.paths.reduceRight(function (next, path) {
+        return function (id, module) {
+            var newId = URL.resolve(path, id);
+            return load(newId, module)
+            .fail(function (error) {
+                if (/^Can't find /.test(error.message)) {
+                    return next(id, module);
+                } else {
+                    throw error;
+                }
+            });
+        };
+    }, function (id, module) {
+        throw new Error(
+            "Can't find " + JSON.stringify(id) + " from paths " +
+            JSON.stringify(config.paths) + " in package at " +
+            JSON.stringify(config.location)
+        );
+    });
+    return function(id, module) {
+        if (Require.isAbsolute(id)) {
+            // already fully qualified
+            return load(id, module);
+        } else {
+            return loadFromPaths(id, module);
+        }
+    };
+};
+
+Require.MemoizedLoader = function (config, load) {
+    var cache = config.cache = config.cache || {};
+    return memoize(load, cache);
+};
+
+var normalizeId = function (id) {
+    var match = /^(.*)\.js$/.exec(id);
+    if (match) {
+        id = match[1];
+    }
+    return id;
+};
+
+var memoize = function (callback, cache) {
+    cache = cache || {};
+    return function (key, arg) {
+        if (!has(cache, key)) {
+            cache[key] = Q.fcall(callback, key, arg);
+        }
+        return cache[key];
+    };
+};
+
+}],[{},function (require, exports, module){
+
+// q q
+// ---
+
 // vim:ts=4:sts=4:sw=4:
 /*!
  *
@@ -1749,3 +3203,4 @@ var qEndingLine = captureLine();
 return Q;
 
 });
+}]]})(this))().done()

@@ -1,6 +1,6 @@
 {
   "name": "mr",
-  "version": "0.13.3",
+  "version": "0.13.0",
   "description": "A refresh-only CommonJS module system for browsers, used in Montage",
   "keywords": [
     "montage",
@@ -10,22 +10,26 @@
     "modules",
     "loader"
   ],
-  "main": "require",
+  "browser": {
+    "url": "./mini-url.js"
+  },
   "scripts": {
-    "test": "jasmine-node spec/node-spec.js && node spec/phantom.js && jshint .",
-    "integration": "mop-integration"
+    "build": "npm run build-boot && npm run build-preload",
+    "build-boot": "node bin/mrs.js boot/browser.js -e '().done()' > boot.js",
+    "build-preload": "node bin/mrs.js boot/preload-entry.js > boot/preload-boilerplate.js",
+    "test": "npm run build && npm run node-test && npm run browser-test  && npm run lint",
+    "node-test": "jasmine-node spec/node-spec.js",
+    "browser-test": "node spec/phantom.js",
+    "lint": "jshint require.js browser.js node.js",
+    "integration": "MOP_VERSION=~0.13 MR_VERSION=. mop-integration"
   },
   "bin": {
-    "mr": "bin/mr"
-  },
-  "mappings": {
-    "q": {
-      "name": "q",
-      "location": "packages/q"
-    }
+    "mr": "bin/mr.js",
+    "mrs": "bin/mrs.js"
   },
   "dependencies": {
-    "q": "0.9.6"
+    "q": "0.9.6",
+    "optimist": "~0.6.0"
   },
   "devDependencies": {
     "qs": "~0.5.3",
