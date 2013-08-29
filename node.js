@@ -139,22 +139,10 @@ Require.NodeLoader = function NodeLoader(config, load) {
 };
 
 Require.makeLoader = function makeLoader(config) {
-    return Require.MappingsLoader(
+    return Require.makeCommonLoader(config, Require.Loader(
         config,
-        Require.ExtensionsLoader(
-            config,
-            Require.PathsLoader(
-                config,
-                Require.MemoizedLoader(
-                    config,
-                    Require.Loader(
-                        config,
-                        Require.NodeLoader(config)
-                    )
-                )
-            )
-        )
-    );
+        Require.NodeLoader(config)
+    ));
 };
 
 Require.findPackagePath = function findPackagePath(directory) {
