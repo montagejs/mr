@@ -1,5 +1,5 @@
 
-var URL = require("mini-url");
+var URL = require("url");
 var QS = require("qs");
 
 var a = document.createElement("a");

@@ -3,17 +3,15 @@
  No rights, expressed or implied, whatsoever to this software are provided by Motorola Mobility, Inc. hereunder.<br/>
  (c) Copyright 2012 Motorola Mobility, Inc.  All Rights Reserved.
  </copyright> */
-/*global bootstrap,montageDefine:true */
+/*global montageDefine:true */
 /*jshint -W015, evil:true, camelcase:false */
-bootstrap("require/browser", function (require) {
 
-var Require = require("require");
-var Promise = require("promise");
-var URL = require("mini-url");
+var Require = require("./require");
+var URL = require("url");
+var Q = require("q");
 var GET = "GET";
 var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";
 var FILE_PROTOCOL = "file:";
-var global = typeof global !== "undefined" ? global : window;
 
 Require.getLocation = function() {
     return URL.resolve(window.location, ".");
@@ -39,7 +37,7 @@ Require.read = function (url) {
     }
 
     var request = new XMLHttpRequest();
-    var response = Promise.defer();
+    var response = Q.defer();
 
     function onload() {
         if (xhrSuccess(request)) {
@@ -66,7 +64,7 @@ Require.read = function (url) {
         request.onload = request.load = onload;
         request.onerror = request.error = onerror;
     } catch (exception) {
-        response.reject(exception.message, exception);
+        response.reject(exception);
     }
 
     request.send();
@@ -138,7 +136,7 @@ Require.XhrLoader = function (config) {
 var definitions = {};
 var getDefinition = function (hash, id) {
     definitions[hash] = definitions[hash] || {};
-    definitions[hash][id] = definitions[hash][id] || Promise.defer();
+    definitions[hash][id] = definitions[hash][id] || Q.defer();
     return definitions[hash][id];
 };
 // global
@@ -162,7 +160,7 @@ Require.loadScript = function (location) {
 Require.ScriptLoader = function (config) {
     var hash = config.packageDescription.hash;
     return function (location, module) {
-        return Promise.fcall(function () {
+        return Q.fcall(function () {
 
             // short-cut by predefinition
             if (definitions[hash] && definitions[hash][module.id]) {
@@ -246,4 +244,5 @@ Require.makeLoader = function (config) {
     );
 };
 
-});
+module.exports = Require;
+
