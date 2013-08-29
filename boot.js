@@ -316,19 +316,7 @@ Require.makeLoader = function (config) {
     } else {
         Loader = Require.XhrLoader;
     }
-    return Require.MappingsLoader(
-        config,
-        Require.ExtensionsLoader(
-            config,
-            Require.PathsLoader(
-                config,
-                Require.MemoizedLoader(
-                    config,
-                    Loader(config)
-                )
-            )
-        )
-    );
+    return Require.makeCommonLoader(config, Loader(config));
 };
 
 module.exports = Require;
@@ -480,6 +468,7 @@ Require.makeRequire = function (config) {
     config.read = config.read || Require.read;
     config.compilers = config.compilers || {};
     config.translators = config.translators || {};
+    config.redirectTable = config.redirectTable || [];
 
     // Modules: { exports, id, location, directory, factory, dependencies,
     // dependees, text, type }
@@ -934,7 +923,7 @@ Require.loadPackage = function (dependency, config) {
                     return config.loadPackage(subconfig.mappings[prefix], subconfig, loading);
                 }))
                 .then(function () {
-                    postConfigurePackage(subconfig);
+                    postConfigurePackage(subconfig, packageDescription);
                 })
                 .thenResolve(pkg);
             });
@@ -1138,9 +1127,10 @@ function configurePackage(location, description, parent) {
     return config;
 }
 
-function postConfigurePackage(config) {
+function postConfigurePackage(config, description) {
     var mappings = config.mappings;
     var prefixes = Object.keys(mappings);
+    var redirectTable = config.redirectTable = config.redirectTable || [];
     prefixes.forEach(function (prefix) {
 
         var dependency = mappings[prefix];
@@ -1166,7 +1156,25 @@ function postConfigurePackage(config) {
             myCompilers[extension] = prefix + "/" + theirCompilers[extension];
         });
 
+        // copy redirect patterns
+        redirectTable.push.apply(
+            redirectTable,
+            package.config.redirectTable
+        );
+
     });
+
+    if (description["redirect-patterns"]) {
+        var describedPatterns = description["redirect-patterns"];
+        for (var pattern in describedPatterns) {
+            if (Object.prototype.hasOwnProperty.call(describedPatterns, pattern)) {
+                redirectTable.push([
+                    new RegExp(pattern),
+                    describedPatterns[pattern]
+                ]);
+            }
+        }
+    }
 }
 
 // Helper functions:
@@ -1315,6 +1323,25 @@ Require.JsonCompiler = function (config, compile) {
 
 // Built-in loader "middleware":
 
+Require.makeCommonLoader = function (config, load) {
+    return Require.MappingsLoader(
+        config,
+        Require.RedirectPatternsLoader(
+            config,
+            Require.ExtensionsLoader(
+                config,
+                Require.PathsLoader(
+                    config,
+                    Require.MemoizedLoader(
+                        config,
+                        load
+                    )
+                )
+            )
+        )
+    );
+};
+
 // Using mappings hash to load modules that match a mapping.
 Require.MappingsLoader = function(config, load) {
     config.mappings = config.mappings || {};
@@ -1426,6 +1453,22 @@ Require.PathsLoader = function(config, load) {
 Require.MemoizedLoader = function (config, load) {
     var cache = config.cache = config.cache || {};
     return memoize(load, cache);
+};
+
+Require.RedirectPatternsLoader = function (config, load) {
+    return function (id, module) {
+        var table = config.redirectTable || [];
+        for (var i = 0; i < table.length; i++) {
+            var expression = table[i][0];
+            var match = expression.exec(id);
+            if (match) {
+                var replacement = table[i][1];
+                module.redirect = id.replace(expression, replacement);
+                return;
+            }
+        }
+        return load(id, module);
+    };
 };
 
 var normalizeId = function (id) {

@@ -232,19 +232,7 @@ Require.makeLoader = function (config) {
     } else {
         Loader = Require.XhrLoader;
     }
-    return Require.MappingsLoader(
-        config,
-        Require.ExtensionsLoader(
-            config,
-            Require.PathsLoader(
-                config,
-                Require.MemoizedLoader(
-                    config,
-                    Loader(config)
-                )
-            )
-        )
-    );
+    return Require.makeCommonLoader(config, Loader(config));
 };
 
 module.exports = Require;
