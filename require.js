@@ -636,7 +636,7 @@ function configurePackage(location, description, parent) {
         // loaded definition from the given path.
         modules[""] = {
             id: "",
-            redirect: normalizeId(description.main),
+            redirect: normalizeId(resolve(description.main, "")),
             location: config.location
         };
 
