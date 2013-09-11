@@ -1141,11 +1141,11 @@ function configurePackage(location, description, parent) {
         // loaded definition from the given path.
         modules[""] = {
             id: "",
-            redirect: normalizeId(description.main),
+            redirect: normalizeId(resolve(description.main, "")),
             location: config.location
         };
 
-        if (description.name !== modules[""].redirect) {
+        if (description.name && description.name !== modules[""].redirect) {
             modules[description.name] = {
                 id: description.name,
                 redirect: "",
