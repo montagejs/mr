@@ -640,7 +640,7 @@ function configurePackage(location, description, parent) {
             location: config.location
         };
 
-        if (description.name !== modules[""].redirect) {
+        if (description.name && description.name !== modules[""].redirect) {
             modules[description.name] = {
                 id: description.name,
                 redirect: "",
