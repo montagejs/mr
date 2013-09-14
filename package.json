@@ -13,7 +13,8 @@
   "main": "require",
   "scripts": {
     "test": "jasmine-node spec/node-spec.js && node spec/phantom.js && jshint .",
-    "integration": "mop-integration"
+    "integration": "mop-integration",
+    "saucelabs": "grunt saucelabs"
   },
   "bin": {
     "mr": "bin/mr"
@@ -35,7 +36,11 @@
     "q-io": "~1.6.4",
     "jshint": "~2.1.4",
     "jasmine-node": "~1.10.2",
-    "mop-integration": "git://github.com/montagejs/mop-integration.git#master"
+    "mop-integration": "git://github.com/montagejs/mop-integration.git#master",
+    "grunt-cli": "~0.1.9",
+    "grunt": "~0.4.1",
+    "grunt-saucelabs": "~4.0.4",
+    "grunt-contrib-connect": "~0.5.0"
   },
   "exclude": [
     "README.md",

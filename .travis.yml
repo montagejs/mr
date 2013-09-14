@@ -1,9 +1,15 @@
 language: node_js
 node_js:
-  - "0.10"
+- '0.10'
+
 script: npm run $COMMAND
 env:
+  matrix:
   - COMMAND=test
   - COMMAND=integration MR_VERSION=. MOP_VERSION=0.13
   - COMMAND=integration MR_VERSION=. MOP_VERSION=latest
   - COMMAND=integration MR_VERSION=. MOP_VERSION="#master"
+  - COMMAND=saucelabs
+  global:
+  - secure: SZjXkabaLuzaS2VMe3UMisVDjYtxaHfRShsfWH/oztLCgPk130RkbsgyAeHbu2dkAAN2WlagEYshT8xUgCK3+WAU0pNVDhGDJ38tXQ7wO8NB5vWeDtS4ES/Lu3VMHQ3AIsWoovdGA+ZN1W6illZo3tCI0aVxdOVOoTfhpzq+w+k=
+  - secure: S8eySXghjjRUq83rhrVzcYem77qVKHf/0El3PADfz0skc08NiQyNdKZoSgSanNZ8u6DFPsmgYCm4wdoxXqQXCrlQWx99ZAcGslhMQ/NuWTFC73NcKW56Ft9smYYlpt1OvmDjUWsY4qlTec8EYuyB0gOaiCLBnKQIWiYcQxsgo2o=

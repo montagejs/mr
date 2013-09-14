@@ -1,7 +1,8 @@
+.DS_Store
+.idea
 .npmignore
 .tmp
-.idea
-.DS_Store
-lcov.info
-lcov-report/
 /node_modules
+lcov-report/
+lcov.info
+sauce_connect.log*
