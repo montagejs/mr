@@ -169,7 +169,7 @@ if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
 var __FILE__String = "__FILE__",
     DoubleUnderscoreString = "__",
     globalEvalConstantA = "(function ",
-    globalEvalConstantB = "(require, exports, module) {",
+    globalEvalConstantB = "(require, exports, module, __filename, __dirname) {",
     globalEvalConstantC = "//*/\n})\n//@ sourceURL=";
 
 Require.Compiler = function (config) {
@@ -664,7 +664,9 @@ Require.makeRequire = function (config) {
             void 0, // this (defaults to global)
             makeRequire(topId), // require
             module.exports, // exports
-            module // module
+            module, // module
+            module.location, // __filename
+            module.directory // __dirname
         );
 
         // EXTENSION
