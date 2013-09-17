@@ -1092,8 +1092,6 @@ function configurePackage(location, description, parent) {
     config.location = location || Require.getLocation();
     config.packageDescription = description;
     config.useScriptInjection = description.useScriptInjection;
-    config.compilers = description.compilers;
-    config.translators = description.translators;
 
     if (description.production !== void 0) {
         config.production = description.production;
@@ -1213,6 +1211,10 @@ function configurePackage(location, description, parent) {
         );
     });
     config.mappings = mappings;
+
+    // compilers, translators, redirect patterns
+    config.compilers = description.compilers;
+    config.translators = description.translators;
 
     return config;
 }
