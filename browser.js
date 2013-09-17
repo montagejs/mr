@@ -133,7 +133,7 @@ RequireRead.onerror = onerror;
 var DoubleUnderscore = "__",
     Underscore = "_",
     globalEvalConstantA = "(function ",
-    globalEvalConstantB = "(require, exports, module, global) {",
+    globalEvalConstantB = "(require, exports, module, global, __filename, __dirname) {",
     globalEvalConstantC = "//*/\n})\n//# sourceURL=",
     globalConcatenator = [globalEvalConstantA,undefined,globalEvalConstantB,undefined,globalEvalConstantC,undefined],
     nameRegex = /[^\w\d]/g;

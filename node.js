@@ -101,7 +101,7 @@ Require.read = function read(location) {
 // Can be overriden by the platform to make the engine aware of the source path. Uses sourceURL hack by default.
 Require.Compiler = function Compiler(config) {
     config.scope = config.scope || {};
-    var names = ["require", "exports", "module"];
+    var names = ["require", "exports", "module", "global", "__filename", "__dirname"];
     var scopeNames = Object.keys(config.scope);
     names.push.apply(names, scopeNames);
     return function (module) {
@@ -116,7 +116,7 @@ Require.Compiler = function Compiler(config) {
                 module.text +
                 "\n//*/\n})\n//@ sourceURL=" + module.location
             );
-            module.factory = function (require, exports, module) {
+            module.factory = function (require, exports, module, global, __filename, __dirname) {
                 Array.prototype.push.apply(arguments, scopeNames.map(function (name) {
                     return config.scope[name];
                 }));
