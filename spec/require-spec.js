@@ -62,6 +62,7 @@ describe("Require", function () {
         {name: "script-injection-dep", node: false},
         {name: "script-injection", node: false},
         "read",
+        "main-name",
         "main",
         "sandbox"
     ].forEach(function (test) {
