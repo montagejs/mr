@@ -3,17 +3,15 @@
  No rights, expressed or implied, whatsoever to this software are provided by Motorola Mobility, Inc. hereunder.<br/>
  (c) Copyright 2012 Motorola Mobility, Inc.  All Rights Reserved.
  </copyright> */
-/*global bootstrap,montageDefine:true */
+/*global montageDefine:true */
 /*jshint -W015, evil:true, camelcase:false */
-bootstrap("require/browser", function (require) {
 
-var Require = require("require");
-var Promise = require("promise");
-var URL = require("mini-url");
+var Require = require("./require");
+var URL = require("url");
+var Q = require("q");
 var GET = "GET";
 var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";
 var FILE_PROTOCOL = "file:";
-var global = typeof global !== "undefined" ? global : window;
 
 Require.getLocation = function() {
     return URL.resolve(window.location, ".");
@@ -39,7 +37,7 @@ Require.read = function (url) {
     }
 
     var request = new XMLHttpRequest();
-    var response = Promise.defer();
+    var response = Q.defer();
 
     function onload() {
         if (xhrSuccess(request)) {
@@ -66,7 +64,7 @@ Require.read = function (url) {
         request.onload = request.load = onload;
         request.onerror = request.error = onerror;
     } catch (exception) {
-        response.reject(exception.message, exception);
+        response.reject(exception);
     }
 
     request.send();
@@ -86,7 +84,7 @@ if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
 var __FILE__String = "__FILE__",
     DoubleUnderscoreString = "__",
     globalEvalConstantA = "(function ",
-    globalEvalConstantB = "(require, exports, module) {",
+    globalEvalConstantB = "(require, exports, module, __filename, __dirname) {",
     globalEvalConstantC = "//*/\n})\n//@ sourceURL=";
 
 Require.Compiler = function (config) {
@@ -111,6 +109,9 @@ Require.Compiler = function (config) {
 
         try {
             module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+module.location);
+            if (!config.saveText) {
+                delete module.text; // save some space
+            }
         } catch (exception) {
             exception.message = exception.message + " in " + module.location;
             throw exception;
@@ -138,30 +139,9 @@ Require.XhrLoader = function (config) {
 var definitions = {};
 var getDefinition = function (hash, id) {
     definitions[hash] = definitions[hash] || {};
-    definitions[hash][id] = definitions[hash][id] || Promise.defer();
+    definitions[hash][id] = definitions[hash][id] || Q.defer();
     return definitions[hash][id];
 };
-
-var loadIfNotPreloaded = function (location, definition, preloaded) {
-    // The package.json might come in a preloading bundle. If so, we do not
-    // want to issue a script injection. However, if by the time preloading
-    // has finished the package.json has not arrived, we will need to kick off
-    // a request for the requested script.
-    if (preloaded && preloaded.isPending()) {
-        preloaded
-        .then(function () {
-            if (definition.isPending()) {
-                Require.loadScript(location);
-            }
-        })
-        .done();
-    } else if (definition.isPending()) {
-        // otherwise preloading has already completed and we don't have the
-        // module, so load it
-        Require.loadScript(location);
-    }
-};
-
 // global
 montageDefine = function (hash, id, module) {
     getDefinition(hash, id).resolve(module);
@@ -183,7 +163,7 @@ Require.loadScript = function (location) {
 Require.ScriptLoader = function (config) {
     var hash = config.packageDescription.hash;
     return function (location, module) {
-        return Promise.fcall(function () {
+        return Q.fcall(function () {
 
             // short-cut by predefinition
             if (definitions[hash] && definitions[hash][module.id]) {
@@ -196,10 +176,9 @@ Require.ScriptLoader = function (config) {
                 location += ".load.js";
             }
 
-            var definition = getDefinition(hash, module.id).promise;
-            loadIfNotPreloaded(location, definition, config.preloaded);
+            Require.loadScript(location);
 
-            return definition;
+            return getDefinition(hash, module.id).promise;
         })
         .then(function (definition) {
             /*jshint -W089 */
@@ -221,7 +200,23 @@ Require.loadPackageDescription = function (dependency, config) {
         var definition = getDefinition(dependency.hash, "package.json").promise;
         var location = URL.resolve(dependency.location, "package.json.load.js");
 
-        loadIfNotPreloaded(location, definition, config.preloaded);
+        // The package.json might come in a preloading bundle. If so, we do not
+        // want to issue a script injection. However, if by the time preloading
+        // has finished the package.json has not arrived, we will need to kick off
+        // a request for the package.json.load.js script.
+        if (config.preloaded && config.preloaded.isPending()) {
+            config.preloaded
+            .then(function () {
+                if (definition.isPending()) {
+                    Require.loadScript(location);
+                }
+            })
+            .done();
+        } else if (definition.isPending()) {
+            // otherwise preloading has already completed and we don't have the
+            // package description, so load it
+            Require.loadScript(location);
+        }
 
         return definition.get("exports");
     } else {
@@ -237,19 +232,8 @@ Require.makeLoader = function (config) {
     } else {
         Loader = Require.XhrLoader;
     }
-    return Require.MappingsLoader(
-        config,
-        Require.ExtensionsLoader(
-            config,
-            Require.PathsLoader(
-                config,
-                Require.MemoizedLoader(
-                    config,
-                    Loader(config)
-                )
-            )
-        )
-    );
+    return Require.makeCommonLoader(config, Loader(config));
 };
 
-});
+module.exports = Require;
+
