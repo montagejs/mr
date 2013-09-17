@@ -403,7 +403,7 @@ Require.makeRequire = function (config) {
             aModule.display = (config.name || config.location); // EXTENSION
             aModule.display += "#"; // EXTENSION
             aModule.display += id; // EXTENSION
-            aModule.require = require;
+            aModule.require = makeRequire(id)
         }
         return modules[lookupId];
     }
