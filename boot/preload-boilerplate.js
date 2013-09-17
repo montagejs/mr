@@ -541,8 +541,7 @@ Require.makeRequire = function (config) {
     // Configuration defaults:
     config = config || {};
     config.location = URL.resolve(config.location || Require.getLocation(), "./");
-    config.lib = URL.resolve(config.location, config.lib || "./");
-    config.paths = config.paths || [config.lib];
+    config.paths = config.paths || [config.location];
     config.mappings = config.mappings || {}; // EXTENSION
     config.exposedConfigs = config.exposedConfigs || Require.exposedConfigs;
     config.makeLoader = config.makeLoader || Require.makeLoader;
@@ -1135,16 +1134,7 @@ function configurePackage(location, description, parent) {
     });
     delete description.overlay;
 
-    // directories
-    description.directories = description.directories || {};
-    description.directories.lib =
-        description.directories.lib === void 0 ? "./" : description.directories.lib;
-    var lib = description.directories.lib;
-    // lib
-    config.lib = URL.resolve(location, "./" + lib);
-    var packagesDirectory = description.directories.packages || "node_modules";
-    packagesDirectory = URL.resolve(location, packagesDirectory + "/");
-    config.packagesDirectory = packagesDirectory;
+    config.packagesDirectory = URL.resolve(location, "node_modules/");
 
     // The default "main" module of a package has the same name as the
     // package.
