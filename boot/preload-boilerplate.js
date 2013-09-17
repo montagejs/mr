@@ -547,6 +547,7 @@ Require.makeRequire = function (config) {
     config.compile = config.compile || config.makeCompiler(config);
     config.parseDependencies = config.parseDependencies || Require.parseDependencies;
     config.read = config.read || Require.read;
+    config.compilers = config.compilers || {};
 
     // Modules: { exports, id, location, directory, factory, dependencies,
     // dependees, text, type }
@@ -582,7 +583,7 @@ Require.makeRequire = function (config) {
     }
 
     // Ensures a module definition is loaded, compiled, analyzed
-    var load = memoize(function (topId, viaId) {
+    var load = memoize(function (topId, viaId, loading) {
         var module = getModuleDescriptor(topId);
         return Q.fcall(function () {
             // if not already loaded, already instantiated, or
@@ -597,15 +598,23 @@ Require.makeRequire = function (config) {
         })
         .then(function () {
             // compile and analyze dependencies
-            config.compile(module);
-            var dependencies =
-                module.dependencies =
-                    module.dependencies || [];
-            if (module.redirect !== void 0) {
-                dependencies.push(module.redirect);
-            }
-            if (module.extraDependencies !== void 0) {
-                Array.prototype.push.apply(module.dependencies, module.extraDependencies);
+            var extension = Require.extension(topId);
+            if (config.compilers[extension]) {
+                var compilerId = config.compilers[extension];
+                return deepLoad(compilerId, "", loading)
+                .then(function () {
+                    var compile = require(compilerId);
+                    compile(module);
+                });
+            } else {
+                config.compile(module);
+                var dependencies = module.dependencies = module.dependencies || [];
+                if (module.redirect !== void 0) {
+                    dependencies.push(module.redirect);
+                }
+                if (module.extraDependencies !== void 0) {
+                    Array.prototype.push.apply(module.dependencies, module.extraDependencies);
+                }
             }
         });
     });
@@ -626,6 +635,7 @@ Require.makeRequire = function (config) {
         .then(function () {
             // load the transitive dependencies using the magic of
             // recursion.
+            var dependencies = module.dependencies = module.dependencies || [];
             return Q.all(module.dependencies.map(function (depId) {
                 depId = resolve(depId, topId);
                 // create dependees set, purely for debug purposes
@@ -1045,6 +1055,7 @@ function configurePackage(location, description, parent) {
     config.location = location || Require.getLocation();
     config.packageDescription = description;
     config.useScriptInjection = description.useScriptInjection;
+    config.compilers = description.compilers;
 
     if (description.production !== void 0) {
         config.production = description.production;
@@ -1198,6 +1209,13 @@ Require.base = function (location) {
     return String(location)
         .replace(/(.+?)\/+$/, "$1")
         .match(/([^\/]+$|^\/$|^$)/)[1];
+};
+
+Require.extension = function (location) {
+    var match = /\.([^\/]+)$/.exec(location);
+    if (match) {
+        return match[1];
+    }
 };
 
 // Tests whether the location or URL is a absolute.
