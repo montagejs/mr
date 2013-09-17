@@ -585,6 +585,7 @@ function lookup(topId, viaId) {
             var error = new Error(
                 "Can't require module " + JSON.stringify(module.id) +
                 " via " + JSON.stringify(viaId) +
+                " in " + JSON.stringify(config.name || config.location) +
                 " because " + module.error.message
             );
             error.cause = module.error;
