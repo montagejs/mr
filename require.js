@@ -53,7 +53,7 @@ Require.makeRequire = function (config) {
                 id: id,
                 extension: Require.extension(id),
                 display: (config.name || config.location) + "#" + id, // EXTENSION
-                require: require
+                require: makeRequire(id)
             };
         }
         return modules[lookupId];
@@ -233,7 +233,7 @@ Require.makeRequire = function (config) {
         var returnValue = module.factory.call(
             // in the context of the module:
             void 0, // this (defaults to global)
-            makeRequire(topId), // require
+            module.require, // require
             module.exports, // exports
             module, // module
             module.location, // __filename
