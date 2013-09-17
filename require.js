@@ -231,7 +231,9 @@ Require.makeRequire = function (config) {
             void 0, // this (defaults to global)
             makeRequire(topId), // require
             module.exports, // exports
-            module // module
+            module, // module
+            module.location, // __filename
+            module.directory // __dirname
         );
 
         // EXTENSION
