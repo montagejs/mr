@@ -193,6 +193,9 @@ Require.Compiler = function (config) {
 
         try {
             module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+module.location);
+            if (!config.saveText) {
+                delete module.text; // save some space
+            }
         } catch (exception) {
             exception.message = exception.message + " in " + module.location;
             throw exception;
