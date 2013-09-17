@@ -974,8 +974,10 @@ Require.loadPackage = function (dependency, config) {
         }
         var location = dependency.location;
 
+        // prevent data-lock if there is a package dependency cycle
         loading = loading || {};
         if (loading[location]) {
+            // returns an already-fulfilled promise for `undefined`
             return Q();
         }
         loading[location] = true;
@@ -1290,7 +1292,7 @@ Require.base = function (location) {
 };
 
 Require.extension = function (location) {
-    var match = /\.([^\/]+)$/.exec(location);
+    var match = /\.([^\/\.]+)$/.exec(location);
     if (match) {
         return match[1];
     }
