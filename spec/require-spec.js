@@ -65,6 +65,7 @@ describe("Require", function () {
         "main-name",
         "main",
         "compiler",
+        "translator",
         "sandbox"
     ].forEach(function (test) {
         if (typeof test === "object") {
