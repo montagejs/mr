@@ -14,7 +14,7 @@
         var module = this;
         if (!module.exports) {
             module.exports = {};
-            function require(id) {
+            var require = function (id) {
                 var index = module.dependencies[id];
                 var dependency = modules[index];
                 if (!dependency)
