@@ -1088,7 +1088,10 @@ function configurePackage(location, description, parent) {
             location: config.location
         };
 
-        if (description.name && description.name !== modules[""].redirect) {
+        if (
+            description.name &&
+            description.name.toLowerCase() !== modules[""].redirect.toLowerCase()
+        ) {
             modules[description.name] = {
                 id: description.name,
                 redirect: "",
