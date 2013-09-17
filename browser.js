@@ -165,7 +165,9 @@ Require.Compiler = function (config) {
         module.factory = globalEval(globalConcatenator.join(''));
         module.factory.displayName = displayName;
 
-        module.text = null;
+        if (!config.saveText) {
+            delete module.text;
+        }
         globalConcatenator[1] = globalConcatenator[3] = globalConcatenator[5] = null;
     };
 };
