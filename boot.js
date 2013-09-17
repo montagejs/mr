@@ -406,8 +406,8 @@ function getParams(scriptName) {
 
 }],[{},function (require, exports, module){
 
-// mr mini-url.js
-// --------------
+// mr mini-url
+// -----------
 
 
 var head = document.querySelector("head"),
@@ -1107,7 +1107,7 @@ function configurePackage(location, description, parent) {
         Object.keys(redirects).forEach(function (name) {
             modules[name] = {
                 id: name,
-                redirect: redirects[name],
+                redirect: normalizeId(resolve(redirects[name], "")),
                 location: URL.resolve(location, name)
             };
         });
