@@ -198,6 +198,7 @@ Require.makeRequire = function (config) {
             error.message = (
                 "Can't require module " + JSON.stringify(module.id) +
                 " via " + JSON.stringify(viaId) +
+                " in " + JSON.stringify(config.name || config.location) +
                 " because " + error.message
             );
             throw error;
