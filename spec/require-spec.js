@@ -69,7 +69,8 @@ describe("Require", function () {
         "translator",
         "compiler-package",
         "translator-package",
-        "redirect-patterns"
+        "redirect-patterns",
+        "main"
     ].forEach(function (test) {
         if (typeof test === "object") {
             if (test.node === false && typeof process !== "undefined") {
