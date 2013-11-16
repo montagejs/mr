@@ -64,7 +64,9 @@ describe("Require", function () {
         "read",
         "main-name",
         "main",
-        "sandbox"
+        "sandbox",
+        "browser-alternative",
+        "browser-alternatives"
     ].forEach(function (test) {
         if (typeof test === "object") {
             if (test.node === false && typeof process !== "undefined") {

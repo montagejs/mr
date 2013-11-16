@@ -557,7 +557,8 @@
         // overlay
         var overlay = description.overlay || {};
         var layer;
-        (config.overlays || Require.overlays).forEach(function (engine) {
+        config.overlays = config.ovelays || Require.overlays;
+        config.overlays.forEach(function (engine) {
             /*jshint -W089 */
             if (overlay[engine]) {
                 var layer = overlay[engine];
