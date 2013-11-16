@@ -556,6 +556,20 @@
 
         // overlay
         var overlay = description.overlay || {};
+
+        // but first, convert "browser" field, as pioneered by Browserify, to
+        // an overlay
+        if (typeof description.browser === "string") {
+            overlay.browser = {
+                redirects: {"": description.browser}
+            };
+        } else if (typeof description.browser === "object") {
+            overlay.browser = {
+                redirects: description.browser
+            };
+        }
+
+        // overlay continued...
         var layer;
         config.overlays = config.ovelays || Require.overlays;
         config.overlays.forEach(function (engine) {
@@ -603,7 +617,7 @@
             Object.keys(redirects).forEach(function (name) {
                 modules[name] = {
                     id: name,
-                    redirect: redirects[name],
+                    redirect: normalizeId(resolve(redirects[name], name)),
                     location: URL.resolve(location, name)
                 };
             });
