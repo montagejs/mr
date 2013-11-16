@@ -66,7 +66,7 @@ Require.read = function (url) {
         request.onload = request.load = onload;
         request.onerror = request.error = onerror;
     } catch (exception) {
-        response.reject(exception.message, exception);
+        response.reject(exception);
     }
 
     request.send();
