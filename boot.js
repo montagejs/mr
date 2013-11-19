@@ -37,11 +37,11 @@
 var Require = require("../browser");
 var URL = require("url");
 var Q = require("q");
-
-var params = require("./script-params")("boot.js");
+var getParams = require("./script-params");
 
 module.exports = boot;
-function boot(preloaded) {
+function boot(preloaded, params) {
+    params = params || getParams("boot.js");
 
     var config = {preloaded: preloaded};
     var applicationLocation = URL.resolve(window.location, params.package || ".");
@@ -226,6 +226,7 @@ var getDefinition = function (hash, id) {
     definitions[hash][id] = definitions[hash][id] || Q.defer();
     return definitions[hash][id];
 };
+
 // global
 montageDefine = function (hash, id, module) {
     getDefinition(hash, id).resolve(module);
@@ -262,7 +263,9 @@ Require.ScriptLoader = function (config) {
 
             Require.loadScript(location);
 
-            return getDefinition(hash, module.id).promise;
+            var definition = getDefinition(hash, module.id).promise;
+            loadIfNotPreloaded(location, definition, config.preloaded);
+            return definition;
         })
         .then(function (definition) {
             /*jshint -W089 */
@@ -283,25 +286,7 @@ Require.loadPackageDescription = function (dependency, config) {
     if (dependency.hash) { // use script injection
         var definition = getDefinition(dependency.hash, "package.json").promise;
         var location = URL.resolve(dependency.location, "package.json.load.js");
-
-        // The package.json might come in a preloading bundle. If so, we do not
-        // want to issue a script injection. However, if by the time preloading
-        // has finished the package.json has not arrived, we will need to kick off
-        // a request for the package.json.load.js script.
-        if (config.preloaded && config.preloaded.isPending()) {
-            config.preloaded
-            .then(function () {
-                if (definition.isPending()) {
-                    Require.loadScript(location);
-                }
-            })
-            .done();
-        } else if (definition.isPending()) {
-            // otherwise preloading has already completed and we don't have the
-            // package description, so load it
-            Require.loadScript(location);
-        }
-
+        loadIfNotPreloaded(location, definition, config.preloaded);
         return definition.get("exports");
     } else {
         // fall back to normal means
@@ -318,6 +303,26 @@ Require.makeLoader = function (config) {
     }
     return Require.makeCommonLoader(config, Loader(config));
 };
+
+function loadIfNotPreloaded(location, definition, preloaded) {
+    // The package.json might come in a preloading bundle. If so, we do not
+    // want to issue a script injection. However, if by the time preloading
+    // has finished the package.json has not arrived, we will need to kick off
+    // a request for the requested script.
+    if (preloaded && preloaded.isPending()) {
+        preloaded
+        .then(function () {
+            if (definition.isPending()) {
+                Require.loadScript(location);
+            }
+        })
+        .done();
+    } else if (definition.isPending()) {
+        // otherwise preloading has already completed and we don't have the
+        // module, so load it
+        Require.loadScript(location);
+    }
+}
 
 module.exports = Require;
 
@@ -351,7 +356,7 @@ function getParams(scriptName) {
         // `data-boot-location` property on the script instead.  This will also
         // serve to inform the boot script of the location of the loading
         // package, albeit Montage or Mr.
-        if (script.src && (match = script.src.match(re))) {
+        if (scriptName && script.src && (match = script.src.match(re))) {
             location = match[1];
         }
         if (script.hasAttribute("data-boot-location")) {

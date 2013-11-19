@@ -1,8 +1,10 @@
 
 var boot = require("./browser");
 var preload = require("./preload");
+var getParams = require("./script-params");
 
 module.exports = function bootstrapPreload(plan) {
-    return boot(preload(plan));
+    var params = getParams();
+    return boot(preload(plan, params), params);
 };
 

@@ -23,7 +23,7 @@ function getParams(scriptName) {
         // `data-boot-location` property on the script instead.  This will also
         // serve to inform the boot script of the location of the loading
         // package, albeit Montage or Mr.
-        if (script.src && (match = script.src.match(re))) {
+        if (scriptName && script.src && (match = script.src.match(re))) {
             location = match[1];
         }
         if (script.hasAttribute("data-boot-location")) {

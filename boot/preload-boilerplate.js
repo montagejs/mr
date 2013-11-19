@@ -27,7 +27,7 @@
     };
 
     return modules[0].getExports();
-})((function (global){return[[{"./browser":1,"./preload":2},function (require, exports, module){
+})((function (global){return[[{"./browser":1,"./preload":2,"./script-params":3},function (require, exports, module){
 
 // mr boot/preload-entry
 // ---------------------
@@ -35,12 +35,14 @@
 
 var boot = require("./browser");
 var preload = require("./preload");
+var getParams = require("./script-params");
 
 module.exports = function bootstrapPreload(plan) {
-    return boot(preload(plan));
+    var params = getParams();
+    return boot(preload(plan, params), params);
 };
 
-}],[{"../browser":3,"url":5,"q":8,"./script-params":4},function (require, exports, module){
+}],[{"../browser":4,"url":5,"q":8,"./script-params":3},function (require, exports, module){
 
 // mr boot/browser
 // ---------------
@@ -50,11 +52,11 @@ module.exports = function bootstrapPreload(plan) {
 var Require = require("../browser");
 var URL = require("url");
 var Q = require("q");
-
-var params = require("./script-params")("boot.js");
+var getParams = require("./script-params");
 
 module.exports = boot;
-function boot(preloaded) {
+function boot(preloaded, params) {
+    params = params || getParams("boot.js");
 
     var config = {preloaded: preloaded};
     var applicationLocation = URL.resolve(window.location, params.package || ".");
@@ -99,7 +101,7 @@ function boot(preloaded) {
 var load = require("./script-injection");
 var Q = require("q");
 
-module.exports = function preload(plan) {
+module.exports = function preload(plan, params) {
 
     // Each bundle ends with a bundleLoaded(name) call.  We use these hooks to
     // synchronize the preloader.
@@ -117,7 +119,7 @@ module.exports = function preload(plan) {
     var preloaded = plan.reduce(function (previous, bundleLocations) {
         return previous.then(function () {
             return Q.all(bundleLocations.map(function (bundleLocation) {
-                load(bundleLocation);
+                load(resolve(params.location, bundleLocation));
                 return getHook(bundleLocation).promise;
             }));
         });
@@ -129,6 +131,76 @@ module.exports = function preload(plan) {
 
     return preloaded;
 };
+
+}],[{"url":5},function (require, exports, module){
+
+// mr boot/script-params
+// ---------------------
+
+
+var URL = require("url");
+
+module.exports = getParams;
+function getParams(scriptName) {
+    var i, j,
+        match,
+        script,
+        location,
+        attr,
+        name,
+        re = new RegExp("^(.*)" + scriptName + "(?:[\\?\\.]|$)", "i");
+    var params = {};
+    // Find the <script> that loads us, so we can divine our parameters
+    // from its attributes.
+    var scripts = document.getElementsByTagName("script");
+    for (i = 0; i < scripts.length; i++) {
+        script = scripts[i];
+        // There are two distinct ways that a bootstrapping script might be
+        // identified.  In development, we can rely on the script name.  In
+        // production, the script name is produced by the optimizer and does
+        // not have a generic pattern.  However, the optimizer will drop a
+        // `data-boot-location` property on the script instead.  This will also
+        // serve to inform the boot script of the location of the loading
+        // package, albeit Montage or Mr.
+        if (scriptName && script.src && (match = script.src.match(re))) {
+            location = match[1];
+        }
+        if (script.hasAttribute("data-boot-location")) {
+            location = URL.resolve(window.location, script.getAttribute("data-boot-location"));
+        }
+        if (location) {
+            if (script.dataset) {
+                for (name in script.dataset) {
+                    if (script.dataset.hasOwnProperty(name)) {
+                        params[name] = script.dataset[name];
+                    }
+                }
+            } else if (script.attributes) {
+                var dataRe = /^data-(.*)$/,
+                    letterAfterDash = /-([a-z])/g,
+                    /*jshint -W083 */
+                    upperCaseChar = function (_, c) {
+                        return c.toUpperCase();
+                    };
+                    /*jshint +W083 */
+
+                for (j = 0; j < script.attributes.length; j++) {
+                    attr = script.attributes[j];
+                    match = attr.name.match(/^data-(.*)$/);
+                    if (match) {
+                        params[match[1].replace(letterAfterDash, upperCaseChar)] = attr.value;
+                    }
+                }
+            }
+            // Permits multiple boot <scripts>; by removing as they are
+            // discovered, next one finds itself.
+            script.parentNode.removeChild(script);
+            params.location = location;
+            break;
+        }
+    }
+    return params;
+}
 
 }],[{"./require":7,"url":5,"q":8},function (require, exports, module){
 
@@ -279,6 +351,7 @@ var getDefinition = function (hash, id) {
     definitions[hash][id] = definitions[hash][id] || Q.defer();
     return definitions[hash][id];
 };
+
 // global
 montageDefine = function (hash, id, module) {
     getDefinition(hash, id).resolve(module);
@@ -315,7 +388,9 @@ Require.ScriptLoader = function (config) {
 
             Require.loadScript(location);
 
-            return getDefinition(hash, module.id).promise;
+            var definition = getDefinition(hash, module.id).promise;
+            loadIfNotPreloaded(location, definition, config.preloaded);
+            return definition;
         })
         .then(function (definition) {
             /*jshint -W089 */
@@ -336,25 +411,7 @@ Require.loadPackageDescription = function (dependency, config) {
     if (dependency.hash) { // use script injection
         var definition = getDefinition(dependency.hash, "package.json").promise;
         var location = URL.resolve(dependency.location, "package.json.load.js");
-
-        // The package.json might come in a preloading bundle. If so, we do not
-        // want to issue a script injection. However, if by the time preloading
-        // has finished the package.json has not arrived, we will need to kick off
-        // a request for the package.json.load.js script.
-        if (config.preloaded && config.preloaded.isPending()) {
-            config.preloaded
-            .then(function () {
-                if (definition.isPending()) {
-                    Require.loadScript(location);
-                }
-            })
-            .done();
-        } else if (definition.isPending()) {
-            // otherwise preloading has already completed and we don't have the
-            // package description, so load it
-            Require.loadScript(location);
-        }
-
+        loadIfNotPreloaded(location, definition, config.preloaded);
         return definition.get("exports");
     } else {
         // fall back to normal means
@@ -372,77 +429,27 @@ Require.makeLoader = function (config) {
     return Require.makeCommonLoader(config, Loader(config));
 };
 
-module.exports = Require;
-
-}],[{"url":5},function (require, exports, module){
-
-// mr boot/script-params
-// ---------------------
-
-
-var URL = require("url");
-
-module.exports = getParams;
-function getParams(scriptName) {
-    var i, j,
-        match,
-        script,
-        location,
-        attr,
-        name,
-        re = new RegExp("^(.*)" + scriptName + "(?:[\\?\\.]|$)", "i");
-    var params = {};
-    // Find the <script> that loads us, so we can divine our parameters
-    // from its attributes.
-    var scripts = document.getElementsByTagName("script");
-    for (i = 0; i < scripts.length; i++) {
-        script = scripts[i];
-        // There are two distinct ways that a bootstrapping script might be
-        // identified.  In development, we can rely on the script name.  In
-        // production, the script name is produced by the optimizer and does
-        // not have a generic pattern.  However, the optimizer will drop a
-        // `data-boot-location` property on the script instead.  This will also
-        // serve to inform the boot script of the location of the loading
-        // package, albeit Montage or Mr.
-        if (script.src && (match = script.src.match(re))) {
-            location = match[1];
-        }
-        if (script.hasAttribute("data-boot-location")) {
-            location = URL.resolve(window.location, script.getAttribute("data-boot-location"));
-        }
-        if (location) {
-            if (script.dataset) {
-                for (name in script.dataset) {
-                    if (script.dataset.hasOwnProperty(name)) {
-                        params[name] = script.dataset[name];
-                    }
-                }
-            } else if (script.attributes) {
-                var dataRe = /^data-(.*)$/,
-                    letterAfterDash = /-([a-z])/g,
-                    /*jshint -W083 */
-                    upperCaseChar = function (_, c) {
-                        return c.toUpperCase();
-                    };
-                    /*jshint +W083 */
-
-                for (j = 0; j < script.attributes.length; j++) {
-                    attr = script.attributes[j];
-                    match = attr.name.match(/^data-(.*)$/);
-                    if (match) {
-                        params[match[1].replace(letterAfterDash, upperCaseChar)] = attr.value;
-                    }
-                }
+function loadIfNotPreloaded(location, definition, preloaded) {
+    // The package.json might come in a preloading bundle. If so, we do not
+    // want to issue a script injection. However, if by the time preloading
+    // has finished the package.json has not arrived, we will need to kick off
+    // a request for the requested script.
+    if (preloaded && preloaded.isPending()) {
+        preloaded
+        .then(function () {
+            if (definition.isPending()) {
+                Require.loadScript(location);
             }
-            // Permits multiple boot <scripts>; by removing as they are
-            // discovered, next one finds itself.
-            script.parentNode.removeChild(script);
-            params.location = location;
-            break;
-        }
+        })
+        .done();
+    } else if (definition.isPending()) {
+        // otherwise preloading has already completed and we don't have the
+        // module, so load it
+        Require.loadScript(location);
     }
-    return params;
 }
+
+module.exports = Require;
 
 }],[{},function (require, exports, module){
 
@@ -488,7 +495,7 @@ module.exports = load;
 var head = document.querySelector("head");
 function load(location) {
     var script = document.createElement("script");
-    script.src = URL.resolve(params.mrLocation, location);
+    script.src = location;
     script.onload = function () {
         // remove clutter
         script.parentNode.removeChild(script);
