@@ -944,7 +944,11 @@ Require.LocationLoader = function (config, load) {
     return function (id, module) {
         var base = id;
         var extension = Require.extension(id);
-        if (!extension && extension !== "js") {
+        if (
+            !has(config.translators, extension) &&
+            !has(config.compilers, extension) &&
+            extension !== "js"
+        ) {
             base += ".js";
         }
         var location = URL.resolve(config.location, base);

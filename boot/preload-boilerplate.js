@@ -40,7 +40,7 @@ module.exports = function bootstrapPreload(plan) {
     return boot(preload(plan));
 };
 
-}],[{"../browser":4,"url":6,"q":8,"./script-params":5},function (require, exports, module){
+}],[{"../browser":3,"url":5,"q":8,"./script-params":4},function (require, exports, module){
 
 // mr boot/browser
 // ---------------
@@ -90,7 +90,7 @@ function boot(preloaded) {
 
 }
 
-}],[{"./script-injection":3,"q":8},function (require, exports, module){
+}],[{"./script-injection":6,"q":8},function (require, exports, module){
 
 // mr boot/preload
 // ---------------
@@ -130,26 +130,7 @@ module.exports = function preload(plan) {
     return preloaded;
 };
 
-}],[{},function (require, exports, module){
-
-// mr boot/script-injection
-// ------------------------
-
-
-module.exports = load;
-
-var head = document.querySelector("head");
-function load(location) {
-    var script = document.createElement("script");
-    script.src = URL.resolve(params.mrLocation, location);
-    script.onload = function () {
-        // remove clutter
-        script.parentNode.removeChild(script);
-    };
-    head.appendChild(script);
-};
-
-}],[{"./require":7,"url":6,"q":8},function (require, exports, module){
+}],[{"./require":7,"url":5,"q":8},function (require, exports, module){
 
 // mr browser
 // ----------
@@ -393,7 +374,7 @@ Require.makeLoader = function (config) {
 
 module.exports = Require;
 
-}],[{"url":6},function (require, exports, module){
+}],[{"url":5},function (require, exports, module){
 
 // mr boot/script-params
 // ---------------------
@@ -496,7 +477,26 @@ exports.resolve = function resolve(base, relative) {
     return resolved;
 };
 
-}],[{"q":8,"url":6},function (require, exports, module){
+}],[{},function (require, exports, module){
+
+// mr boot/script-injection
+// ------------------------
+
+
+module.exports = load;
+
+var head = document.querySelector("head");
+function load(location) {
+    var script = document.createElement("script");
+    script.src = URL.resolve(params.mrLocation, location);
+    script.onload = function () {
+        // remove clutter
+        script.parentNode.removeChild(script);
+    };
+    head.appendChild(script);
+};
+
+}],[{"q":8,"url":5},function (require, exports, module){
 
 // mr require
 // ----------
@@ -1447,7 +1447,11 @@ Require.LocationLoader = function (config, load) {
     return function (id, module) {
         var base = id;
         var extension = Require.extension(id);
-        if (!extension && extension !== "js") {
+        if (
+            !has(config.translators, extension) &&
+            !has(config.compilers, extension) &&
+            extension !== "js"
+        ) {
             base += ".js";
         }
         var location = URL.resolve(config.location, base);
