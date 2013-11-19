@@ -10,15 +10,18 @@ module.exports = build;
 function build(path) {
     return Require.findPackageLocationAndModuleId(path)
     .then(function (arg) {
+        var cache = {};
         return Q.fcall(function () {
             return Require.loadPackage(arg.location, {
-                overlays: ["node"]
+                overlays: ["node"],
+                cache: cache
             });
         })
         .then(function (translatorPackage) {
             return Require.loadPackage(arg.location, {
                 overlays: ["browser"],
-                translatorPackage: translatorPackage
+                translatorPackage: translatorPackage,
+                cache: cache
             })
         })
         .then(function (package) {

@@ -729,7 +729,7 @@ function postConfigurePackage(config, description) {
     if (description["redirect-patterns"]) {
         var describedPatterns = description["redirect-patterns"];
         for (var pattern in describedPatterns) {
-            if (Object.prototype.hasOwnProperty.call(describedPatterns, pattern)) {
+            if (has(describedPatterns, pattern)) {
                 redirectTable.push([
                     new RegExp(pattern),
                     describedPatterns[pattern]
@@ -771,13 +771,6 @@ function resolve(id, baseId) {
     }
     return target.join("/");
 }
-
-Require.base = function (location) {
-    // matches Unix basename
-    return String(location)
-        .replace(/(.+?)\/+$/, "$1")
-        .match(/([^\/]+$|^\/$|^$)/)[1];
-};
 
 Require.extension = function (location) {
     var match = /\.([^\/\.]+)$/.exec(location);
@@ -890,14 +883,11 @@ Require.makeCommonLoader = function (config, load) {
         config,
         Require.RedirectPatternsLoader(
             config,
-            Require.ExtensionsLoader(
+            Require.LocationLoader(
                 config,
-                Require.PathsLoader(
+                Require.MemoizedLoader(
                     config,
-                    Require.MemoizedLoader(
-                        config,
-                        load
-                    )
+                    load
                 )
             )
         )
@@ -950,65 +940,15 @@ Require.MappingsLoader = function(config, load) {
     };
 };
 
-Require.ExtensionsLoader = function(config, load) {
-    var extensions = config.extensions || ["js"];
-    var loadWithExtension = extensions.reduceRight(function (next, extension) {
-        return function (id, module) {
-            return load(id + "." + extension, module)
-            .fail(function (error) {
-                if (/^Can't find /.test(error.message)) {
-                    return next(id, module);
-                } else {
-                    throw error;
-                }
-            });
-        };
-    }, function (id, module) {
-        throw new Error(
-            "Can't find " + JSON.stringify(id) + " with extensions " +
-            JSON.stringify(extensions) + " in package at " +
-            JSON.stringify(config.location)
-        );
-    });
+Require.LocationLoader = function (config, load) {
     return function (id, module) {
-        if (Require.base(id).indexOf(".") !== -1) {
-            // already has an extension
-            return load(id, module);
-        } else {
-            return loadWithExtension(id, module);
+        var base = id;
+        var extension = Require.extension(id);
+        if (!extension && extension !== "js") {
+            base += ".js";
         }
-    };
-};
-
-// Attempts to load using multiple base paths (or one absolute path) with a
-// single loader.
-Require.PathsLoader = function(config, load) {
-    var loadFromPaths = config.paths.reduceRight(function (next, path) {
-        return function (id, module) {
-            var newId = URL.resolve(path, id);
-            return load(newId, module)
-            .fail(function (error) {
-                if (/^Can't find /.test(error.message)) {
-                    return next(id, module);
-                } else {
-                    throw error;
-                }
-            });
-        };
-    }, function (id, module) {
-        throw new Error(
-            "Can't find " + JSON.stringify(id) + " from paths " +
-            JSON.stringify(config.paths) + " in package at " +
-            JSON.stringify(config.location)
-        );
-    });
-    return function(id, module) {
-        if (Require.isAbsolute(id)) {
-            // already fully qualified
-            return load(id, module);
-        } else {
-            return loadFromPaths(id, module);
-        }
+        var location = URL.resolve(config.location, base);
+        return load(location, module);
     };
 };
 
