@@ -99,12 +99,13 @@ Require.makeRequire = function (config) {
                 return Q.fcall(function () {
                     if (config.translators[module.extension]) {
                         var translatorId = config.translators[module.extension];
+                        var translatorPackage = config.translatorPackage || require;
                         // TODO try to load translator related modules in a
                         // parallel module system so that they do not get
                         // bundled
-                        return deepLoad(translatorId, "", loading)
+                        return translatorPackage.deepLoad(translatorId, "", loading)
                         .then(function () {
-                            var translate = require(translatorId);
+                            var translate = translatorPackage(translatorId);
                             module.text = translate(module.text, module);
                         });
                     }

@@ -1,4 +1,5 @@
 
+var Q = require("q");
 var FS = require("fs");
 var Path = require("path");
 var Require = require("./node");
@@ -9,8 +10,16 @@ module.exports = build;
 function build(path) {
     return Require.findPackageLocationAndModuleId(path)
     .then(function (arg) {
-        return Require.loadPackage(arg.location, {
-            overlays: ["browser"]
+        return Q.fcall(function () {
+            return Require.loadPackage(arg.location, {
+                overlays: ["node"]
+            });
+        })
+        .then(function (translatorPackage) {
+            return Require.loadPackage(arg.location, {
+                overlays: ["browser"],
+                translatorPackage: translatorPackage
+            })
         })
         .then(function (package) {
             return package.deepLoad(arg.id)
