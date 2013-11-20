@@ -85,7 +85,7 @@ Require.Compiler = function Compiler(config) {
             return module;
         } else if (
             module.text !== void 0 &&
-            module.type === "javascript"
+            module.type === "js"
         ) {
             var factory = globalEval(
                 "(function(" + names.join(",") + "){" +
@@ -109,7 +109,6 @@ Require.Loader = function Loader(config, load) {
     return function (location, module) {
         return config.read(location)
         .then(function (text) {
-            module.type = "javascript";
             module.text = text;
             module.location = location;
         }, function (reason, error, rejection) {

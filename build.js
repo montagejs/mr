@@ -14,14 +14,16 @@ function build(path) {
         return Q.fcall(function () {
             return Require.loadPackage(arg.location, {
                 overlays: ["node"],
-                cache: cache
+                cache: cache,
+                production: false
             });
         })
-        .then(function (translatorPackage) {
+        .then(function (builder) {
             return Require.loadPackage(arg.location, {
                 overlays: ["browser"],
-                translatorPackage: translatorPackage,
-                cache: cache
+                builder: builder,
+                cache: cache,
+                production: true
             })
         })
         .then(function (package) {

@@ -30,9 +30,9 @@ function xhrSuccess(req) {
 // listeners.  The promise library ascertains that the returned promise
 // is resolved only by the first event.
 // http://dl.dropbox.com/u/131998/yui/misc/get/browser-capabilities.html
-Require.read = function (url) {
+Require.read = function (location) {
 
-    if (URL.resolve(window.location, url).indexOf(FILE_PROTOCOL) === 0) {
+    if (URL.resolve(window.location, location).indexOf(FILE_PROTOCOL) === 0) {
         throw new Error("XHR does not function for file: protocol");
     }
 
@@ -48,11 +48,11 @@ Require.read = function (url) {
     }
 
     function onerror() {
-        response.reject(new Error("Can't XHR " + JSON.stringify(url)));
+        response.reject(new Error("Can't XHR " + JSON.stringify(location)));
     }
 
     try {
-        request.open(GET, url, true);
+        request.open(GET, location, true);
         if (request.overrideMimeType) {
             request.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
         }
@@ -89,8 +89,8 @@ var __FILE__String = "__FILE__",
 
 Require.Compiler = function (config) {
     return function(module) {
-        if (module.factory || module.text === void 0) {
-            return module;
+        if (module.factory || module.text === void 0 || module.type !== "js") {
+            return;
         }
         if (config.useScriptInjection) {
             throw new Error("Can't use eval.");
@@ -126,12 +126,11 @@ Require.Compiler = function (config) {
 };
 
 Require.XhrLoader = function (config) {
-    return function (url, module) {
-        return config.read(url)
+    return function (location, module) {
+        return config.read(location)
         .then(function (text) {
-            module.type = "javascript";
             module.text = text;
-            module.location = url;
+            module.location = location;
         });
     };
 };
@@ -148,18 +147,7 @@ montageDefine = function (hash, id, module) {
     getDefinition(hash, id).resolve(module);
 };
 
-Require.loadScript = function (location) {
-    var script = document.createElement("script");
-    script.onload = function() {
-        script.parentNode.removeChild(script);
-    };
-    script.onerror = function (error) {
-        script.parentNode.removeChild(script);
-    };
-    script.src = location;
-    script.defer = true;
-    document.getElementsByTagName("head")[0].appendChild(script);
-};
+Require.loadScript = require("./boot/script-injection");
 
 Require.ScriptLoader = function (config) {
     var hash = config.packageDescription.hash;

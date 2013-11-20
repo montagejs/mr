@@ -6,9 +6,12 @@ function load(location) {
     var script = document.createElement("script");
     script.src = location;
     script.onload = function () {
-        // remove clutter
         script.parentNode.removeChild(script);
     };
+    script.onerror = function (error) {
+        script.parentNode.removeChild(script);
+    };
+    script.defer = true;
     head.appendChild(script);
 };
 
