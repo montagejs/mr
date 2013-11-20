@@ -147,7 +147,7 @@ montageDefine = function (hash, id, module) {
     getDefinition(hash, id).resolve(module);
 };
 
-Require.loadScript = require("./boot/script-injection");
+Require.loadScript = require("./script");
 
 Require.ScriptLoader = function (config) {
     var hash = config.packageDescription.hash;

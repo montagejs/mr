@@ -92,13 +92,13 @@ function boot(preloaded, params) {
 
 }
 
-}],[{"./script-injection":6,"q":8},function (require, exports, module){
+}],[{"../script":6,"q":8},function (require, exports, module){
 
 // mr boot/preload
 // ---------------
 
 
-var load = require("./script-injection");
+var load = require("../script");
 var Q = require("q");
 
 module.exports = function preload(plan, params) {
@@ -202,7 +202,7 @@ function getParams(scriptName) {
     return params;
 }
 
-}],[{"./require":7,"url":5,"q":8,"./boot/script-injection":6},function (require, exports, module){
+}],[{"./require":7,"url":5,"q":8,"./script":6},function (require, exports, module){
 
 // mr browser
 // ----------
@@ -356,7 +356,7 @@ montageDefine = function (hash, id, module) {
     getDefinition(hash, id).resolve(module);
 };
 
-Require.loadScript = require("./boot/script-injection");
+Require.loadScript = require("./script");
 
 Require.ScriptLoader = function (config) {
     var hash = config.packageDescription.hash;
@@ -474,8 +474,8 @@ exports.resolve = function resolve(base, relative) {
 
 }],[{},function (require, exports, module){
 
-// mr boot/script-injection
-// ------------------------
+// mr script
+// ---------
 
 
 module.exports = load;

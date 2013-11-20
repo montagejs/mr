@@ -77,7 +77,7 @@ function boot(preloaded, params) {
 
 }
 
-}],[{"./require":4,"url":3,"q":6,"./boot/script-injection":5},function (require, exports, module){
+}],[{"./require":4,"url":3,"q":6,"./script":5},function (require, exports, module){
 
 // mr browser
 // ----------
@@ -231,7 +231,7 @@ montageDefine = function (hash, id, module) {
     getDefinition(hash, id).resolve(module);
 };
 
-Require.loadScript = require("./boot/script-injection");
+Require.loadScript = require("./script");
 
 Require.ScriptLoader = function (config) {
     var hash = config.packageDescription.hash;
@@ -1461,8 +1461,8 @@ function memoize(callback, cache) {
 
 }],[{},function (require, exports, module){
 
-// mr boot/script-injection
-// ------------------------
+// mr script
+// ---------
 
 
 module.exports = load;
