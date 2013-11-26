@@ -239,14 +239,11 @@ Require.makeLoader = function (config) {
     }
     return Require.MappingsLoader(
         config,
-        Require.ExtensionsLoader(
+        Require.LocationLoader(
             config,
-            Require.PathsLoader(
+            Require.MemoizedLoader(
                 config,
-                Require.MemoizedLoader(
-                    config,
-                    Loader(config)
-                )
+                Loader(config)
             )
         )
     );
