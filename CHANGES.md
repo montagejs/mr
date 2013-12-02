@@ -1,3 +1,7 @@
+### 0.14.1
+
+ - Correct extension detection
+
 ## 0.14.0
 
  - Remove support for `directories` `package.json` property. Node ignores the
