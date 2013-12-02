@@ -66,7 +66,8 @@ describe("Require", function () {
         "main",
         "sandbox",
         "browser-alternative",
-        "browser-alternatives"
+        "browser-alternatives",
+        "extension-loader"
     ].forEach(function (test) {
         if (typeof test === "object") {
             if (test.node === false && typeof process !== "undefined") {
