@@ -679,7 +679,7 @@
         return target.join("/");
     }
 
-    var extensionPattern = /\.([^\.]+)$/;
+    var extensionPattern = /\.([^\/\.]+)$/;
     Require.extension = function (path) {
         var match = extensionPattern.exec(path);
         if (match) {
