@@ -570,7 +570,7 @@
 
         // overlay continued...
         var layer;
-        config.overlays = config.ovelays || Require.overlays;
+        config.overlays = config.overlays || Require.overlays;
         config.overlays.forEach(function (engine) {
             /*jshint -W089 */
             if (overlay[engine]) {
