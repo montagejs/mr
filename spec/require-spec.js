@@ -72,27 +72,31 @@ describe("Require", function () {
         "redirect-patterns",
         "main",
         "json",
-        {name: "optimizer", production: true, node: true, browser: false},
-        {name: "optimizer", production: false, node: true, browser: true}
+        "optimizer",
+        {name: "optimizer", optimize: false}
     ].forEach(function (test) {
-        if (typeof test === "string") {
-            test = {name: test, node: true, browser: true, production: false};
-        }
-        if (!test.node && typeof process !== "undefined") {
-            return;
-        }
-        if (!test.browser && typeof window !== "undefined") {
-            return;
-        }
+
+        if (typeof test === "string") test = {name: test};
+
+        if (test.optimize === undefined) test.optimize = true;
+        if (test.node === undefined) test.node = true;
+        if (test.browser === undefined) test.browser = true;
+
+        if (!test.node && typeof process !== "undefined") return;
+        if (!test.browser && typeof window !== "undefined") return;
+
         it(test.name, function () {
             var spec = this;
             var done;
             var message;
 
-            //console.log(test + ":", "START");
+            //console.log(test.name + ":", "START", test.optimize);
 
-            return require.loadPackage(module.directory + test.name + "/", {
-                production: test.production
+            return require.loadPackage(module.directory + test.name + "/", {})
+            .then(function (preprocessorPackage) {
+                return require.loadPackage(module.directory + test.name + "/", {
+                    preprocessorPackage: test.optimize ? preprocessorPackage : null
+                })
             })
             .then(function (pkg) {
                 pkg.inject("test", {

@@ -205,7 +205,7 @@ Require.makeLoader = function (config) {
     } else {
         Loader = Require.XhrLoader;
     }
-    return Require.makeCommonLoader(config, Loader(config));
+    return Require.CommonLoader(config, Loader(config));
 };
 
 function loadIfNotPreloaded(location, definition, preloaded) {

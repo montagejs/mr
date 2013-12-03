@@ -1,10 +1,4 @@
-
 var test = require("test");
 var hello = require("./hello");
-if (require.config.production) {
-    test.assert(hello === 'hello, world!\n');
-} else {
-    test.assert(hello === 'Hello, World!\n');
-}
+test.assert(false === !!require.config.preprocessorPackage);
 test.print("DONE", "info");
-

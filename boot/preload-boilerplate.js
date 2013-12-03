@@ -414,7 +414,7 @@ Require.makeLoader = function (config) {
     } else {
         Loader = Require.XhrLoader;
     }
-    return Require.makeCommonLoader(config, Loader(config));
+    return Require.CommonLoader(config, Loader(config));
 };
 
 function loadIfNotPreloaded(location, definition, preloaded) {
@@ -506,6 +506,7 @@ function load(location) {
     3-Clause BSD License
     https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
 */
+/*global -URL*/
 
 var Require = exports;
 var Q = require("q");
@@ -539,7 +540,6 @@ Require.makeRequire = function (config) {
     config.compilers = config.compilers || {};
     config.translators = config.translators || {};
     config.redirectTable = config.redirectTable || [];
-    // config.builder defaults to require, which is not available at this time
 
     // Modules: { exports, id, location, directory, factory, dependencies,
     // dependees, text, type }
@@ -554,9 +554,11 @@ Require.makeRequire = function (config) {
             var extension = Require.extension(id);
             var type;
             if (
-                has(config.optimizers, extension) ||
-                has(config.translators, extension) ||
-                has(config.compilers, extension)
+                extension && (
+                    has(config.optimizers, extension) ||
+                    has(config.translators, extension) ||
+                    has(config.compilers, extension)
+                )
             ) {
                 type = extension;
             } else {
@@ -583,6 +585,7 @@ Require.makeRequire = function (config) {
         module.location = URL.resolve(config.location, id);
         module.directory = URL.resolve(module.location, "./");
         module.injected = true;
+        module.type = void 0;
         delete module.redirect;
         delete module.mappingRedirect;
     }
@@ -590,10 +593,9 @@ Require.makeRequire = function (config) {
     // Ensures a module definition is loaded, compiled, analyzed
     var load = memoize(function (topId, viaId, loading) {
         var module = getModuleDescriptor(topId);
-        var builder = config.builder || require;
         return Q.fcall(function () {
-            // if not already loaded, already instantiated, or
-            // configured as a redirection to another module
+            // If not already loaded, already instantiated, or configured as a
+            // redirection to another module.
             if (
                 module.factory === void 0 &&
                 module.exports === void 0 &&
@@ -603,58 +605,77 @@ Require.makeRequire = function (config) {
             }
         })
         .then(function () {
-            // Run optional optimizers, in production only.
+            // Translate (to JavaScript, optionally provide dependency analysis
+            // services).
+            if (module.type !== "js" && has(config.translators, module.type)) {
+                var translatorId = config.translators[module.type];
+                return Q.fcall(function () {
+                    // The use of a preprocessor package is optional for
+                    // translators, though mandatory for optimizers because
+                    // there are .js to .js optimizers, but no such
+                    // translators.
+                    if (config.hasPreprocessorPackage) {
+                        return config.loadPreprocessorPackage();
+                    } else {
+                        return require;
+                    }
+                })
+                .invoke("async", translatorId)
+                .then(function (translate) {
+                    module.text = translate(module.text, module);
+                    module.type = "js";
+                });
+            }
+        })
+        .then(function () {
+            if (module.type === "js" && module.text !== void 0 && module.dependencies === void 0) {
+                // Remove the shebang
+                module.text = module.text.replace(/^#!/, "//#!");
+                // Parse dependencies.
+                module.dependencies = config.parseDependencies(module.text);
+            }
+
+            // Run optional optimizers.
             // {text, type} to {text', type')
-            if (config.production && has(config.optimizers, module.type)) {
+            if (config.hasPreprocessorPackage && has(config.optimizers, module.type)) {
                 var optimizerId = config.optimizers[module.type];
-                return builder.async(optimizerId)
+                return config.loadPreprocessorPackage()
+                .invoke("async", optimizerId)
                 .then(function (optimize) {
                     optimize(module);
                 });
             }
         })
         .then(function () {
-            // Analyze dependencies and produce a module factory function or go
-            // directly to its exports.
-            // module {text, type} to {dependencies, factory || exports}
-            if (has(config.compilers, module.type)) {
-                // Compilers must take care of both dependency analysis and
-                // converting the text into a factory or exports
-                var compilerId = config.compilers[module.type];
-                return deepLoad(compilerId, "", loading)
-                .then(function () {
-                    var compile = require(compilerId);
-                    compile(module);
-                });
-            } else {
-                return Q.fcall(function () {
-                    // Optionally, translator converts other languages to
-                    // javascript, and also optionally perform dependency
-                    // analysis.
-                    // module {text, type} to {text', type', ?dependencies}
-                    if (has(config.translators, module.type)) {
-                        var translatorId = config.translators[module.type];
-                        return builder.async(translatorId)
-                        .then(function (translate) {
-                            module.text = translate(module.text, module);
-                            module.type = "js";
-                        });
-                    }
-                })
-                .then(function () {
-                    // Then apply configured compilers.
-                    // module {text, type} to {dependencies, factory || exports}
+            if (
+                module.factory === void 0 &&
+                module.redirect === void 0 &&
+                module.exports === void 0
+            ) {
+                // Then apply configured compilers.  module {text, type} to
+                // {dependencies, factory || exports || redirect}
+                if (has(config.compilers, module.type)) {
+                    var compilerId = config.compilers[module.type];
+                    return deepLoad(compilerId, "", loading)
+                    .then(function () {
+                        var compile = require(compilerId);
+                        compile(module);
+                    });
+                } else if (module.type === "js") {
                     config.compile(module);
-                    var dependencies = module.dependencies = module.dependencies || [];
-                    if (module.redirect !== void 0) {
-                        dependencies.push(module.redirect);
-                    }
-                    if (module.extraDependencies !== void 0) {
-                        Array.prototype.push.apply(module.dependencies, module.extraDependencies);
-                    }
-                });
+                }
+            }
+
+            // Final dependency massaging
+            var dependencies = module.dependencies = module.dependencies || [];
+            if (module.redirect !== void 0) {
+                dependencies.push(module.redirect);
+            }
+            if (module.extraDependencies !== void 0) {
+                Array.prototype.push.apply(module.dependencies, module.extraDependencies);
             }
         });
+
     });
 
     // Load a module definition, and the definitions of its transitive
@@ -1013,6 +1034,7 @@ Require.loadPackage = function (dependency, config) {
         loading[location] = true;
 
         if (!loadingPackages[location]) {
+
             loadingPackages[location] = Require.loadPackageDescription(dependency, config)
             .then(function (packageDescription) {
                 var subconfig = configurePackage(
@@ -1020,6 +1042,16 @@ Require.loadPackage = function (dependency, config) {
                     packageDescription,
                     config
                 );
+
+                subconfig.loadPreprocessorPackage = function () {
+                    if (!viaConfig) {
+                        return Q(config.preprocessorPackage);
+                    } else {
+                        return viaConfig.loadPreprocessorPackage()
+                        .invoke("loadPackage", dependency);
+                    }
+                };
+
                 var pkg = Require.makeRequire(subconfig);
                 loadedPackages[location] = pkg;
                 return Q.all(Object.keys(subconfig.mappings).map(function (prefix) {
@@ -1043,6 +1075,8 @@ Require.loadPackage = function (dependency, config) {
             return require.async(id, callback);
         });
     };
+
+    config.hasPreprocessorPackage = !!config.preprocessorPackage;
 
     return pkg;
 };
@@ -1108,6 +1142,7 @@ function configurePackage(location, description, parent) {
     }
 
     var config = Object.create(parent);
+    config.parent = parent;
     config.name = description.name;
     config.location = location || Require.getLocation();
     config.packageDescription = description;
@@ -1147,9 +1182,7 @@ function configurePackage(location, description, parent) {
         /*jshint -W089 */
         if (overlay[engine]) {
             var layer = overlay[engine];
-            for (var name in layer) {
-                description[name] = layer[name];
-            }
+            merge(description, layer);
         }
         /*jshint +W089 */
     });
@@ -1281,20 +1314,40 @@ function postConfigurePackage(config, description) {
     }
 }
 
+function merge(target, source) {
+    for (var name in source) {
+        if (has(source, name)) {
+            var sourceValue = source[name];
+            var targetValue = target[name];
+            if (sourceValue === null) {
+                delete target[name];
+            } else if (
+                typeof sourceValue === "object" && !Array.isArray(sourceValue) &&
+                typeof targetValue === "object" && !Array.isArray(targetValue)
+            ) {
+                merge(targetValue, sourceValue);
+            } else {
+                target[name] = source[name];
+            }
+        }
+    }
+}
+
+Require.exposedConfigs = [
+    "location",
+    "packageDescription",
+    "packages",
+    "modules"
+];
+
 // Built-in compiler/preprocessor "middleware":
 
 Require.makeCompiler = function(config) {
     return Require.JsonCompiler(
         config,
-        Require.ShebangCompiler(
+        Require.LintCompiler(
             config,
-            Require.DependenciesCompiler(
-                config,
-                Require.LintCompiler(
-                    config,
-                    Require.Compiler(config)
-                )
-            )
+            Require.Compiler(config)
         )
     );
 };
@@ -1308,34 +1361,6 @@ Require.JsonCompiler = function (config, compile) {
         } else {
             return compile(module);
         }
-    };
-};
-
-// Support she-bang for shell scripts by commenting it out (it is never
-// valid JavaScript syntax anyway)
-Require.ShebangCompiler = function(config, compile) {
-    return function (module) {
-        if (module.text) {
-            module.text = module.text.replace(/^#!/, "//#!");
-        }
-        compile(module);
-    };
-};
-
-Require.DependenciesCompiler = function(config, compile) {
-    return function(module) {
-        if (!module.dependencies && module.text !== void 0) {
-            module.dependencies = config.parseDependencies(module.text);
-        }
-        compile(module);
-        if (module && !module.dependencies) {
-            if (module.text || module.factory) {
-                module.dependencies = Require.parseDependencies(module.text || module.factory);
-            } else {
-                module.dependencies = [];
-            }
-        }
-        return module;
     };
 };
 
@@ -1357,7 +1382,7 @@ Require.LintCompiler = function(config, compile) {
 
 // Built-in loader "middleware":
 
-Require.makeCommonLoader = function (config, load) {
+Require.CommonLoader = function (config, load) {
     return Require.MappingsLoader(
         config,
         Require.RedirectPatternsLoader(
@@ -1505,22 +1530,13 @@ function isAbsolute(location) {
 // Extracts dependencies by parsing code and looking for "require" (currently
 // using a simple regexp)
 Require.parseDependencies = parseDependencies;
-function parseDependencies(factory) {
+function parseDependencies(text) {
     var o = {};
-    String(factory).replace(/(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g, function(_, id) {
+    String(text).replace(/(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g, function(_, id) {
         o[id] = true;
     });
     return Object.keys(o);
 }
-
-Require.exposedConfigs = [
-    "paths",
-    "mappings",
-    "location",
-    "packageDescription",
-    "packages",
-    "modules"
-];
 
 function has(object, property) {
     return Object.prototype.hasOwnProperty.call(object, property);

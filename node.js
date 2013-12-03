@@ -111,8 +111,8 @@ Require.Loader = function Loader(config, load) {
         .then(function (text) {
             module.text = text;
             module.location = location;
-        }, function (reason, error, rejection) {
-            return load(location, module);
+        }, function (error) {
+            return load(location, module, error);
         });
     };
 };
@@ -120,28 +120,35 @@ Require.Loader = function Loader(config, load) {
 Require.NodeLoader = function NodeLoader(config, load) {
     config.overlays = config.overlays || Require.overlays;
     if (config.overlays.indexOf("node") >= 0) {
-        return function nodeLoad(location, module) {
-            var id = location.slice(config.location.length);
-            id = id.replace(/\.js$/, "");
-            module.type = "native";
+        return function nodeLoad(location, module, lastError) {
             try {
-                module.exports = require(id);
+                module.exports = require(module.id);
+                module.type = void 0;
             } catch (error) {
+                error.message += " and " + lastError.message;
                 module.error = error;
             }
         };
     } else {
-        return function cantLoad(location) {
-            throw new Error("Can't load: " + location + " from package " + config.name + " at " + config.location);
+        return function cantLoad(location, module, error) {
+            throw new Error(
+                "Can't load " + JSON.stringify(location) +
+                " from package " + JSON.stringify(config.name) +
+                " at " + JSON.stringify(config.location) +
+                (error ?  " because " + error.message : "")
+            );
         };
     }
 };
 
 Require.makeLoader = function makeLoader(config) {
-    return Require.makeCommonLoader(config, Require.Loader(
+    return Require.CommonLoader(
         config,
-        Require.NodeLoader(config)
-    ));
+        Require.Loader(
+            config,
+            Require.NodeLoader(config)
+        )
+    );
 };
 
 Require.findPackagePath = function findPackagePath(directory) {

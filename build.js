@@ -18,12 +18,12 @@ function build(path) {
                 production: false
             });
         })
-        .then(function (builder) {
+        .then(function (preprocessorPackage) {
             return Require.loadPackage(arg.location, {
                 overlays: ["browser"],
-                builder: builder,
                 cache: cache,
-                production: true
+                production: true,
+                preprocessorPackage: preprocessorPackage
             })
         })
         .then(function (package) {
