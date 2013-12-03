@@ -64,32 +64,53 @@ describe("Require", function () {
         "read",
         "main-name",
         "main",
-        "sandbox"
+        "sandbox",
+        "compiler",
+        "translator",
+        "compiler-package",
+        "translator-package",
+        "redirect-patterns",
+        "main",
+        "json",
+        "optimizer",
+        {name: "optimizer", optimize: false}
     ].forEach(function (test) {
-        if (typeof test === "object") {
-            if (test.node === false && typeof process !== "undefined") {
-                return;
-            }
-            test = test.name;
-        }
-        it(test, function () {
+
+        if (typeof test === "string") test = {name: test};
+
+        if (test.optimize === undefined) test.optimize = true;
+        if (test.node === undefined) test.node = true;
+        if (test.browser === undefined) test.browser = true;
+
+        if (!test.node && typeof process !== "undefined") return;
+        if (!test.browser && typeof window !== "undefined") return;
+
+        it(test.name, function () {
             var spec = this;
             var done;
             var message;
 
-            //console.log(test + ":", "START");
+            //console.log(test.name + ":", "START", test.optimize);
 
-            return require.loadPackage(module.directory + test + "/", {})
+            return require.loadPackage(module.directory + test.name + "/", {})
+            .then(function (preprocessorPackage) {
+                return require.loadPackage(module.directory + test.name + "/", {
+                    preprocessorPackage: test.optimize ? preprocessorPackage : null
+                })
+            })
             .then(function (pkg) {
                 pkg.inject("test", {
                     print: function (_message, level) {
-                        //console.log(test + ":", _message);
+                        //console.log(test.name + ":", _message);
                         if (_message === "DONE") {
                             message = _message;
                         }
                     },
                     assert: function (guard, message) {
-                        //console.log(test + ":", guard ? "PASS" : "FAIL", message);
+                        //console.log(test.name + ":", guard ? "PASS" : "FAIL", message);
+                        if (!guard && message) {
+                            console.error("FAIL", message);
+                        }
                         expect(!!guard).toBe(true);
                     }
                 });

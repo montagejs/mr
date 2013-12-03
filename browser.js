@@ -30,9 +30,9 @@ function xhrSuccess(req) {
 // listeners.  The promise library ascertains that the returned promise
 // is resolved only by the first event.
 // http://dl.dropbox.com/u/131998/yui/misc/get/browser-capabilities.html
-Require.read = function (url) {
+Require.read = function (location) {
 
-    if (URL.resolve(window.location, url).indexOf(FILE_PROTOCOL) === 0) {
+    if (URL.resolve(window.location, location).indexOf(FILE_PROTOCOL) === 0) {
         throw new Error("XHR does not function for file: protocol");
     }
 
@@ -48,11 +48,11 @@ Require.read = function (url) {
     }
 
     function onerror() {
-        response.reject(new Error("Can't XHR " + JSON.stringify(url)));
+        response.reject(new Error("Can't XHR " + JSON.stringify(location)));
     }
 
     try {
-        request.open(GET, url, true);
+        request.open(GET, location, true);
         if (request.overrideMimeType) {
             request.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
         }
@@ -84,13 +84,13 @@ if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
 var __FILE__String = "__FILE__",
     DoubleUnderscoreString = "__",
     globalEvalConstantA = "(function ",
-    globalEvalConstantB = "(require, exports, module) {",
+    globalEvalConstantB = "(require, exports, module, __filename, __dirname) {",
     globalEvalConstantC = "//*/\n})\n//@ sourceURL=";
 
 Require.Compiler = function (config) {
     return function(module) {
-        if (module.factory || module.text === void 0) {
-            return module;
+        if (module.factory || module.text === void 0 || module.type !== "js") {
+            return;
         }
         if (config.useScriptInjection) {
             throw new Error("Can't use eval.");
@@ -109,6 +109,9 @@ Require.Compiler = function (config) {
 
         try {
             module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+module.location);
+            if (!config.saveText) {
+                delete module.text; // save some space
+            }
         } catch (exception) {
             exception.message = exception.message + " in " + module.location;
             throw exception;
@@ -123,12 +126,11 @@ Require.Compiler = function (config) {
 };
 
 Require.XhrLoader = function (config) {
-    return function (url, module) {
-        return config.read(url)
+    return function (location, module) {
+        return config.read(location)
         .then(function (text) {
-            module.type = "javascript";
             module.text = text;
-            module.location = url;
+            module.location = location;
         });
     };
 };
@@ -139,23 +141,13 @@ var getDefinition = function (hash, id) {
     definitions[hash][id] = definitions[hash][id] || Q.defer();
     return definitions[hash][id];
 };
+
 // global
 montageDefine = function (hash, id, module) {
     getDefinition(hash, id).resolve(module);
 };
 
-Require.loadScript = function (location) {
-    var script = document.createElement("script");
-    script.onload = function() {
-        script.parentNode.removeChild(script);
-    };
-    script.onerror = function (error) {
-        script.parentNode.removeChild(script);
-    };
-    script.src = location;
-    script.defer = true;
-    document.getElementsByTagName("head")[0].appendChild(script);
-};
+Require.loadScript = require("./script");
 
 Require.ScriptLoader = function (config) {
     var hash = config.packageDescription.hash;
@@ -175,7 +167,9 @@ Require.ScriptLoader = function (config) {
 
             Require.loadScript(location);
 
-            return getDefinition(hash, module.id).promise;
+            var definition = getDefinition(hash, module.id).promise;
+            loadIfNotPreloaded(location, definition, config.preloaded);
+            return definition;
         })
         .then(function (definition) {
             /*jshint -W089 */
@@ -196,25 +190,7 @@ Require.loadPackageDescription = function (dependency, config) {
     if (dependency.hash) { // use script injection
         var definition = getDefinition(dependency.hash, "package.json").promise;
         var location = URL.resolve(dependency.location, "package.json.load.js");
-
-        // The package.json might come in a preloading bundle. If so, we do not
-        // want to issue a script injection. However, if by the time preloading
-        // has finished the package.json has not arrived, we will need to kick off
-        // a request for the package.json.load.js script.
-        if (config.preloaded && config.preloaded.isPending()) {
-            config.preloaded
-            .then(function () {
-                if (definition.isPending()) {
-                    Require.loadScript(location);
-                }
-            })
-            .done();
-        } else if (definition.isPending()) {
-            // otherwise preloading has already completed and we don't have the
-            // package description, so load it
-            Require.loadScript(location);
-        }
-
+        loadIfNotPreloaded(location, definition, config.preloaded);
         return definition.get("exports");
     } else {
         // fall back to normal means
@@ -229,20 +205,28 @@ Require.makeLoader = function (config) {
     } else {
         Loader = Require.XhrLoader;
     }
-    return Require.MappingsLoader(
-        config,
-        Require.ExtensionsLoader(
-            config,
-            Require.PathsLoader(
-                config,
-                Require.MemoizedLoader(
-                    config,
-                    Loader(config)
-                )
-            )
-        )
-    );
+    return Require.CommonLoader(config, Loader(config));
 };
+
+function loadIfNotPreloaded(location, definition, preloaded) {
+    // The package.json might come in a preloading bundle. If so, we do not
+    // want to issue a script injection. However, if by the time preloading
+    // has finished the package.json has not arrived, we will need to kick off
+    // a request for the requested script.
+    if (preloaded && preloaded.isPending()) {
+        preloaded
+        .then(function () {
+            if (definition.isPending()) {
+                Require.loadScript(location);
+            }
+        })
+        .done();
+    } else if (definition.isPending()) {
+        // otherwise preloading has already completed and we don't have the
+        // module, so load it
+        Require.loadScript(location);
+    }
+}
 
 module.exports = Require;
 

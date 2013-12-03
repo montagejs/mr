@@ -77,7 +77,7 @@ Require.read = function read(location) {
 // Can be overriden by the platform to make the engine aware of the source path. Uses sourceURL hack by default.
 Require.Compiler = function Compiler(config) {
     config.scope = config.scope || {};
-    var names = ["require", "exports", "module"];
+    var names = ["require", "exports", "module", "__filename", "__dirname"];
     var scopeNames = Object.keys(config.scope);
     names.push.apply(names, scopeNames);
     return function (module) {
@@ -85,7 +85,7 @@ Require.Compiler = function Compiler(config) {
             return module;
         } else if (
             module.text !== void 0 &&
-            module.type === "javascript"
+            module.type === "js"
         ) {
             var factory = globalEval(
                 "(function(" + names.join(",") + "){" +
@@ -109,11 +109,10 @@ Require.Loader = function Loader(config, load) {
     return function (location, module) {
         return config.read(location)
         .then(function (text) {
-            module.type = "javascript";
             module.text = text;
             module.location = location;
-        }, function (reason, error, rejection) {
-            return load(location, module);
+        }, function (error) {
+            return load(location, module, error);
         });
     };
 };
@@ -121,38 +120,33 @@ Require.Loader = function Loader(config, load) {
 Require.NodeLoader = function NodeLoader(config, load) {
     config.overlays = config.overlays || Require.overlays;
     if (config.overlays.indexOf("node") >= 0) {
-        return function nodeLoad(location, module) {
-            var id = location.slice(config.location.length);
-            id = id.replace(/\.js$/, "");
-            module.type = "native";
+        return function nodeLoad(location, module, lastError) {
             try {
-                module.exports = require(id);
+                module.exports = require(module.id);
+                module.type = void 0;
             } catch (error) {
+                error.message += " and " + lastError.message;
                 module.error = error;
             }
         };
     } else {
-        return function cantLoad(location) {
-            throw new Error("Can't load: " + location + " from package " + config.name + " at " + config.location);
+        return function cantLoad(location, module, error) {
+            throw new Error(
+                "Can't load " + JSON.stringify(location) +
+                " from package " + JSON.stringify(config.name) +
+                " at " + JSON.stringify(config.location) +
+                (error ?  " because " + error.message : "")
+            );
         };
     }
 };
 
 Require.makeLoader = function makeLoader(config) {
-    return Require.MappingsLoader(
+    return Require.CommonLoader(
         config,
-        Require.ExtensionsLoader(
+        Require.Loader(
             config,
-            Require.PathsLoader(
-                config,
-                Require.MemoizedLoader(
-                    config,
-                    Require.Loader(
-                        config,
-                        Require.NodeLoader(config)
-                    )
-                )
-            )
+            Require.NodeLoader(config)
         )
     );
 };

@@ -1,8 +1,8 @@
 
-var load = require("./script-injection");
+var load = require("../script");
 var Q = require("q");
 
-module.exports = function preload(plan) {
+module.exports = function preload(plan, params) {
 
     // Each bundle ends with a bundleLoaded(name) call.  We use these hooks to
     // synchronize the preloader.
@@ -20,7 +20,7 @@ module.exports = function preload(plan) {
     var preloaded = plan.reduce(function (previous, bundleLocations) {
         return previous.then(function () {
             return Q.all(bundleLocations.map(function (bundleLocation) {
-                load(bundleLocation);
+                load(resolve(params.location, bundleLocation));
                 return getHook(bundleLocation).promise;
             }));
         });

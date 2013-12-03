@@ -3,11 +3,11 @@
 var Require = require("../browser");
 var URL = require("url");
 var Q = require("q");
-
-var params = require("./script-params")("boot.js");
+var getParams = require("./script-params");
 
 module.exports = boot;
-function boot(preloaded) {
+function boot(preloaded, params) {
+    params = params || getParams("boot.js");
 
     var config = {preloaded: preloaded};
     var applicationLocation = URL.resolve(window.location, params.package || ".");

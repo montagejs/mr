@@ -5,6 +5,7 @@
     3-Clause BSD License
     https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
 */
+/*global -URL*/
 
 var Require = exports;
 var Q = require("q");
@@ -25,8 +26,7 @@ Require.makeRequire = function (config) {
     // Configuration defaults:
     config = config || {};
     config.location = URL.resolve(config.location || Require.getLocation(), "./");
-    config.lib = URL.resolve(config.location, config.lib || "./");
-    config.paths = config.paths || [config.lib];
+    config.paths = config.paths || [config.location];
     config.mappings = config.mappings || {}; // EXTENSION
     config.exposedConfigs = config.exposedConfigs || Require.exposedConfigs;
     config.makeLoader = config.makeLoader || Require.makeLoader;
@@ -35,6 +35,10 @@ Require.makeRequire = function (config) {
     config.compile = config.compile || config.makeCompiler(config);
     config.parseDependencies = config.parseDependencies || Require.parseDependencies;
     config.read = config.read || Require.read;
+    config.optimizers = config.optimizers || {};
+    config.compilers = config.compilers || {};
+    config.translators = config.translators || {};
+    config.redirectTable = config.redirectTable || [];
 
     // Modules: { exports, id, location, directory, factory, dependencies,
     // dependees, text, type }
@@ -46,10 +50,25 @@ Require.makeRequire = function (config) {
     function getModuleDescriptor(id) {
         var lookupId = id.toLowerCase();
         if (!has(modules, lookupId)) {
+            var extension = Require.extension(id);
+            var type;
+            if (
+                extension && (
+                    has(config.optimizers, extension) ||
+                    has(config.translators, extension) ||
+                    has(config.compilers, extension)
+                )
+            ) {
+                type = extension;
+            } else {
+                type = "js";
+            }
             modules[lookupId] = {
                 id: id,
-                display: (config.name || config.location) + "#" + id, // EXTENSION
-                require: require
+                extension: extension,
+                type: type,
+                display: (config.name || config.location) + "#" + id,
+                require: makeRequire(id)
             };
         }
         return modules[lookupId];
@@ -65,16 +84,17 @@ Require.makeRequire = function (config) {
         module.location = URL.resolve(config.location, id);
         module.directory = URL.resolve(module.location, "./");
         module.injected = true;
+        module.type = void 0;
         delete module.redirect;
         delete module.mappingRedirect;
     }
 
     // Ensures a module definition is loaded, compiled, analyzed
-    var load = memoize(function (topId, viaId) {
+    var load = memoize(function (topId, viaId, loading) {
         var module = getModuleDescriptor(topId);
         return Q.fcall(function () {
-            // if not already loaded, already instantiated, or
-            // configured as a redirection to another module
+            // If not already loaded, already instantiated, or configured as a
+            // redirection to another module.
             if (
                 module.factory === void 0 &&
                 module.exports === void 0 &&
@@ -84,11 +104,69 @@ Require.makeRequire = function (config) {
             }
         })
         .then(function () {
-            // compile and analyze dependencies
-            config.compile(module);
-            var dependencies =
-                module.dependencies =
-                    module.dependencies || [];
+            // Translate (to JavaScript, optionally provide dependency analysis
+            // services).
+            if (module.type !== "js" && has(config.translators, module.type)) {
+                var translatorId = config.translators[module.type];
+                return Q.fcall(function () {
+                    // The use of a preprocessor package is optional for
+                    // translators, though mandatory for optimizers because
+                    // there are .js to .js optimizers, but no such
+                    // translators.
+                    if (config.hasPreprocessorPackage) {
+                        return config.loadPreprocessorPackage();
+                    } else {
+                        return require;
+                    }
+                })
+                .invoke("async", translatorId)
+                .then(function (translate) {
+                    module.text = translate(module.text, module);
+                    module.type = "js";
+                });
+            }
+        })
+        .then(function () {
+            if (module.type === "js" && module.text !== void 0 && module.dependencies === void 0) {
+                // Remove the shebang
+                module.text = module.text.replace(/^#!/, "//#!");
+                // Parse dependencies.
+                module.dependencies = config.parseDependencies(module.text);
+            }
+
+            // Run optional optimizers.
+            // {text, type} to {text', type')
+            if (config.hasPreprocessorPackage && has(config.optimizers, module.type)) {
+                var optimizerId = config.optimizers[module.type];
+                return config.loadPreprocessorPackage()
+                .invoke("async", optimizerId)
+                .then(function (optimize) {
+                    optimize(module);
+                });
+            }
+        })
+        .then(function () {
+            if (
+                module.factory === void 0 &&
+                module.redirect === void 0 &&
+                module.exports === void 0
+            ) {
+                // Then apply configured compilers.  module {text, type} to
+                // {dependencies, factory || exports || redirect}
+                if (has(config.compilers, module.type)) {
+                    var compilerId = config.compilers[module.type];
+                    return deepLoad(compilerId, "", loading)
+                    .then(function () {
+                        var compile = require(compilerId);
+                        compile(module);
+                    });
+                } else if (module.type === "js") {
+                    config.compile(module);
+                }
+            }
+
+            // Final dependency massaging
+            var dependencies = module.dependencies = module.dependencies || [];
             if (module.redirect !== void 0) {
                 dependencies.push(module.redirect);
             }
@@ -96,6 +174,7 @@ Require.makeRequire = function (config) {
                 Array.prototype.push.apply(module.dependencies, module.extraDependencies);
             }
         });
+
     });
 
     // Load a module definition, and the definitions of its transitive
@@ -114,6 +193,7 @@ Require.makeRequire = function (config) {
         .then(function () {
             // load the transitive dependencies using the magic of
             // recursion.
+            var dependencies = module.dependencies = module.dependencies || [];
             return Q.all(module.dependencies.map(function (depId) {
                 depId = resolve(depId, topId);
                 // create dependees set, purely for debug purposes
@@ -171,6 +251,7 @@ Require.makeRequire = function (config) {
             error.message = (
                 "Can't require module " + JSON.stringify(module.id) +
                 " via " + JSON.stringify(viaId) +
+                " in " + JSON.stringify(config.name || config.location) +
                 " because " + error.message
             );
             throw error;
@@ -206,9 +287,11 @@ Require.makeRequire = function (config) {
         var returnValue = module.factory.call(
             // in the context of the module:
             void 0, // this (defaults to global)
-            makeRequire(topId), // require
+            module.require, // require
             module.exports, // exports
-            module // module
+            module, // module
+            module.location, // __filename
+            module.directory // __dirname
         );
 
         // EXTENSION
@@ -286,7 +369,7 @@ Require.makeRequire = function (config) {
         };
 
         require.resolve = function (id) {
-            return normalizeId(resolve(id, viaId));
+            return normalize(resolve(id, viaId));
         };
 
         require.getModule = getModuleDescriptor; // XXX deprecated, use:
@@ -434,13 +517,23 @@ Require.loadPackage = function (dependency, config) {
         return loadedPackages[location];
     };
 
-    config.loadPackage = function (dependency, viaConfig) {
+    config.loadPackage = function (dependency, viaConfig, loading) {
         dependency = normalizeDependency(dependency, viaConfig);
         if (!dependency.location) {
             throw new Error("Can't find dependency: " + JSON.stringify(dependency) + " from " + config.location);
         }
         var location = dependency.location;
+
+        // prevent data-lock if there is a package dependency cycle
+        loading = loading || {};
+        if (loading[location]) {
+            // returns an already-fulfilled promise for `undefined`
+            return Q();
+        }
+        loading[location] = true;
+
         if (!loadingPackages[location]) {
+
             loadingPackages[location] = Require.loadPackageDescription(dependency, config)
             .then(function (packageDescription) {
                 var subconfig = configurePackage(
@@ -448,9 +541,26 @@ Require.loadPackage = function (dependency, config) {
                     packageDescription,
                     config
                 );
+
+                subconfig.loadPreprocessorPackage = function () {
+                    if (!viaConfig) {
+                        return Q(config.preprocessorPackage);
+                    } else {
+                        return viaConfig.loadPreprocessorPackage()
+                        .invoke("loadPackage", dependency);
+                    }
+                };
+
                 var pkg = Require.makeRequire(subconfig);
                 loadedPackages[location] = pkg;
-                return pkg;
+                return Q.all(Object.keys(subconfig.mappings).map(function (prefix) {
+                    var dependency = subconfig.mappings[prefix];
+                    return config.loadPackage(subconfig.mappings[prefix], subconfig, loading);
+                }))
+                .then(function () {
+                    postConfigurePackage(subconfig, packageDescription);
+                })
+                .thenResolve(pkg);
             });
             loadingPackages[location].done();
         }
@@ -464,6 +574,8 @@ Require.loadPackage = function (dependency, config) {
             return require.async(id, callback);
         });
     };
+
+    config.hasPreprocessorPackage = !!config.preprocessorPackage;
 
     return pkg;
 };
@@ -529,6 +641,7 @@ function configurePackage(location, description, parent) {
     }
 
     var config = Object.create(parent);
+    config.parent = parent;
     config.name = description.name;
     config.location = location || Require.getLocation();
     config.packageDescription = description;
@@ -568,24 +681,13 @@ function configurePackage(location, description, parent) {
         /*jshint -W089 */
         if (overlay[engine]) {
             var layer = overlay[engine];
-            for (var name in layer) {
-                description[name] = layer[name];
-            }
+            merge(description, layer);
         }
         /*jshint +W089 */
     });
     delete description.overlay;
 
-    // directories
-    description.directories = description.directories || {};
-    description.directories.lib =
-        description.directories.lib === void 0 ? "./" : description.directories.lib;
-    var lib = description.directories.lib;
-    // lib
-    config.lib = URL.resolve(location, "./" + lib);
-    var packagesDirectory = description.directories.packages || "node_modules";
-    packagesDirectory = URL.resolve(location, packagesDirectory + "/");
-    config.packagesDirectory = packagesDirectory;
+    config.packagesDirectory = URL.resolve(location, "node_modules/");
 
     // The default "main" module of a package has the same name as the
     // package.
@@ -597,7 +699,7 @@ function configurePackage(location, description, parent) {
         // loaded definition from the given path.
         modules[""] = {
             id: "",
-            redirect: normalizeId(resolve(description.main, "")),
+            redirect: normalize(resolve(description.main, "")),
             location: config.location
         };
 
@@ -609,7 +711,7 @@ function configurePackage(location, description, parent) {
         Object.keys(redirects).forEach(function (name) {
             modules[name] = {
                 id: name,
-                redirect: redirects[name],
+                redirect: normalize(resolve(redirects[name], "")),
                 location: URL.resolve(location, name)
             };
         });
@@ -617,8 +719,8 @@ function configurePackage(location, description, parent) {
 
     // mappings, link this package to other packages.
     var mappings = description.mappings || {};
-    // dependencies, devDependencies if not in production
-    [description.dependencies, !config.production? description.devDependencies : null]
+    // dependencies, devDependencies if not in production, if not installed by NPM
+    [description.dependencies, description._id || description.production ? null : description.devDependencies]
     .forEach(function (dependencies) {
         if (!dependencies) {
             return;
@@ -645,14 +747,234 @@ function configurePackage(location, description, parent) {
     });
     config.mappings = mappings;
 
+    // per-extension configuration
+    config.optimizers = description.optimizers;
+    config.compilers = description.compilers;
+    config.translators = description.translators;
+
     return config;
 }
 
-// Helper functions:
+function postConfigurePackage(config, description) {
+    var mappings = config.mappings;
+    var prefixes = Object.keys(mappings);
+    var redirectTable = config.redirectTable = config.redirectTable || [];
+    prefixes.forEach(function (prefix) {
 
-function has(object, property) {
-    return Object.prototype.hasOwnProperty.call(object, property);
+        var dependency = mappings[prefix];
+        if (!config.hasPackage(dependency)) {
+            return;
+        }
+        var package = config.getPackage(dependency);
+        var extensions;
+
+        // reference optimizers
+        var myOptimizers = config.optimizers = config.optimizers || {};
+        var theirOptimizers = package.config.optimizers;
+        extensions = Object.keys(theirOptimizers);
+        extensions.forEach(function (extension) {
+            myOptimizers[extension] = prefix + "/" + theirOptimizers[extension];
+        });
+
+        // reference translators
+        var myTranslators = config.translators = config.translators || {};
+        var theirTranslators = package.config.translators;
+        extensions = Object.keys(theirTranslators);
+        extensions.forEach(function (extension) {
+            myTranslators[extension] = prefix + "/" + theirTranslators[extension];
+        });
+
+        // reference compilers
+        var myCompilers = config.compilers = config.compilers || {};
+        var theirCompilers = package.config.compilers;
+        extensions = Object.keys(theirCompilers);
+        extensions.forEach(function (extension) {
+            myCompilers[extension] = prefix + "/" + theirCompilers[extension];
+        });
+
+        // copy redirect patterns
+        redirectTable.push.apply(
+            redirectTable,
+            package.config.redirectTable
+        );
+
+    });
+
+    if (description["redirect-patterns"]) {
+        var describedPatterns = description["redirect-patterns"];
+        for (var pattern in describedPatterns) {
+            if (has(describedPatterns, pattern)) {
+                redirectTable.push([
+                    new RegExp(pattern),
+                    describedPatterns[pattern]
+                ]);
+            }
+        }
+    }
 }
+
+function merge(target, source) {
+    for (var name in source) {
+        if (has(source, name)) {
+            var sourceValue = source[name];
+            var targetValue = target[name];
+            if (sourceValue === null) {
+                delete target[name];
+            } else if (
+                typeof sourceValue === "object" && !Array.isArray(sourceValue) &&
+                typeof targetValue === "object" && !Array.isArray(targetValue)
+            ) {
+                merge(targetValue, sourceValue);
+            } else {
+                target[name] = source[name];
+            }
+        }
+    }
+}
+
+Require.exposedConfigs = [
+    "location",
+    "packageDescription",
+    "packages",
+    "modules"
+];
+
+// Built-in compiler/preprocessor "middleware":
+
+Require.makeCompiler = function(config) {
+    return Require.JsonCompiler(
+        config,
+        Require.LintCompiler(
+            config,
+            Require.Compiler(config)
+        )
+    );
+};
+
+Require.JsonCompiler = function (config, compile) {
+    return function (module) {
+        var json = (module.location || "").match(/\.json$/);
+        if (json) {
+            module.exports = JSON.parse(module.text);
+            return module;
+        } else {
+            return compile(module);
+        }
+    };
+};
+
+Require.LintCompiler = function(config, compile) {
+    return function(module) {
+        try {
+            compile(module);
+        } catch (error) {
+            if (config.lint) {
+                // TODO: use ASAP
+                Q.nextTick(function () {
+                    config.lint(module);
+                });
+            }
+            throw error;
+        }
+    };
+};
+
+// Built-in loader "middleware":
+
+Require.CommonLoader = function (config, load) {
+    return Require.MappingsLoader(
+        config,
+        Require.RedirectPatternsLoader(
+            config,
+            Require.LocationLoader(
+                config,
+                Require.MemoizedLoader(
+                    config,
+                    load
+                )
+            )
+        )
+    );
+};
+
+// Using mappings hash to load modules that match a mapping.
+Require.MappingsLoader = function(config, load) {
+    config.mappings = config.mappings || {};
+    config.name = config.name;
+
+    // finds a mapping to follow, if any
+    return function (id, module) {
+        var mappings = config.mappings;
+        var prefixes = Object.keys(mappings);
+        var length = prefixes.length;
+
+        if (Require.isAbsolute(id)) {
+            return load(id, module);
+        }
+        var i, prefix;
+        for (i = 0; i < length; i++) {
+            prefix = prefixes[i];
+            if (
+                id === prefix ||
+                id.indexOf(prefix) === 0 &&
+                id.charAt(prefix.length) === "/"
+            ) {
+                /*jshint -W083 */
+                var mapping = mappings[prefix];
+                var rest = id.slice(prefix.length + 1);
+                return config.loadPackage(mapping, config)
+                .then(function (mappingRequire) {
+                    /*jshint +W083 */
+                    module.mappingRedirect = rest;
+                    module.mappingRequire = mappingRequire;
+                    return mappingRequire.deepLoad(rest, config.location);
+                });
+            }
+        }
+        return load(id, module);
+    };
+};
+
+Require.RedirectPatternsLoader = function (config, load) {
+    return function (id, module) {
+        var table = config.redirectTable || [];
+        for (var i = 0; i < table.length; i++) {
+            var expression = table[i][0];
+            var match = expression.exec(id);
+            if (match) {
+                var replacement = table[i][1];
+                module.redirect = id.replace(expression, replacement);
+                return;
+            }
+        }
+        return load(id, module);
+    };
+};
+
+Require.LocationLoader = function (config, load) {
+    return function (id, module) {
+        var base = id;
+        var extension = module.extension;
+        if (
+            !has(config.optimizers, extension) &&
+            !has(config.translators, extension) &&
+            !has(config.compilers, extension) &&
+            extension !== "js" &&
+            extension !== "json"
+        ) {
+            base += ".js";
+        }
+        var location = URL.resolve(config.location, base);
+        return load(location, module);
+    };
+};
+
+Require.MemoizedLoader = function (config, load) {
+    var cache = config.cache = config.cache || {};
+    return memoize(load, cache);
+};
+
+// Helper functions:
 
 // Resolves CommonJS module IDs (not paths)
 Require.resolve = resolve;
@@ -681,234 +1003,45 @@ function resolve(id, baseId) {
     return target.join("/");
 }
 
-Require.base = function (location) {
-    // matches Unix basename
-    return String(location)
-        .replace(/(.+?)\/+$/, "$1")
-        .match(/([^\/]+$|^\/$|^$)/)[1];
-};
-
-// Tests whether the location or URL is a absolute.
-Require.isAbsolute = function(location) {
-    return (/^[\w\-]+:/).test(location);
-};
-
-// Extracts dependencies by parsing code and looking for "require" (currently using a simple regexp)
-Require.parseDependencies = function(factory) {
-    var o = {};
-    String(factory).replace(/(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g, function(_, id) {
-        o[id] = true;
-    });
-    return Object.keys(o);
-};
-
-// Built-in compiler/preprocessor "middleware":
-
-Require.DependenciesCompiler = function(config, compile) {
-    return function(module) {
-        if (!module.dependencies && module.text !== void 0) {
-            module.dependencies = config.parseDependencies(module.text);
-        }
-        compile(module);
-        if (module && !module.dependencies) {
-            if (module.text || module.factory) {
-                module.dependencies = Require.parseDependencies(module.text || module.factory);
-            } else {
-                module.dependencies = [];
-            }
-        }
-        return module;
-    };
-};
-
-// Support she-bang for shell scripts by commenting it out (it is never
-// valid JavaScript syntax anyway)
-Require.ShebangCompiler = function(config, compile) {
-    return function (module) {
-        if (module.text) {
-            module.text = module.text.replace(/^#!/, "//#!");
-        }
-        compile(module);
-    };
-};
-
-Require.LintCompiler = function(config, compile) {
-    return function(module) {
-        try {
-            compile(module);
-        } catch (error) {
-            if (config.lint) {
-                // TODO: use ASAP
-                Q.nextTick(function () {
-                    config.lint(module);
-                });
-            }
-            throw error;
-        }
-    };
-};
-
-Require.exposedConfigs = [
-    "paths",
-    "mappings",
-    "location",
-    "packageDescription",
-    "packages",
-    "modules"
-];
-
-Require.makeCompiler = function(config) {
-    return Require.JsonCompiler(
-        config,
-        Require.ShebangCompiler(
-            config,
-            Require.DependenciesCompiler(
-                config,
-                Require.LintCompiler(
-                    config,
-                    Require.Compiler(config)
-                )
-            )
-        )
-    );
-};
-
-Require.JsonCompiler = function (config, compile) {
-    return function (module) {
-        var json = (module.location || "").match(/\.json$/);
-        if (json) {
-            module.exports = JSON.parse(module.text);
-            return module;
-        } else {
-            return compile(module);
-        }
-    };
-};
-
-// Built-in loader "middleware":
-
-// Using mappings hash to load modules that match a mapping.
-Require.MappingsLoader = function(config, load) {
-    config.mappings = config.mappings || {};
-    config.name = config.name;
-
-    // finds a mapping to follow, if any
-    return function (id, module) {
-        var mappings = config.mappings;
-        var prefixes = Object.keys(mappings);
-        var length = prefixes.length;
-
-        if (Require.isAbsolute(id)) {
-            return load(id, module);
-        }
-        // TODO: remove this when all code has been migrated off of the autonomous name-space problem
-        if (
-            config.name !== void 0 &&
-            id.indexOf(config.name) === 0 &&
-            id.charAt(config.name.length) === "/"
-        ) {
-            console.warn("Package reflexive module ignored:", id);
-        }
-        var i, prefix;
-        for (i = 0; i < length; i++) {
-            prefix = prefixes[i];
-            if (
-                id === prefix ||
-                id.indexOf(prefix) === 0 &&
-                id.charAt(prefix.length) === "/"
-            ) {
-                /*jshint -W083 */
-                var mapping = mappings[prefix];
-                var rest = id.slice(prefix.length + 1);
-                return config.loadPackage(mapping, config)
-                .then(function (mappingRequire) {
-                    /*jshint +W083 */
-                    module.mappingRedirect = rest;
-                    module.mappingRequire = mappingRequire;
-                    return mappingRequire.deepLoad(rest, config.location);
-                });
-            }
-        }
-        return load(id, module);
-    };
-};
-
-Require.ExtensionsLoader = function(config, load) {
-    var extensions = config.extensions || ["js"];
-    var loadWithExtension = extensions.reduceRight(function (next, extension) {
-        return function (id, module) {
-            return load(id + "." + extension, module)
-            .fail(function (error) {
-                if (/^Can't find /.test(error.message)) {
-                    return next(id, module);
-                } else {
-                    throw error;
-                }
-            });
-        };
-    }, function (id, module) {
-        throw new Error(
-            "Can't find " + JSON.stringify(id) + " with extensions " +
-            JSON.stringify(extensions) + " in package at " +
-            JSON.stringify(config.location)
-        );
-    });
-    return function (id, module) {
-        if (Require.base(id).indexOf(".") !== -1) {
-            // already has an extension
-            return load(id, module);
-        } else {
-            return loadWithExtension(id, module);
-        }
-    };
-};
-
-// Attempts to load using multiple base paths (or one absolute path) with a
-// single loader.
-Require.PathsLoader = function(config, load) {
-    var loadFromPaths = config.paths.reduceRight(function (next, path) {
-        return function (id, module) {
-            var newId = URL.resolve(path, id);
-            return load(newId, module)
-            .fail(function (error) {
-                if (/^Can't find /.test(error.message)) {
-                    return next(id, module);
-                } else {
-                    throw error;
-                }
-            });
-        };
-    }, function (id, module) {
-        throw new Error(
-            "Can't find " + JSON.stringify(id) + " from paths " +
-            JSON.stringify(config.paths) + " in package at " +
-            JSON.stringify(config.location)
-        );
-    });
-    return function(id, module) {
-        if (Require.isAbsolute(id)) {
-            // already fully qualified
-            return load(id, module);
-        } else {
-            return loadFromPaths(id, module);
-        }
-    };
-};
-
-Require.MemoizedLoader = function (config, load) {
-    var cache = config.cache = config.cache || {};
-    return memoize(load, cache);
-};
-
-var normalizeId = function (id) {
+Require.normalize = normalize;
+function normalize(id) {
     var match = /^(.*)\.js$/.exec(id);
     if (match) {
         id = match[1];
     }
     return id;
-};
+}
 
-var memoize = function (callback, cache) {
+Require.extension = extension;
+function extension(location) {
+    var match = /\.([^\/\.]+)$/.exec(location);
+    if (match) {
+        return match[1];
+    }
+}
+
+// Tests whether the location or URL is a absolute.
+Require.isAbsolute = isAbsolute;
+function isAbsolute(location) {
+    return (/^[\w\-]+:/).test(location);
+}
+
+// Extracts dependencies by parsing code and looking for "require" (currently
+// using a simple regexp)
+Require.parseDependencies = parseDependencies;
+function parseDependencies(text) {
+    var o = {};
+    String(text).replace(/(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g, function(_, id) {
+        o[id] = true;
+    });
+    return Object.keys(o);
+}
+
+function has(object, property) {
+    return Object.prototype.hasOwnProperty.call(object, property);
+}
+
+function memoize(callback, cache) {
     cache = cache || {};
     return function (key, arg) {
         if (!has(cache, key)) {
@@ -916,5 +1049,5 @@ var memoize = function (callback, cache) {
         }
         return cache[key];
     };
-};
+}
 

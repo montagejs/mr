@@ -14,7 +14,7 @@
         var module = this;
         if (!module.exports) {
             module.exports = {};
-            function require(id) {
+            var require = function (id) {
                 var index = module.dependencies[id];
                 var dependency = modules[index];
                 if (!dependency)
@@ -27,7 +27,7 @@
     };
 
     return modules[0].getExports();
-})((function (global){return[[{"./browser":1,"./preload":2},function (require, exports, module){
+})((function (global){return[[{"./browser":1,"./preload":2,"./script-params":3},function (require, exports, module){
 
 // mr boot/preload-entry
 // ---------------------
@@ -35,12 +35,14 @@
 
 var boot = require("./browser");
 var preload = require("./preload");
+var getParams = require("./script-params");
 
 module.exports = function bootstrapPreload(plan) {
-    return boot(preload(plan));
+    var params = getParams();
+    return boot(preload(plan, params), params);
 };
 
-}],[{"../browser":3,"url":5,"q":8,"./script-params":4},function (require, exports, module){
+}],[{"../browser":4,"url":5,"q":8,"./script-params":3},function (require, exports, module){
 
 // mr boot/browser
 // ---------------
@@ -50,11 +52,11 @@ module.exports = function bootstrapPreload(plan) {
 var Require = require("../browser");
 var URL = require("url");
 var Q = require("q");
-
-var params = require("./script-params")("boot.js");
+var getParams = require("./script-params");
 
 module.exports = boot;
-function boot(preloaded) {
+function boot(preloaded, params) {
+    params = params || getParams("boot.js");
 
     var config = {preloaded: preloaded};
     var applicationLocation = URL.resolve(window.location, params.package || ".");
@@ -90,16 +92,16 @@ function boot(preloaded) {
 
 }
 
-}],[{"./script-injection":6,"q":8},function (require, exports, module){
+}],[{"../script":6,"q":8},function (require, exports, module){
 
 // mr boot/preload
 // ---------------
 
 
-var load = require("./script-injection");
+var load = require("../script");
 var Q = require("q");
 
-module.exports = function preload(plan) {
+module.exports = function preload(plan, params) {
 
     // Each bundle ends with a bundleLoaded(name) call.  We use these hooks to
     // synchronize the preloader.
@@ -117,7 +119,7 @@ module.exports = function preload(plan) {
     var preloaded = plan.reduce(function (previous, bundleLocations) {
         return previous.then(function () {
             return Q.all(bundleLocations.map(function (bundleLocation) {
-                load(bundleLocation);
+                load(resolve(params.location, bundleLocation));
                 return getHook(bundleLocation).promise;
             }));
         });
@@ -129,259 +131,6 @@ module.exports = function preload(plan) {
 
     return preloaded;
 };
-
-}],[{"./require":7,"url":5,"q":8},function (require, exports, module){
-
-// mr browser
-// ----------
-
-/* <copyright>
- This file contains proprietary software owned by Motorola Mobility, Inc.<br/>
- No rights, expressed or implied, whatsoever to this software are provided by Motorola Mobility, Inc. hereunder.<br/>
- (c) Copyright 2012 Motorola Mobility, Inc.  All Rights Reserved.
- </copyright> */
-/*global montageDefine:true */
-/*jshint -W015, evil:true, camelcase:false */
-
-var Require = require("./require");
-var URL = require("url");
-var Q = require("q");
-var GET = "GET";
-var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";
-var FILE_PROTOCOL = "file:";
-
-Require.getLocation = function() {
-    return URL.resolve(window.location, ".");
-};
-
-Require.overlays = ["window", "browser", "montage"];
-
-// Determine if an XMLHttpRequest was successful
-// Some versions of WebKit return 0 for successful file:// URLs
-function xhrSuccess(req) {
-    return (req.status === 200 || (req.status === 0 && req.responseText));
-}
-
-// Due to crazy variabile availability of new and old XHR APIs across
-// platforms, this implementation registers every known name for the event
-// listeners.  The promise library ascertains that the returned promise
-// is resolved only by the first event.
-// http://dl.dropbox.com/u/131998/yui/misc/get/browser-capabilities.html
-Require.read = function (url) {
-
-    if (URL.resolve(window.location, url).indexOf(FILE_PROTOCOL) === 0) {
-        throw new Error("XHR does not function for file: protocol");
-    }
-
-    var request = new XMLHttpRequest();
-    var response = Q.defer();
-
-    function onload() {
-        if (xhrSuccess(request)) {
-            response.resolve(request.responseText);
-        } else {
-            onerror();
-        }
-    }
-
-    function onerror() {
-        response.reject(new Error("Can't XHR " + JSON.stringify(url)));
-    }
-
-    try {
-        request.open(GET, url, true);
-        if (request.overrideMimeType) {
-            request.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
-        }
-        request.onreadystatechange = function () {
-            if (request.readyState === 4) {
-                onload();
-            }
-        };
-        request.onload = request.load = onload;
-        request.onerror = request.error = onerror;
-    } catch (exception) {
-        response.reject(exception);
-    }
-
-    request.send();
-    return response.promise;
-};
-
-// By using a named "eval" most browsers will execute in the global scope.
-// http://www.davidflanagan.com/2010/12/global-eval-in.html
-// Unfortunately execScript doesn't always return the value of the evaluated expression (at least in Chrome)
-var globalEval = /*this.execScript ||*/eval;
-// For Firebug evaled code isn't debuggable otherwise
-// http://code.google.com/p/fbug/issues/detail?id=2198
-if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
-    globalEval = new Function("_", "return eval(_)");
-}
-
-var __FILE__String = "__FILE__",
-    DoubleUnderscoreString = "__",
-    globalEvalConstantA = "(function ",
-    globalEvalConstantB = "(require, exports, module) {",
-    globalEvalConstantC = "//*/\n})\n//@ sourceURL=";
-
-Require.Compiler = function (config) {
-    return function(module) {
-        if (module.factory || module.text === void 0) {
-            return module;
-        }
-        if (config.useScriptInjection) {
-            throw new Error("Can't use eval.");
-        }
-
-        // Here we use a couple tricks to make debugging better in various browsers:
-        // TODO: determine if these are all necessary / the best options
-        // 1. name the function with something inteligible since some debuggers display the first part of each eval (Firebug)
-        // 2. append the "//@ sourceURL=location" hack (Safari, Chrome, Firebug)
-        //  * http://pmuellr.blogspot.com/2009/06/debugger-friendly.html
-        //  * http://blog.getfirebug.com/2009/08/11/give-your-eval-a-name-with-sourceurl/
-        //      TODO: investigate why this isn't working in Firebug.
-        // 3. set displayName property on the factory function (Safari, Chrome)
-
-        var displayName = __FILE__String+module.location.replace(/\.\w+$|\W/g, DoubleUnderscoreString);
-
-        try {
-            module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+module.location);
-        } catch (exception) {
-            exception.message = exception.message + " in " + module.location;
-            throw exception;
-        }
-
-        // This should work and would be simpler, but Firebug does not show scripts executed via "new Function()" constructor.
-        // TODO: sniff browser?
-        // module.factory = new Function("require", "exports", "module", module.text + "\n//*/"+sourceURLComment);
-
-        module.factory.displayName = displayName;
-    };
-};
-
-Require.XhrLoader = function (config) {
-    return function (url, module) {
-        return config.read(url)
-        .then(function (text) {
-            module.type = "javascript";
-            module.text = text;
-            module.location = url;
-        });
-    };
-};
-
-var definitions = {};
-var getDefinition = function (hash, id) {
-    definitions[hash] = definitions[hash] || {};
-    definitions[hash][id] = definitions[hash][id] || Q.defer();
-    return definitions[hash][id];
-};
-// global
-montageDefine = function (hash, id, module) {
-    getDefinition(hash, id).resolve(module);
-};
-
-Require.loadScript = function (location) {
-    var script = document.createElement("script");
-    script.onload = function() {
-        script.parentNode.removeChild(script);
-    };
-    script.onerror = function (error) {
-        script.parentNode.removeChild(script);
-    };
-    script.src = location;
-    script.defer = true;
-    document.getElementsByTagName("head")[0].appendChild(script);
-};
-
-Require.ScriptLoader = function (config) {
-    var hash = config.packageDescription.hash;
-    return function (location, module) {
-        return Q.fcall(function () {
-
-            // short-cut by predefinition
-            if (definitions[hash] && definitions[hash][module.id]) {
-                return definitions[hash][module.id].promise;
-            }
-
-            if (/\.js$/.test(location)) {
-                location = location.replace(/\.js/, ".load.js");
-            } else {
-                location += ".load.js";
-            }
-
-            Require.loadScript(location);
-
-            return getDefinition(hash, module.id).promise;
-        })
-        .then(function (definition) {
-            /*jshint -W089 */
-            delete definitions[hash][module.id];
-            for (var name in definition) {
-                module[name] = definition[name];
-            }
-            module.location = location;
-            module.directory = URL.resolve(location, ".");
-            /*jshint +W089 */
-        });
-    };
-};
-
-// old version
-var loadPackageDescription = Require.loadPackageDescription;
-Require.loadPackageDescription = function (dependency, config) {
-    if (dependency.hash) { // use script injection
-        var definition = getDefinition(dependency.hash, "package.json").promise;
-        var location = URL.resolve(dependency.location, "package.json.load.js");
-
-        // The package.json might come in a preloading bundle. If so, we do not
-        // want to issue a script injection. However, if by the time preloading
-        // has finished the package.json has not arrived, we will need to kick off
-        // a request for the package.json.load.js script.
-        if (config.preloaded && config.preloaded.isPending()) {
-            config.preloaded
-            .then(function () {
-                if (definition.isPending()) {
-                    Require.loadScript(location);
-                }
-            })
-            .done();
-        } else if (definition.isPending()) {
-            // otherwise preloading has already completed and we don't have the
-            // package description, so load it
-            Require.loadScript(location);
-        }
-
-        return definition.get("exports");
-    } else {
-        // fall back to normal means
-        return loadPackageDescription(dependency, config);
-    }
-};
-
-Require.makeLoader = function (config) {
-    var Loader;
-    if (config.useScriptInjection) {
-        Loader = Require.ScriptLoader;
-    } else {
-        Loader = Require.XhrLoader;
-    }
-    return Require.MappingsLoader(
-        config,
-        Require.ExtensionsLoader(
-            config,
-            Require.PathsLoader(
-                config,
-                Require.MemoizedLoader(
-                    config,
-                    Loader(config)
-                )
-            )
-        )
-    );
-};
-
-module.exports = Require;
 
 }],[{"url":5},function (require, exports, module){
 
@@ -413,7 +162,7 @@ function getParams(scriptName) {
         // `data-boot-location` property on the script instead.  This will also
         // serve to inform the boot script of the location of the loading
         // package, albeit Montage or Mr.
-        if (script.src && (match = script.src.match(re))) {
+        if (scriptName && script.src && (match = script.src.match(re))) {
             location = match[1];
         }
         if (script.hasAttribute("data-boot-location")) {
@@ -453,10 +202,247 @@ function getParams(scriptName) {
     return params;
 }
 
+}],[{"./require":7,"url":5,"q":8,"./script":6},function (require, exports, module){
+
+// mr browser
+// ----------
+
+/* <copyright>
+ This file contains proprietary software owned by Motorola Mobility, Inc.<br/>
+ No rights, expressed or implied, whatsoever to this software are provided by Motorola Mobility, Inc. hereunder.<br/>
+ (c) Copyright 2012 Motorola Mobility, Inc.  All Rights Reserved.
+ </copyright> */
+/*global montageDefine:true */
+/*jshint -W015, evil:true, camelcase:false */
+
+var Require = require("./require");
+var URL = require("url");
+var Q = require("q");
+var GET = "GET";
+var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";
+var FILE_PROTOCOL = "file:";
+
+Require.getLocation = function() {
+    return URL.resolve(window.location, ".");
+};
+
+Require.overlays = ["window", "browser", "montage"];
+
+// Determine if an XMLHttpRequest was successful
+// Some versions of WebKit return 0 for successful file:// URLs
+function xhrSuccess(req) {
+    return (req.status === 200 || (req.status === 0 && req.responseText));
+}
+
+// Due to crazy variabile availability of new and old XHR APIs across
+// platforms, this implementation registers every known name for the event
+// listeners.  The promise library ascertains that the returned promise
+// is resolved only by the first event.
+// http://dl.dropbox.com/u/131998/yui/misc/get/browser-capabilities.html
+Require.read = function (location) {
+
+    if (URL.resolve(window.location, location).indexOf(FILE_PROTOCOL) === 0) {
+        throw new Error("XHR does not function for file: protocol");
+    }
+
+    var request = new XMLHttpRequest();
+    var response = Q.defer();
+
+    function onload() {
+        if (xhrSuccess(request)) {
+            response.resolve(request.responseText);
+        } else {
+            onerror();
+        }
+    }
+
+    function onerror() {
+        response.reject(new Error("Can't XHR " + JSON.stringify(location)));
+    }
+
+    try {
+        request.open(GET, location, true);
+        if (request.overrideMimeType) {
+            request.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
+        }
+        request.onreadystatechange = function () {
+            if (request.readyState === 4) {
+                onload();
+            }
+        };
+        request.onload = request.load = onload;
+        request.onerror = request.error = onerror;
+    } catch (exception) {
+        response.reject(exception);
+    }
+
+    request.send();
+    return response.promise;
+};
+
+// By using a named "eval" most browsers will execute in the global scope.
+// http://www.davidflanagan.com/2010/12/global-eval-in.html
+// Unfortunately execScript doesn't always return the value of the evaluated expression (at least in Chrome)
+var globalEval = /*this.execScript ||*/eval;
+// For Firebug evaled code isn't debuggable otherwise
+// http://code.google.com/p/fbug/issues/detail?id=2198
+if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
+    globalEval = new Function("_", "return eval(_)");
+}
+
+var __FILE__String = "__FILE__",
+    DoubleUnderscoreString = "__",
+    globalEvalConstantA = "(function ",
+    globalEvalConstantB = "(require, exports, module, __filename, __dirname) {",
+    globalEvalConstantC = "//*/\n})\n//@ sourceURL=";
+
+Require.Compiler = function (config) {
+    return function(module) {
+        if (module.factory || module.text === void 0 || module.type !== "js") {
+            return;
+        }
+        if (config.useScriptInjection) {
+            throw new Error("Can't use eval.");
+        }
+
+        // Here we use a couple tricks to make debugging better in various browsers:
+        // TODO: determine if these are all necessary / the best options
+        // 1. name the function with something inteligible since some debuggers display the first part of each eval (Firebug)
+        // 2. append the "//@ sourceURL=location" hack (Safari, Chrome, Firebug)
+        //  * http://pmuellr.blogspot.com/2009/06/debugger-friendly.html
+        //  * http://blog.getfirebug.com/2009/08/11/give-your-eval-a-name-with-sourceurl/
+        //      TODO: investigate why this isn't working in Firebug.
+        // 3. set displayName property on the factory function (Safari, Chrome)
+
+        var displayName = __FILE__String+module.location.replace(/\.\w+$|\W/g, DoubleUnderscoreString);
+
+        try {
+            module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+module.location);
+            if (!config.saveText) {
+                delete module.text; // save some space
+            }
+        } catch (exception) {
+            exception.message = exception.message + " in " + module.location;
+            throw exception;
+        }
+
+        // This should work and would be simpler, but Firebug does not show scripts executed via "new Function()" constructor.
+        // TODO: sniff browser?
+        // module.factory = new Function("require", "exports", "module", module.text + "\n//*/"+sourceURLComment);
+
+        module.factory.displayName = displayName;
+    };
+};
+
+Require.XhrLoader = function (config) {
+    return function (location, module) {
+        return config.read(location)
+        .then(function (text) {
+            module.text = text;
+            module.location = location;
+        });
+    };
+};
+
+var definitions = {};
+var getDefinition = function (hash, id) {
+    definitions[hash] = definitions[hash] || {};
+    definitions[hash][id] = definitions[hash][id] || Q.defer();
+    return definitions[hash][id];
+};
+
+// global
+montageDefine = function (hash, id, module) {
+    getDefinition(hash, id).resolve(module);
+};
+
+Require.loadScript = require("./script");
+
+Require.ScriptLoader = function (config) {
+    var hash = config.packageDescription.hash;
+    return function (location, module) {
+        return Q.fcall(function () {
+
+            // short-cut by predefinition
+            if (definitions[hash] && definitions[hash][module.id]) {
+                return definitions[hash][module.id].promise;
+            }
+
+            if (/\.js$/.test(location)) {
+                location = location.replace(/\.js/, ".load.js");
+            } else {
+                location += ".load.js";
+            }
+
+            Require.loadScript(location);
+
+            var definition = getDefinition(hash, module.id).promise;
+            loadIfNotPreloaded(location, definition, config.preloaded);
+            return definition;
+        })
+        .then(function (definition) {
+            /*jshint -W089 */
+            delete definitions[hash][module.id];
+            for (var name in definition) {
+                module[name] = definition[name];
+            }
+            module.location = location;
+            module.directory = URL.resolve(location, ".");
+            /*jshint +W089 */
+        });
+    };
+};
+
+// old version
+var loadPackageDescription = Require.loadPackageDescription;
+Require.loadPackageDescription = function (dependency, config) {
+    if (dependency.hash) { // use script injection
+        var definition = getDefinition(dependency.hash, "package.json").promise;
+        var location = URL.resolve(dependency.location, "package.json.load.js");
+        loadIfNotPreloaded(location, definition, config.preloaded);
+        return definition.get("exports");
+    } else {
+        // fall back to normal means
+        return loadPackageDescription(dependency, config);
+    }
+};
+
+Require.makeLoader = function (config) {
+    var Loader;
+    if (config.useScriptInjection) {
+        Loader = Require.ScriptLoader;
+    } else {
+        Loader = Require.XhrLoader;
+    }
+    return Require.CommonLoader(config, Loader(config));
+};
+
+function loadIfNotPreloaded(location, definition, preloaded) {
+    // The package.json might come in a preloading bundle. If so, we do not
+    // want to issue a script injection. However, if by the time preloading
+    // has finished the package.json has not arrived, we will need to kick off
+    // a request for the requested script.
+    if (preloaded && preloaded.isPending()) {
+        preloaded
+        .then(function () {
+            if (definition.isPending()) {
+                Require.loadScript(location);
+            }
+        })
+        .done();
+    } else if (definition.isPending()) {
+        // otherwise preloading has already completed and we don't have the
+        // module, so load it
+        Require.loadScript(location);
+    }
+}
+
+module.exports = Require;
+
 }],[{},function (require, exports, module){
 
-// mr mini-url.js
-// --------------
+// mr mini-url
+// -----------
 
 
 var head = document.querySelector("head"),
@@ -488,8 +474,8 @@ exports.resolve = function resolve(base, relative) {
 
 }],[{},function (require, exports, module){
 
-// mr boot/script-injection
-// ------------------------
+// mr script
+// ---------
 
 
 module.exports = load;
@@ -497,11 +483,14 @@ module.exports = load;
 var head = document.querySelector("head");
 function load(location) {
     var script = document.createElement("script");
-    script.src = URL.resolve(params.mrLocation, location);
+    script.src = location;
     script.onload = function () {
-        // remove clutter
         script.parentNode.removeChild(script);
     };
+    script.onerror = function (error) {
+        script.parentNode.removeChild(script);
+    };
+    script.defer = true;
     head.appendChild(script);
 };
 
@@ -517,6 +506,7 @@ function load(location) {
     3-Clause BSD License
     https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
 */
+/*global -URL*/
 
 var Require = exports;
 var Q = require("q");
@@ -537,8 +527,7 @@ Require.makeRequire = function (config) {
     // Configuration defaults:
     config = config || {};
     config.location = URL.resolve(config.location || Require.getLocation(), "./");
-    config.lib = URL.resolve(config.location, config.lib || "./");
-    config.paths = config.paths || [config.lib];
+    config.paths = config.paths || [config.location];
     config.mappings = config.mappings || {}; // EXTENSION
     config.exposedConfigs = config.exposedConfigs || Require.exposedConfigs;
     config.makeLoader = config.makeLoader || Require.makeLoader;
@@ -547,6 +536,10 @@ Require.makeRequire = function (config) {
     config.compile = config.compile || config.makeCompiler(config);
     config.parseDependencies = config.parseDependencies || Require.parseDependencies;
     config.read = config.read || Require.read;
+    config.optimizers = config.optimizers || {};
+    config.compilers = config.compilers || {};
+    config.translators = config.translators || {};
+    config.redirectTable = config.redirectTable || [];
 
     // Modules: { exports, id, location, directory, factory, dependencies,
     // dependees, text, type }
@@ -558,10 +551,25 @@ Require.makeRequire = function (config) {
     function getModuleDescriptor(id) {
         var lookupId = id.toLowerCase();
         if (!has(modules, lookupId)) {
+            var extension = Require.extension(id);
+            var type;
+            if (
+                extension && (
+                    has(config.optimizers, extension) ||
+                    has(config.translators, extension) ||
+                    has(config.compilers, extension)
+                )
+            ) {
+                type = extension;
+            } else {
+                type = "js";
+            }
             modules[lookupId] = {
                 id: id,
-                display: (config.name || config.location) + "#" + id, // EXTENSION
-                require: require
+                extension: extension,
+                type: type,
+                display: (config.name || config.location) + "#" + id,
+                require: makeRequire(id)
             };
         }
         return modules[lookupId];
@@ -577,16 +585,17 @@ Require.makeRequire = function (config) {
         module.location = URL.resolve(config.location, id);
         module.directory = URL.resolve(module.location, "./");
         module.injected = true;
+        module.type = void 0;
         delete module.redirect;
         delete module.mappingRedirect;
     }
 
     // Ensures a module definition is loaded, compiled, analyzed
-    var load = memoize(function (topId, viaId) {
+    var load = memoize(function (topId, viaId, loading) {
         var module = getModuleDescriptor(topId);
         return Q.fcall(function () {
-            // if not already loaded, already instantiated, or
-            // configured as a redirection to another module
+            // If not already loaded, already instantiated, or configured as a
+            // redirection to another module.
             if (
                 module.factory === void 0 &&
                 module.exports === void 0 &&
@@ -596,11 +605,69 @@ Require.makeRequire = function (config) {
             }
         })
         .then(function () {
-            // compile and analyze dependencies
-            config.compile(module);
-            var dependencies =
-                module.dependencies =
-                    module.dependencies || [];
+            // Translate (to JavaScript, optionally provide dependency analysis
+            // services).
+            if (module.type !== "js" && has(config.translators, module.type)) {
+                var translatorId = config.translators[module.type];
+                return Q.fcall(function () {
+                    // The use of a preprocessor package is optional for
+                    // translators, though mandatory for optimizers because
+                    // there are .js to .js optimizers, but no such
+                    // translators.
+                    if (config.hasPreprocessorPackage) {
+                        return config.loadPreprocessorPackage();
+                    } else {
+                        return require;
+                    }
+                })
+                .invoke("async", translatorId)
+                .then(function (translate) {
+                    module.text = translate(module.text, module);
+                    module.type = "js";
+                });
+            }
+        })
+        .then(function () {
+            if (module.type === "js" && module.text !== void 0 && module.dependencies === void 0) {
+                // Remove the shebang
+                module.text = module.text.replace(/^#!/, "//#!");
+                // Parse dependencies.
+                module.dependencies = config.parseDependencies(module.text);
+            }
+
+            // Run optional optimizers.
+            // {text, type} to {text', type')
+            if (config.hasPreprocessorPackage && has(config.optimizers, module.type)) {
+                var optimizerId = config.optimizers[module.type];
+                return config.loadPreprocessorPackage()
+                .invoke("async", optimizerId)
+                .then(function (optimize) {
+                    optimize(module);
+                });
+            }
+        })
+        .then(function () {
+            if (
+                module.factory === void 0 &&
+                module.redirect === void 0 &&
+                module.exports === void 0
+            ) {
+                // Then apply configured compilers.  module {text, type} to
+                // {dependencies, factory || exports || redirect}
+                if (has(config.compilers, module.type)) {
+                    var compilerId = config.compilers[module.type];
+                    return deepLoad(compilerId, "", loading)
+                    .then(function () {
+                        var compile = require(compilerId);
+                        compile(module);
+                    });
+                } else if (module.type === "js") {
+                    config.compile(module);
+                }
+            }
+
+            // Final dependency massaging
+            var dependencies = module.dependencies = module.dependencies || [];
             if (module.redirect !== void 0) {
                 dependencies.push(module.redirect);
             }
@@ -608,6 +675,7 @@ Require.makeRequire = function (config) {
                 Array.prototype.push.apply(module.dependencies, module.extraDependencies);
             }
         });
+
     });
 
     // Load a module definition, and the definitions of its transitive
@@ -626,6 +694,7 @@ Require.makeRequire = function (config) {
         .then(function () {
             // load the transitive dependencies using the magic of
             // recursion.
+            var dependencies = module.dependencies = module.dependencies || [];
             return Q.all(module.dependencies.map(function (depId) {
                 depId = resolve(depId, topId);
                 // create dependees set, purely for debug purposes
@@ -683,6 +752,7 @@ Require.makeRequire = function (config) {
             error.message = (
                 "Can't require module " + JSON.stringify(module.id) +
                 " via " + JSON.stringify(viaId) +
+                " in " + JSON.stringify(config.name || config.location) +
                 " because " + error.message
             );
             throw error;
@@ -718,9 +788,11 @@ Require.makeRequire = function (config) {
         var returnValue = module.factory.call(
             // in the context of the module:
             void 0, // this (defaults to global)
-            makeRequire(topId), // require
+            module.require, // require
             module.exports, // exports
-            module // module
+            module, // module
+            module.location, // __filename
+            module.directory // __dirname
         );
 
         // EXTENSION
@@ -798,7 +870,7 @@ Require.makeRequire = function (config) {
         };
 
         require.resolve = function (id) {
-            return normalizeId(resolve(id, viaId));
+            return normalize(resolve(id, viaId));
         };
 
         require.getModule = getModuleDescriptor; // XXX deprecated, use:
@@ -946,13 +1018,23 @@ Require.loadPackage = function (dependency, config) {
         return loadedPackages[location];
     };
 
-    config.loadPackage = function (dependency, viaConfig) {
+    config.loadPackage = function (dependency, viaConfig, loading) {
         dependency = normalizeDependency(dependency, viaConfig);
         if (!dependency.location) {
             throw new Error("Can't find dependency: " + JSON.stringify(dependency) + " from " + config.location);
         }
         var location = dependency.location;
+
+        // prevent data-lock if there is a package dependency cycle
+        loading = loading || {};
+        if (loading[location]) {
+            // returns an already-fulfilled promise for `undefined`
+            return Q();
+        }
+        loading[location] = true;
+
         if (!loadingPackages[location]) {
+
             loadingPackages[location] = Require.loadPackageDescription(dependency, config)
             .then(function (packageDescription) {
                 var subconfig = configurePackage(
@@ -960,9 +1042,26 @@ Require.loadPackage = function (dependency, config) {
                     packageDescription,
                     config
                 );
+
+                subconfig.loadPreprocessorPackage = function () {
+                    if (!viaConfig) {
+                        return Q(config.preprocessorPackage);
+                    } else {
+                        return viaConfig.loadPreprocessorPackage()
+                        .invoke("loadPackage", dependency);
+                    }
+                };
+
                 var pkg = Require.makeRequire(subconfig);
                 loadedPackages[location] = pkg;
-                return pkg;
+                return Q.all(Object.keys(subconfig.mappings).map(function (prefix) {
+                    var dependency = subconfig.mappings[prefix];
+                    return config.loadPackage(subconfig.mappings[prefix], subconfig, loading);
+                }))
+                .then(function () {
+                    postConfigurePackage(subconfig, packageDescription);
+                })
+                .thenResolve(pkg);
             });
             loadingPackages[location].done();
         }
@@ -976,6 +1075,8 @@ Require.loadPackage = function (dependency, config) {
             return require.async(id, callback);
         });
     };
+
+    config.hasPreprocessorPackage = !!config.preprocessorPackage;
 
     return pkg;
 };
@@ -1041,6 +1142,7 @@ function configurePackage(location, description, parent) {
     }
 
     var config = Object.create(parent);
+    config.parent = parent;
     config.name = description.name;
     config.location = location || Require.getLocation();
     config.packageDescription = description;
@@ -1080,24 +1182,13 @@ function configurePackage(location, description, parent) {
         /*jshint -W089 */
         if (overlay[engine]) {
             var layer = overlay[engine];
-            for (var name in layer) {
-                description[name] = layer[name];
-            }
+            merge(description, layer);
         }
         /*jshint +W089 */
     });
     delete description.overlay;
 
-    // directories
-    description.directories = description.directories || {};
-    description.directories.lib =
-        description.directories.lib === void 0 ? "./" : description.directories.lib;
-    var lib = description.directories.lib;
-    // lib
-    config.lib = URL.resolve(location, "./" + lib);
-    var packagesDirectory = description.directories.packages || "node_modules";
-    packagesDirectory = URL.resolve(location, packagesDirectory + "/");
-    config.packagesDirectory = packagesDirectory;
+    config.packagesDirectory = URL.resolve(location, "node_modules/");
 
     // The default "main" module of a package has the same name as the
     // package.
@@ -1109,7 +1200,7 @@ function configurePackage(location, description, parent) {
         // loaded definition from the given path.
         modules[""] = {
             id: "",
-            redirect: normalizeId(resolve(description.main, "")),
+            redirect: normalize(resolve(description.main, "")),
             location: config.location
         };
 
@@ -1121,7 +1212,7 @@ function configurePackage(location, description, parent) {
         Object.keys(redirects).forEach(function (name) {
             modules[name] = {
                 id: name,
-                redirect: redirects[name],
+                redirect: normalize(resolve(redirects[name], "")),
                 location: URL.resolve(location, name)
             };
         });
@@ -1129,8 +1220,8 @@ function configurePackage(location, description, parent) {
 
     // mappings, link this package to other packages.
     var mappings = description.mappings || {};
-    // dependencies, devDependencies if not in production
-    [description.dependencies, !config.production? description.devDependencies : null]
+    // dependencies, devDependencies if not in production, if not installed by NPM
+    [description.dependencies, description._id || description.production ? null : description.devDependencies]
     .forEach(function (dependencies) {
         if (!dependencies) {
             return;
@@ -1157,14 +1248,234 @@ function configurePackage(location, description, parent) {
     });
     config.mappings = mappings;
 
+    // per-extension configuration
+    config.optimizers = description.optimizers;
+    config.compilers = description.compilers;
+    config.translators = description.translators;
+
     return config;
 }
 
-// Helper functions:
+function postConfigurePackage(config, description) {
+    var mappings = config.mappings;
+    var prefixes = Object.keys(mappings);
+    var redirectTable = config.redirectTable = config.redirectTable || [];
+    prefixes.forEach(function (prefix) {
 
-function has(object, property) {
-    return Object.prototype.hasOwnProperty.call(object, property);
+        var dependency = mappings[prefix];
+        if (!config.hasPackage(dependency)) {
+            return;
+        }
+        var package = config.getPackage(dependency);
+        var extensions;
+
+        // reference optimizers
+        var myOptimizers = config.optimizers = config.optimizers || {};
+        var theirOptimizers = package.config.optimizers;
+        extensions = Object.keys(theirOptimizers);
+        extensions.forEach(function (extension) {
+            myOptimizers[extension] = prefix + "/" + theirOptimizers[extension];
+        });
+
+        // reference translators
+        var myTranslators = config.translators = config.translators || {};
+        var theirTranslators = package.config.translators;
+        extensions = Object.keys(theirTranslators);
+        extensions.forEach(function (extension) {
+            myTranslators[extension] = prefix + "/" + theirTranslators[extension];
+        });
+
+        // reference compilers
+        var myCompilers = config.compilers = config.compilers || {};
+        var theirCompilers = package.config.compilers;
+        extensions = Object.keys(theirCompilers);
+        extensions.forEach(function (extension) {
+            myCompilers[extension] = prefix + "/" + theirCompilers[extension];
+        });
+
+        // copy redirect patterns
+        redirectTable.push.apply(
+            redirectTable,
+            package.config.redirectTable
+        );
+
+    });
+
+    if (description["redirect-patterns"]) {
+        var describedPatterns = description["redirect-patterns"];
+        for (var pattern in describedPatterns) {
+            if (has(describedPatterns, pattern)) {
+                redirectTable.push([
+                    new RegExp(pattern),
+                    describedPatterns[pattern]
+                ]);
+            }
+        }
+    }
 }
+
+function merge(target, source) {
+    for (var name in source) {
+        if (has(source, name)) {
+            var sourceValue = source[name];
+            var targetValue = target[name];
+            if (sourceValue === null) {
+                delete target[name];
+            } else if (
+                typeof sourceValue === "object" && !Array.isArray(sourceValue) &&
+                typeof targetValue === "object" && !Array.isArray(targetValue)
+            ) {
+                merge(targetValue, sourceValue);
+            } else {
+                target[name] = source[name];
+            }
+        }
+    }
+}
+
+Require.exposedConfigs = [
+    "location",
+    "packageDescription",
+    "packages",
+    "modules"
+];
+
+// Built-in compiler/preprocessor "middleware":
+
+Require.makeCompiler = function(config) {
+    return Require.JsonCompiler(
+        config,
+        Require.LintCompiler(
+            config,
+            Require.Compiler(config)
+        )
+    );
+};
+
+Require.JsonCompiler = function (config, compile) {
+    return function (module) {
+        var json = (module.location || "").match(/\.json$/);
+        if (json) {
+            module.exports = JSON.parse(module.text);
+            return module;
+        } else {
+            return compile(module);
+        }
+    };
+};
+
+Require.LintCompiler = function(config, compile) {
+    return function(module) {
+        try {
+            compile(module);
+        } catch (error) {
+            if (config.lint) {
+                // TODO: use ASAP
+                Q.nextTick(function () {
+                    config.lint(module);
+                });
+            }
+            throw error;
+        }
+    };
+};
+
+// Built-in loader "middleware":
+
+Require.CommonLoader = function (config, load) {
+    return Require.MappingsLoader(
+        config,
+        Require.RedirectPatternsLoader(
+            config,
+            Require.LocationLoader(
+                config,
+                Require.MemoizedLoader(
+                    config,
+                    load
+                )
+            )
+        )
+    );
+};
+
+// Using mappings hash to load modules that match a mapping.
+Require.MappingsLoader = function(config, load) {
+    config.mappings = config.mappings || {};
+    config.name = config.name;
+
+    // finds a mapping to follow, if any
+    return function (id, module) {
+        var mappings = config.mappings;
+        var prefixes = Object.keys(mappings);
+        var length = prefixes.length;
+
+        if (Require.isAbsolute(id)) {
+            return load(id, module);
+        }
+        var i, prefix;
+        for (i = 0; i < length; i++) {
+            prefix = prefixes[i];
+            if (
+                id === prefix ||
+                id.indexOf(prefix) === 0 &&
+                id.charAt(prefix.length) === "/"
+            ) {
+                /*jshint -W083 */
+                var mapping = mappings[prefix];
+                var rest = id.slice(prefix.length + 1);
+                return config.loadPackage(mapping, config)
+                .then(function (mappingRequire) {
+                    /*jshint +W083 */
+                    module.mappingRedirect = rest;
+                    module.mappingRequire = mappingRequire;
+                    return mappingRequire.deepLoad(rest, config.location);
+                });
+            }
+        }
+        return load(id, module);
+    };
+};
+
+Require.RedirectPatternsLoader = function (config, load) {
+    return function (id, module) {
+        var table = config.redirectTable || [];
+        for (var i = 0; i < table.length; i++) {
+            var expression = table[i][0];
+            var match = expression.exec(id);
+            if (match) {
+                var replacement = table[i][1];
+                module.redirect = id.replace(expression, replacement);
+                return;
+            }
+        }
+        return load(id, module);
+    };
+};
+
+Require.LocationLoader = function (config, load) {
+    return function (id, module) {
+        var base = id;
+        var extension = module.extension;
+        if (
+            !has(config.optimizers, extension) &&
+            !has(config.translators, extension) &&
+            !has(config.compilers, extension) &&
+            extension !== "js" &&
+            extension !== "json"
+        ) {
+            base += ".js";
+        }
+        var location = URL.resolve(config.location, base);
+        return load(location, module);
+    };
+};
+
+Require.MemoizedLoader = function (config, load) {
+    var cache = config.cache = config.cache || {};
+    return memoize(load, cache);
+};
+
+// Helper functions:
 
 // Resolves CommonJS module IDs (not paths)
 Require.resolve = resolve;
@@ -1193,234 +1504,45 @@ function resolve(id, baseId) {
     return target.join("/");
 }
 
-Require.base = function (location) {
-    // matches Unix basename
-    return String(location)
-        .replace(/(.+?)\/+$/, "$1")
-        .match(/([^\/]+$|^\/$|^$)/)[1];
-};
-
-// Tests whether the location or URL is a absolute.
-Require.isAbsolute = function(location) {
-    return (/^[\w\-]+:/).test(location);
-};
-
-// Extracts dependencies by parsing code and looking for "require" (currently using a simple regexp)
-Require.parseDependencies = function(factory) {
-    var o = {};
-    String(factory).replace(/(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g, function(_, id) {
-        o[id] = true;
-    });
-    return Object.keys(o);
-};
-
-// Built-in compiler/preprocessor "middleware":
-
-Require.DependenciesCompiler = function(config, compile) {
-    return function(module) {
-        if (!module.dependencies && module.text !== void 0) {
-            module.dependencies = config.parseDependencies(module.text);
-        }
-        compile(module);
-        if (module && !module.dependencies) {
-            if (module.text || module.factory) {
-                module.dependencies = Require.parseDependencies(module.text || module.factory);
-            } else {
-                module.dependencies = [];
-            }
-        }
-        return module;
-    };
-};
-
-// Support she-bang for shell scripts by commenting it out (it is never
-// valid JavaScript syntax anyway)
-Require.ShebangCompiler = function(config, compile) {
-    return function (module) {
-        if (module.text) {
-            module.text = module.text.replace(/^#!/, "//#!");
-        }
-        compile(module);
-    };
-};
-
-Require.LintCompiler = function(config, compile) {
-    return function(module) {
-        try {
-            compile(module);
-        } catch (error) {
-            if (config.lint) {
-                // TODO: use ASAP
-                Q.nextTick(function () {
-                    config.lint(module);
-                });
-            }
-            throw error;
-        }
-    };
-};
-
-Require.exposedConfigs = [
-    "paths",
-    "mappings",
-    "location",
-    "packageDescription",
-    "packages",
-    "modules"
-];
-
-Require.makeCompiler = function(config) {
-    return Require.JsonCompiler(
-        config,
-        Require.ShebangCompiler(
-            config,
-            Require.DependenciesCompiler(
-                config,
-                Require.LintCompiler(
-                    config,
-                    Require.Compiler(config)
-                )
-            )
-        )
-    );
-};
-
-Require.JsonCompiler = function (config, compile) {
-    return function (module) {
-        var json = (module.location || "").match(/\.json$/);
-        if (json) {
-            module.exports = JSON.parse(module.text);
-            return module;
-        } else {
-            return compile(module);
-        }
-    };
-};
-
-// Built-in loader "middleware":
-
-// Using mappings hash to load modules that match a mapping.
-Require.MappingsLoader = function(config, load) {
-    config.mappings = config.mappings || {};
-    config.name = config.name;
-
-    // finds a mapping to follow, if any
-    return function (id, module) {
-        var mappings = config.mappings;
-        var prefixes = Object.keys(mappings);
-        var length = prefixes.length;
-
-        if (Require.isAbsolute(id)) {
-            return load(id, module);
-        }
-        // TODO: remove this when all code has been migrated off of the autonomous name-space problem
-        if (
-            config.name !== void 0 &&
-            id.indexOf(config.name) === 0 &&
-            id.charAt(config.name.length) === "/"
-        ) {
-            console.warn("Package reflexive module ignored:", id);
-        }
-        var i, prefix;
-        for (i = 0; i < length; i++) {
-            prefix = prefixes[i];
-            if (
-                id === prefix ||
-                id.indexOf(prefix) === 0 &&
-                id.charAt(prefix.length) === "/"
-            ) {
-                /*jshint -W083 */
-                var mapping = mappings[prefix];
-                var rest = id.slice(prefix.length + 1);
-                return config.loadPackage(mapping, config)
-                .then(function (mappingRequire) {
-                    /*jshint +W083 */
-                    module.mappingRedirect = rest;
-                    module.mappingRequire = mappingRequire;
-                    return mappingRequire.deepLoad(rest, config.location);
-                });
-            }
-        }
-        return load(id, module);
-    };
-};
-
-Require.ExtensionsLoader = function(config, load) {
-    var extensions = config.extensions || ["js"];
-    var loadWithExtension = extensions.reduceRight(function (next, extension) {
-        return function (id, module) {
-            return load(id + "." + extension, module)
-            .fail(function (error) {
-                if (/^Can't find /.test(error.message)) {
-                    return next(id, module);
-                } else {
-                    throw error;
-                }
-            });
-        };
-    }, function (id, module) {
-        throw new Error(
-            "Can't find " + JSON.stringify(id) + " with extensions " +
-            JSON.stringify(extensions) + " in package at " +
-            JSON.stringify(config.location)
-        );
-    });
-    return function (id, module) {
-        if (Require.base(id).indexOf(".") !== -1) {
-            // already has an extension
-            return load(id, module);
-        } else {
-            return loadWithExtension(id, module);
-        }
-    };
-};
-
-// Attempts to load using multiple base paths (or one absolute path) with a
-// single loader.
-Require.PathsLoader = function(config, load) {
-    var loadFromPaths = config.paths.reduceRight(function (next, path) {
-        return function (id, module) {
-            var newId = URL.resolve(path, id);
-            return load(newId, module)
-            .fail(function (error) {
-                if (/^Can't find /.test(error.message)) {
-                    return next(id, module);
-                } else {
-                    throw error;
-                }
-            });
-        };
-    }, function (id, module) {
-        throw new Error(
-            "Can't find " + JSON.stringify(id) + " from paths " +
-            JSON.stringify(config.paths) + " in package at " +
-            JSON.stringify(config.location)
-        );
-    });
-    return function(id, module) {
-        if (Require.isAbsolute(id)) {
-            // already fully qualified
-            return load(id, module);
-        } else {
-            return loadFromPaths(id, module);
-        }
-    };
-};
-
-Require.MemoizedLoader = function (config, load) {
-    var cache = config.cache = config.cache || {};
-    return memoize(load, cache);
-};
-
-var normalizeId = function (id) {
+Require.normalize = normalize;
+function normalize(id) {
     var match = /^(.*)\.js$/.exec(id);
     if (match) {
         id = match[1];
     }
     return id;
-};
+}
 
-var memoize = function (callback, cache) {
+Require.extension = extension;
+function extension(location) {
+    var match = /\.([^\/\.]+)$/.exec(location);
+    if (match) {
+        return match[1];
+    }
+}
+
+// Tests whether the location or URL is a absolute.
+Require.isAbsolute = isAbsolute;
+function isAbsolute(location) {
+    return (/^[\w\-]+:/).test(location);
+}
+
+// Extracts dependencies by parsing code and looking for "require" (currently
+// using a simple regexp)
+Require.parseDependencies = parseDependencies;
+function parseDependencies(text) {
+    var o = {};
+    String(text).replace(/(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g, function(_, id) {
+        o[id] = true;
+    });
+    return Object.keys(o);
+}
+
+function has(object, property) {
+    return Object.prototype.hasOwnProperty.call(object, property);
+}
+
+function memoize(callback, cache) {
     cache = cache || {};
     return function (key, arg) {
         if (!has(cache, key)) {
@@ -1428,7 +1550,7 @@ var memoize = function (callback, cache) {
         }
         return cache[key];
     };
-};
+}
 
 }],[{},function (require, exports, module){
 
@@ -1528,6 +1650,8 @@ var nextTick =(function () {
     var isNodeJS = false;
 
     function flush() {
+        /* jshint loopfunc: true */
+
         while (head.next) {
             head = head.next;
             var task = head.task;
@@ -1550,9 +1674,13 @@ var nextTick =(function () {
                     // Ensure continuation if the uncaught exception is suppressed
                     // listening "uncaughtException" events (as domains does).
                     // Continue in next event to avoid tick recursion.
-                    domain && domain.exit();
+                    if (domain) {
+                        domain.exit();
+                    }
                     setTimeout(flush, 0);
-                    domain && domain.enter();
+                    if (domain) {
+                        domain.enter();
+                    }
 
                     throw e;
 
@@ -1609,9 +1737,21 @@ var nextTick =(function () {
         // modern browsers
         // http://www.nonblocking.io/2011/06/windownexttick.html
         var channel = new MessageChannel();
-        channel.port1.onmessage = flush;
-        requestTick = function () {
+        // At least Safari Version 6.0.5 (8536.30.1) intermittently cannot create
+        // working message ports the first time a page loads.
+        channel.port1.onmessage = function () {
+            requestTick = requestPortTick;
+            channel.port1.onmessage = flush;
+            flush();
+        };
+        var requestPortTick = function () {
+            // Opera requires us to provide a message payload, regardless of
+            // whether we use it.
             channel.port2.postMessage(0);
+        };
+        requestTick = function () {
+            setTimeout(flush, 0);
+            requestPortTick();
         };
 
     } else {
@@ -1635,8 +1775,8 @@ var nextTick =(function () {
 // hard-to-minify characters.
 // See Mark Miller’s explanation of what this does.
 // http://wiki.ecmascript.org/doku.php?id=conventions:safe_meta_programming
+var call = Function.call;
 function uncurryThis(f) {
-    var call = Function.call;
     return function () {
         return call.apply(f, arguments);
     };
@@ -1878,13 +2018,26 @@ function deprecate(callback, name, alternative) {
 // beginning of real work
 
 /**
- * Creates fulfilled promises from non-thenables,
- * Passes Q promises through,
- * Coerces other thenables to Q promises.
+ * Constructs a promise for an immediate reference, passes promises through, or
+ * coerces promises from different systems.
+ * @param value immediate reference or promise
  */
 function Q(value) {
-    return resolve(value);
+    // If the object is already a Promise, return it directly.  This enables
+    // the resolve function to both be used to created references from objects,
+    // but to tolerably coerce non-promises to promises.
+    if (isPromise(value)) {
+        return value;
+    }
+
+    // assimilate thenables
+    if (isPromiseAlike(value)) {
+        return coerce(value);
+    } else {
+        return fulfill(value);
+    }
 }
+Q.resolve = Q;
 
 /**
  * Performs a task in a future turn of the event loop.
@@ -1991,7 +2144,7 @@ function defer() {
             return;
         }
 
-        become(resolve(value));
+        become(Q(value));
     };
 
     deferred.fulfill = function (value) {
@@ -2052,16 +2205,76 @@ function promise(resolver) {
     if (typeof resolver !== "function") {
         throw new TypeError("resolver must be a function.");
     }
-
     var deferred = defer();
-    fcall(
-        resolver,
-        deferred.resolve,
-        deferred.reject,
-        deferred.notify
-    ).fail(deferred.reject);
+    try {
+        resolver(deferred.resolve, deferred.reject, deferred.notify);
+    } catch (reason) {
+        deferred.reject(reason);
+    }
     return deferred.promise;
 }
+
+// XXX experimental.  This method is a way to denote that a local value is
+// serializable and should be immediately dispatched to a remote upon request,
+// instead of passing a reference.
+Q.passByCopy = function (object) {
+    //freeze(object);
+    //passByCopies.set(object, true);
+    return object;
+};
+
+Promise.prototype.passByCopy = function () {
+    //freeze(object);
+    //passByCopies.set(object, true);
+    return this;
+};
+
+/**
+ * If two promises eventually fulfill to the same value, promises that value,
+ * but otherwise rejects.
+ * @param x {Any*}
+ * @param y {Any*}
+ * @returns {Any*} a promise for x and y if they are the same, but a rejection
+ * otherwise.
+ *
+ */
+Q.join = function (x, y) {
+    return Q(x).join(y);
+};
+
+Promise.prototype.join = function (that) {
+    return Q([this, that]).spread(function (x, y) {
+        if (x === y) {
+            // TODO: "===" should be Object.is or equiv
+            return x;
+        } else {
+            throw new Error("Can't join: not the same: " + x + " " + y);
+        }
+    });
+};
+
+/**
+ * Returns a promise for the first of an array of promises to become fulfilled.
+ * @param answers {Array[Any*]} promises to race
+ * @returns {Any*} the first promise to be fulfilled
+ */
+Q.race = race;
+function race(answerPs) {
+    return promise(function(resolve, reject) {
+        // Switch to this once we can assume at least ES5
+        // answerPs.forEach(function(answerP) {
+        //     Q(answerP).then(resolve, reject);
+        // });
+        // Use this in the meantime
+        for (var i = 0, len = answerPs.length; i < len; i++) {
+            Q(answerPs[i]).then(resolve, reject);
+        }
+    });
+}
+
+Promise.prototype.race = function () {
+    return this.then(Q.race);
+};
 
 /**
  * Constructs a Promise with a promise descriptor object and optional fallback
@@ -2128,6 +2341,10 @@ function Promise(descriptor, fallback, inspect) {
 
     return promise;
 }
+
+Promise.prototype.toString = function () {
+    return "[object Promise]";
+};
 
 Promise.prototype.then = function (fulfilled, rejected, progressed) {
     var self = this;
@@ -2200,48 +2417,41 @@ Promise.prototype.then = function (fulfilled, rejected, progressed) {
     return deferred.promise;
 };
 
+/**
+ * Registers an observer on a promise.
+ *
+ * Guarantees:
+ *
+ * 1. that fulfilled and rejected will be called only once.
+ * 2. that either the fulfilled callback or the rejected callback will be
+ *    called, but not both.
+ * 3. that fulfilled and rejected will not be called in this turn.
+ *
+ * @param value      promise or immediate reference to observe
+ * @param fulfilled  function to be called with the fulfilled value
+ * @param rejected   function to be called with the rejection exception
+ * @param progressed function to be called on any progress notifications
+ * @return promise for the return value from the invoked callback
+ */
+Q.when = when;
+function when(value, fulfilled, rejected, progressed) {
+    return Q(value).then(fulfilled, rejected, progressed);
+}
+
 Promise.prototype.thenResolve = function (value) {
-    return when(this, function () { return value; });
+    return this.then(function () { return value; });
+};
+
+Q.thenResolve = function (promise, value) {
+    return Q(promise).thenResolve(value);
 };
 
 Promise.prototype.thenReject = function (reason) {
-    return when(this, function () { throw reason; });
+    return this.then(function () { throw reason; });
 };
 
-// Chainable methods
-array_reduce(
-    [
-        "isFulfilled", "isRejected", "isPending",
-        "dispatch",
-        "when", "spread",
-        "get", "set", "del", "delete",
-        "post", "send", "mapply", "invoke", "mcall",
-        "keys",
-        "fapply", "fcall", "fbind",
-        "all", "allResolved",
-        "timeout", "delay",
-        "catch", "finally", "fail", "fin", "progress", "done",
-        "nfcall", "nfapply", "nfbind", "denodeify", "nbind",
-        "npost", "nsend", "nmapply", "ninvoke", "nmcall",
-        "nodeify"
-    ],
-    function (undefined, name) {
-        Promise.prototype[name] = function () {
-            return Q[name].apply(
-                Q,
-                [this].concat(array_slice(arguments))
-            );
-        };
-    },
-    void 0
-);
-
-Promise.prototype.toSource = function () {
-    return this.toString();
-};
-
-Promise.prototype.toString = function () {
-    return "[object Promise]";
+Q.thenReject = function (promise, reason) {
+    return Q(promise).thenReject(reason);
 };
 
 /**
@@ -2291,6 +2501,10 @@ function isPending(object) {
     return isPromise(object) && object.inspect().state === "pending";
 }
 
+Promise.prototype.isPending = function () {
+    return this.inspect().state === "pending";
+};
+
 /**
  * @returns whether the given object is a value or fulfilled
  * promise.
@@ -2300,6 +2514,10 @@ function isFulfilled(object) {
     return !isPromise(object) || object.inspect().state === "fulfilled";
 }
 
+Promise.prototype.isFulfilled = function () {
+    return this.inspect().state === "fulfilled";
+};
+
 /**
  * @returns whether the given object is a rejected promise.
  */
@@ -2307,6 +2525,10 @@ Q.isRejected = isRejected;
 function isRejected(object) {
     return isPromise(object) && object.inspect().state === "rejected";
 }
+
+Promise.prototype.isRejected = function () {
+    return this.inspect().state === "rejected";
+};
 
 //// BEGIN UNHANDLED REJECTION TRACKING
 
@@ -2335,11 +2557,7 @@ function displayUnhandledReasons() {
 function logUnhandledReasons() {
     for (var i = 0; i < unhandledReasons.length; i++) {
         var reason = unhandledReasons[i];
-        if (reason && typeof reason.stack !== "undefined") {
-            console.warn("Unhandled rejection reason:", reason.stack);
-        } else {
-            console.warn("Unhandled rejection reason (no stack):", reason);
-        }
+        console.warn("Unhandled rejection reason:", reason);
     }
 }
 
@@ -2366,7 +2584,11 @@ function trackRejection(promise, reason) {
     }
 
     unhandledRejections.push(promise);
-    unhandledReasons.push(reason);
+    if (reason && typeof reason.stack !== "undefined") {
+        unhandledReasons.push(reason.stack);
+    } else {
+        unhandledReasons.push("(no stack) " + reason);
+    }
     displayUnhandledReasons();
 }
 
@@ -2455,8 +2677,8 @@ function fulfill(value) {
                 return value[name].apply(value, args);
             }
         },
-        "apply": function (thisP, args) {
-            return value.apply(thisP, args);
+        "apply": function (thisp, args) {
+            return value.apply(thisp, args);
         },
         "keys": function () {
             return object_keys(value);
@@ -2464,28 +2686,6 @@ function fulfill(value) {
     }, void 0, function inspect() {
         return { state: "fulfilled", value: value };
     });
-}
-
-/**
- * Constructs a promise for an immediate reference, passes promises through, or
- * coerces promises from different systems.
- * @param value immediate reference or promise
- */
-Q.resolve = resolve;
-function resolve(value) {
-    // If the object is already a Promise, return it directly.  This enables
-    // the resolve function to both be used to created references from objects,
-    // but to tolerably coerce non-promises to promises.
-    if (isPromise(value)) {
-        return value;
-    }
-
-    // assimilate thenables
-    if (isPromiseAlike(value)) {
-        return coerce(value);
-    } else {
-        return fulfill(value);
-    }
 }
 
 /**
@@ -2521,29 +2721,8 @@ function master(object) {
     }, function fallback(op, args) {
         return dispatch(object, op, args);
     }, function () {
-        return resolve(object).inspect();
+        return Q(object).inspect();
     });
-}
-
-/**
- * Registers an observer on a promise.
- *
- * Guarantees:
- *
- * 1. that fulfilled and rejected will be called only once.
- * 2. that either the fulfilled callback or the rejected callback will be
- *    called, but not both.
- * 3. that fulfilled and rejected will not be called in this turn.
- *
- * @param value      promise or immediate reference to observe
- * @param fulfilled  function to be called with the fulfilled value
- * @param rejected   function to be called with the rejection exception
- * @param progressed function to be called on any progress notifications
- * @return promise for the return value from the invoked callback
- */
-Q.when = when;
-function when(value, fulfilled, rejected, progressed) {
-    return Q(value).then(fulfilled, rejected, progressed);
 }
 
 /**
@@ -2557,13 +2736,15 @@ function when(value, fulfilled, rejected, progressed) {
  * either callback.
  */
 Q.spread = spread;
-function spread(promise, fulfilled, rejected) {
-    return when(promise, function (valuesOrPromises) {
-        return all(valuesOrPromises).then(function (values) {
-            return fulfilled.apply(void 0, values);
-        }, rejected);
-    }, rejected);
+function spread(value, fulfilled, rejected) {
+    return Q(value).spread(fulfilled, rejected);
 }
+
+Promise.prototype.spread = function (fulfilled, rejected) {
+    return this.all().then(function (array) {
+        return fulfilled.apply(void 0, array);
+    }, rejected);
+};
 
 /**
  * The async function is a decorator for generator functions, turning
@@ -2624,7 +2805,7 @@ function async(makeGenerator) {
             }
         }
         var generator = makeGenerator.apply(this, arguments);
-        var callback = continuer.bind(continuer, "send");
+        var callback = continuer.bind(continuer, "next");
         var errback = continuer.bind(continuer, "throw");
         return callback();
     };
@@ -2682,7 +2863,7 @@ function _return(value) {
  * var add = Q.promised(function (a, b) {
  *     return a + b;
  * });
- * add(Q.resolve(a), Q.resolve(B));
+ * add(Q(a), Q(B));
  *
  * @param {function} callback The function to decorate
  * @returns {function} a function that has been decorated.
@@ -2705,26 +2886,17 @@ function promised(callback) {
  */
 Q.dispatch = dispatch;
 function dispatch(object, op, args) {
-    var deferred = defer();
-    nextTick(function () {
-        resolve(object).promiseDispatch(deferred.resolve, op, args);
-    });
-    return deferred.promise;
+    return Q(object).dispatch(op, args);
 }
 
-/**
- * Constructs a promise method that can be used to safely observe resolution of
- * a promise for an arbitrarily named method like "propfind" in a future turn.
- *
- * "dispatcher" constructs methods like "get(promise, name)" and "set(promise)".
- */
-Q.dispatcher = dispatcher;
-function dispatcher(op) {
-    return function (object) {
-        var args = array_slice(arguments, 1);
-        return dispatch(object, op, args);
-    };
-}
+Promise.prototype.dispatch = function (op, args) {
+    var self = this;
+    var deferred = defer();
+    nextTick(function () {
+        self.promiseDispatch(deferred.resolve, op, args);
+    });
+    return deferred.promise;
+};
 
 /**
  * Gets the value of a property in a future turn.
@@ -2732,7 +2904,13 @@ function dispatcher(op) {
  * @param name      name of property to get
  * @return promise for the property value
  */
-Q.get = dispatcher("get");
+Q.get = function (object, key) {
+    return Q(object).dispatch("get", [key]);
+};
+
+Promise.prototype.get = function (key) {
+    return this.dispatch("get", [key]);
+};
 
 /**
  * Sets the value of a property in a future turn.
@@ -2741,7 +2919,13 @@ Q.get = dispatcher("get");
  * @param value     new value of property
  * @return promise for the return value
  */
-Q.set = dispatcher("set");
+Q.set = function (object, key, value) {
+    return Q(object).dispatch("set", [key, value]);
+};
+
+Promise.prototype.set = function (key, value) {
+    return this.dispatch("set", [key, value]);
+};
 
 /**
  * Deletes a property in a future turn.
@@ -2749,8 +2933,15 @@ Q.set = dispatcher("set");
  * @param name      name of property to delete
  * @return promise for the return value
  */
-Q["delete"] = // XXX experimental
-Q.del = dispatcher("delete");
+Q.del = // XXX legacy
+Q["delete"] = function (object, key) {
+    return Q(object).dispatch("delete", [key]);
+};
+
+Promise.prototype.del = // XXX legacy
+Promise.prototype["delete"] = function (key) {
+    return this.dispatch("delete", [key]);
+};
 
 /**
  * Invokes a method in a future turn.
@@ -2765,8 +2956,15 @@ Q.del = dispatcher("delete");
  * @return promise for the return value
  */
 // bound locally because it is used by other methods
-var post = Q.post = dispatcher("post");
-Q.mapply = post; // experimental
+Q.mapply = // XXX As proposed by "Redsandro"
+Q.post = function (object, name, args) {
+    return Q(object).dispatch("post", [name, args]);
+};
+
+Promise.prototype.mapply = // XXX As proposed by "Redsandro"
+Promise.prototype.post = function (name, args) {
+    return this.dispatch("post", [name, args]);
+};
 
 /**
  * Invokes a method in a future turn.
@@ -2775,35 +2973,44 @@ Q.mapply = post; // experimental
  * @param ...args   array of invocation arguments
  * @return promise for the return value
  */
-Q.send = send;
-Q.invoke = send; // synonyms
-Q.mcall = send; // experimental
-function send(value, name) {
-    var args = array_slice(arguments, 2);
-    return post(value, name, args);
-}
+Q.send = // XXX Mark Miller's proposed parlance
+Q.mcall = // XXX As proposed by "Redsandro"
+Q.invoke = function (object, name /*...args*/) {
+    return Q(object).dispatch("post", [name, array_slice(arguments, 2)]);
+};
+
+Promise.prototype.send = // XXX Mark Miller's proposed parlance
+Promise.prototype.mcall = // XXX As proposed by "Redsandro"
+Promise.prototype.invoke = function (name /*...args*/) {
+    return this.dispatch("post", [name, array_slice(arguments, 1)]);
+};
 
 /**
  * Applies the promised function in a future turn.
  * @param object    promise or immediate reference for target function
  * @param args      array of application arguments
  */
-Q.fapply = fapply;
-function fapply(value, args) {
-    return dispatch(value, "apply", [void 0, args]);
-}
+Q.fapply = function (object, args) {
+    return Q(object).dispatch("apply", [void 0, args]);
+};
+
+Promise.prototype.fapply = function (args) {
+    return this.dispatch("apply", [void 0, args]);
+};
 
 /**
  * Calls the promised function in a future turn.
  * @param object    promise or immediate reference for target function
  * @param ...args   array of application arguments
  */
-Q["try"] = fcall; // XXX experimental
-Q.fcall = fcall;
-function fcall(value) {
-    var args = array_slice(arguments, 1);
-    return fapply(value, args);
-}
+Q["try"] =
+Q.fcall = function (object /* ...args*/) {
+    return Q(object).dispatch("apply", [void 0, array_slice(arguments, 1)]);
+};
+
+Promise.prototype.fcall = function (/*...args*/) {
+    return this.dispatch("apply", [void 0, array_slice(arguments)]);
+};
 
 /**
  * Binds the promised function, transforming return values into a fulfilled
@@ -2811,14 +3018,26 @@ function fcall(value) {
  * @param object    promise or immediate reference for target function
  * @param ...args   array of application arguments
  */
-Q.fbind = fbind;
-function fbind(value) {
+Q.fbind = function (object /*...args*/) {
+    var promise = Q(object);
     var args = array_slice(arguments, 1);
     return function fbound() {
-        var allArgs = args.concat(array_slice(arguments));
-        return dispatch(value, "apply", [this, allArgs]);
+        return promise.dispatch("apply", [
+            this,
+            args.concat(array_slice(arguments))
+        ]);
     };
-}
+};
+Promise.prototype.fbind = function (/*...args*/) {
+    var promise = this;
+    var args = array_slice(arguments);
+    return function fbound() {
+        return promise.dispatch("apply", [
+            this,
+            args.concat(array_slice(arguments))
+        ]);
+    };
+};
 
 /**
  * Requests the names of the owned properties of a promised
@@ -2826,7 +3045,13 @@ function fbind(value) {
  * @param object    promise or immediate reference for target object
  * @return promise for the keys of the eventually settled object
  */
-Q.keys = dispatcher("keys");
+Q.keys = function (object) {
+    return Q(object).dispatch("keys", []);
+};
+
+Promise.prototype.keys = function () {
+    return this.dispatch("keys", []);
+};
 
 /**
  * Turns an array of promises into a promise for an array.  If any of
@@ -2851,12 +3076,19 @@ function all(promises) {
                 promises[index] = snapshot.value;
             } else {
                 ++countDown;
-                when(promise, function (value) {
-                    promises[index] = value;
-                    if (--countDown === 0) {
-                        deferred.resolve(promises);
+                when(
+                    promise,
+                    function (value) {
+                        promises[index] = value;
+                        if (--countDown === 0) {
+                            deferred.resolve(promises);
+                        }
+                    },
+                    deferred.reject,
+                    function (progress) {
+                        deferred.notify({ index: index, value: progress });
                     }
-                }, deferred.reject);
+                );
             }
         }, void 0);
         if (countDown === 0) {
@@ -2865,6 +3097,10 @@ function all(promises) {
         return deferred.promise;
     });
 }
+
+Promise.prototype.all = function () {
+    return all(this);
+};
 
 /**
  * Waits for all promises to be settled, either fulfilled or
@@ -2878,7 +3114,7 @@ function all(promises) {
 Q.allResolved = deprecate(allResolved, "allResolved", "allSettled");
 function allResolved(promises) {
     return when(promises, function (promises) {
-        promises = array_map(promises, resolve);
+        promises = array_map(promises, Q);
         return when(all(array_map(promises, function (promise) {
             return when(promise, noop, noop);
         })), function () {
@@ -2887,24 +3123,36 @@ function allResolved(promises) {
     });
 }
 
+Promise.prototype.allResolved = function () {
+    return allResolved(this);
+};
+
+/**
+ * @see Promise#allSettled
+ */
 Q.allSettled = allSettled;
-function allSettled(values) {
-    return when(values, function (values) {
-        return all(array_map(values, function (value, i) {
-            return when(
-                value,
-                function (fulfillmentValue) {
-                    values[i] = { state: "fulfilled", value: fulfillmentValue };
-                    return values[i];
-                },
-                function (reason) {
-                    values[i] = { state: "rejected", reason: reason };
-                    return values[i];
-                }
-            );
-        })).thenResolve(values);
-    });
+function allSettled(promises) {
+    return Q(promises).allSettled();
 }
+
+/**
+ * Turns an array of promises into a promise for an array of their states (as
+ * returned by `inspect`) when they have all settled.
+ * @param {Array[Any*]} values an array (or promise for an array) of values (or
+ * promises for values)
+ * @returns {Array[State]} an array of states for the respective values.
+ */
+Promise.prototype.allSettled = function () {
+    return this.then(function (promises) {
+        return all(array_map(promises, function (promise) {
+            promise = Q(promise);
+            function regardless() {
+                return promise.inspect();
+            }
+            return promise.then(regardless, regardless);
+        }));
+    });
+};
 
 /**
  * Captures the failure of a promise, giving an oportunity to recover
@@ -2915,11 +3163,15 @@ function allSettled(values) {
  * given promise is rejected
  * @returns a promise for the return value of the callback
  */
-Q["catch"] = // XXX experimental
-Q.fail = fail;
-function fail(promise, rejected) {
-    return when(promise, void 0, rejected);
-}
+Q.fail = // XXX legacy
+Q["catch"] = function (object, rejected) {
+    return Q(object).then(void 0, rejected);
+};
+
+Promise.prototype.fail = // XXX legacy
+Promise.prototype["catch"] = function (rejected) {
+    return this.then(void 0, rejected);
+};
 
 /**
  * Attaches a listener that can respond to progress notifications from a
@@ -2930,9 +3182,13 @@ function fail(promise, rejected) {
  * @returns the given promise, unchanged
  */
 Q.progress = progress;
-function progress(promise, progressed) {
-    return when(promise, void 0, void 0, progressed);
+function progress(object, progressed) {
+    return Q(object).then(void 0, void 0, progressed);
 }
+
+Promise.prototype.progress = function (progressed) {
+    return this.then(void 0, void 0, progressed);
+};
 
 /**
  * Provides an opportunity to observe the settling of a promise,
@@ -2945,19 +3201,25 @@ function progress(promise, progressed) {
  * @returns a promise for the resolution of the given promise when
  * ``fin`` is done.
  */
-Q["finally"] = // XXX experimental
-Q.fin = fin;
-function fin(promise, callback) {
-    return when(promise, function (value) {
-        return when(callback(), function () {
+Q.fin = // XXX legacy
+Q["finally"] = function (object, callback) {
+    return Q(object)["finally"](callback);
+};
+
+Promise.prototype.fin = // XXX legacy
+Promise.prototype["finally"] = function (callback) {
+    callback = Q(callback);
+    return this.then(function (value) {
+        return callback.fcall().then(function () {
             return value;
         });
-    }, function (exception) {
-        return when(callback(), function () {
-            return reject(exception);
+    }, function (reason) {
+        // TODO attempt to recycle the rejection with "this".
+        return callback.fcall().then(function () {
+            throw reason;
         });
     });
-}
+};
 
 /**
  * Terminates a chain of promises, forcing rejections to be
@@ -2965,14 +3227,16 @@ function fin(promise, callback) {
  * @param {Any*} promise at the end of a chain of promises
  * @returns nothing
  */
-Q.done = done;
-function done(promise, fulfilled, rejected, progress) {
+Q.done = function (object, fulfilled, rejected, progress) {
+    return Q(object).done(fulfilled, rejected, progress);
+};
+
+Promise.prototype.done = function (fulfilled, rejected, progress) {
     var onUnhandledError = function (error) {
         // forward to a future turn so that ``when``
         // does not catch it and turn it into a rejection.
         nextTick(function () {
             makeStackTraceLong(error, promise);
-
             if (Q.onerror) {
                 Q.onerror(error);
             } else {
@@ -2982,15 +3246,16 @@ function done(promise, fulfilled, rejected, progress) {
     };
 
     // Avoid unnecessary `nextTick`ing via an unnecessary `when`.
-    var promiseToHandle = fulfilled || rejected || progress ?
-        when(promise, fulfilled, rejected, progress) :
-        promise;
+    var promise = fulfilled || rejected || progress ?
+        this.then(fulfilled, rejected, progress) :
+        this;
 
     if (typeof process === "object" && process && process.domain) {
         onUnhandledError = process.domain.bind(onUnhandledError);
     }
-    fail(promiseToHandle, onUnhandledError);
-}
+
+    promise.then(void 0, onUnhandledError);
+};
 
 /**
  * Causes a promise to be rejected if it does not get fulfilled before
@@ -3001,14 +3266,17 @@ function done(promise, fulfilled, rejected, progress) {
  * @returns a promise for the resolution of the given promise if it is
  * fulfilled before the timeout, otherwise rejected.
  */
-Q.timeout = timeout;
-function timeout(promise, ms, msg) {
+Q.timeout = function (object, ms, message) {
+    return Q(object).timeout(ms, message);
+};
+
+Promise.prototype.timeout = function (ms, message) {
     var deferred = defer();
     var timeoutId = setTimeout(function () {
-        deferred.reject(new Error(msg || "Timed out after " + ms + " ms"));
+        deferred.reject(new Error(message || "Timed out after " + ms + " ms"));
     }, ms);
 
-    when(promise, function (value) {
+    this.then(function (value) {
         clearTimeout(timeoutId);
         deferred.resolve(value);
     }, function (exception) {
@@ -3017,32 +3285,34 @@ function timeout(promise, ms, msg) {
     }, deferred.notify);
 
     return deferred.promise;
-}
+};
 
 /**
- * Returns a promise for the given value (or promised value) after some
- * milliseconds.
+ * Returns a promise for the given value (or promised value), some
+ * milliseconds after it resolved. Passes rejections immediately.
  * @param {Any*} promise
  * @param {Number} milliseconds
- * @returns a promise for the resolution of the given promise after some
- * time has elapsed.
+ * @returns a promise for the resolution of the given promise after milliseconds
+ * time has elapsed since the resolution of the given promise.
+ * If the given promise rejects, that is passed immediately.
  */
-Q.delay = delay;
-function delay(promise, timeout) {
+Q.delay = function (object, timeout) {
     if (timeout === void 0) {
-        timeout = promise;
-        promise = void 0;
+        timeout = object;
+        object = void 0;
     }
+    return Q(object).delay(timeout);
+};
 
-    var deferred = defer();
-
-    when(promise, undefined, undefined, deferred.notify);
-    setTimeout(function () {
-        deferred.resolve(promise);
-    }, timeout);
-
-    return deferred.promise;
-}
+Promise.prototype.delay = function (timeout) {
+    return this.then(function (value) {
+        var deferred = defer();
+        setTimeout(function () {
+            deferred.resolve(value);
+        }, timeout);
+        return deferred.promise;
+    });
+};
 
 /**
  * Passes a continuation to a Node function, which is called with the given
@@ -3053,74 +3323,86 @@ function delay(promise, timeout) {
  *      })
  *
  */
-Q.nfapply = nfapply;
-function nfapply(callback, args) {
-    var nodeArgs = array_slice(args);
-    var deferred = defer();
-    nodeArgs.push(deferred.makeNodeResolver());
+Q.nfapply = function (callback, args) {
+    return Q(callback).nfapply(args);
+};
 
-    fapply(callback, nodeArgs).fail(deferred.reject);
+Promise.prototype.nfapply = function (args) {
+    var deferred = defer();
+    var nodeArgs = array_slice(args);
+    nodeArgs.push(deferred.makeNodeResolver());
+    this.fapply(nodeArgs).fail(deferred.reject);
     return deferred.promise;
-}
+};
 
 /**
  * Passes a continuation to a Node function, which is called with the given
  * arguments provided individually, and returns a promise.
- *
- *      Q.nfcall(FS.readFile, __filename)
- *      .then(function (content) {
- *      })
+ * @example
+ * Q.nfcall(FS.readFile, __filename)
+ * .then(function (content) {
+ * })
  *
  */
-Q.nfcall = nfcall;
-function nfcall(callback/*, ...args */) {
-    var nodeArgs = array_slice(arguments, 1);
+Q.nfcall = function (callback /*...args*/) {
+    var args = array_slice(arguments, 1);
+    return Q(callback).nfapply(args);
+};
+
+Promise.prototype.nfcall = function (/*...args*/) {
+    var nodeArgs = array_slice(arguments);
     var deferred = defer();
     nodeArgs.push(deferred.makeNodeResolver());
-
-    fapply(callback, nodeArgs).fail(deferred.reject);
+    this.fapply(nodeArgs).fail(deferred.reject);
     return deferred.promise;
-}
+};
 
 /**
  * Wraps a NodeJS continuation passing function and returns an equivalent
  * version that returns a promise.
- *
- *      Q.nfbind(FS.readFile, __filename)("utf-8")
- *      .then(console.log)
- *      .done()
- *
+ * @example
+ * Q.nfbind(FS.readFile, __filename)("utf-8")
+ * .then(console.log)
+ * .done()
  */
-Q.nfbind = nfbind;
-Q.denodeify = Q.nfbind; // synonyms
-function nfbind(callback/*, ...args */) {
+Q.nfbind =
+Q.denodeify = function (callback /*...args*/) {
     var baseArgs = array_slice(arguments, 1);
     return function () {
         var nodeArgs = baseArgs.concat(array_slice(arguments));
         var deferred = defer();
         nodeArgs.push(deferred.makeNodeResolver());
-
-        fapply(callback, nodeArgs).fail(deferred.reject);
+        Q(callback).fapply(nodeArgs).fail(deferred.reject);
         return deferred.promise;
     };
-}
+};
 
-Q.nbind = nbind;
-function nbind(callback, thisArg /*, ... args*/) {
+Promise.prototype.nfbind =
+Promise.prototype.denodeify = function (/*...args*/) {
+    var args = array_slice(arguments);
+    args.unshift(this);
+    return Q.denodeify.apply(void 0, args);
+};
+
+Q.nbind = function (callback, thisp /*...args*/) {
     var baseArgs = array_slice(arguments, 2);
     return function () {
         var nodeArgs = baseArgs.concat(array_slice(arguments));
         var deferred = defer();
         nodeArgs.push(deferred.makeNodeResolver());
-
         function bound() {
-            return callback.apply(thisArg, arguments);
+            return callback.apply(thisp, arguments);
         }
-
-        fapply(bound, nodeArgs).fail(deferred.reject);
+        Q(bound).fapply(nodeArgs).fail(deferred.reject);
         return deferred.promise;
     };
-}
+};
+
+Promise.prototype.nbind = function (/*thisp, ...args*/) {
+    var args = array_slice(arguments, 0);
+    args.unshift(this);
+    return Q.nbind.apply(void 0, args);
+};
 
 /**
  * Calls a method of a Node-style object that accepts a Node-style
@@ -3131,16 +3413,19 @@ function nbind(callback, thisArg /*, ... args*/) {
  * will be provided by Q and appended to these arguments.
  * @returns a promise for the value or error
  */
-Q.npost = npost;
-Q.nmapply = npost; // synonyms
-function npost(object, name, args) {
+Q.nmapply = // XXX As proposed by "Redsandro"
+Q.npost = function (object, name, args) {
+    return Q(object).npost(name, args);
+};
+
+Promise.prototype.nmapply = // XXX As proposed by "Redsandro"
+Promise.prototype.npost = function (name, args) {
     var nodeArgs = array_slice(args || []);
     var deferred = defer();
     nodeArgs.push(deferred.makeNodeResolver());
-
-    post(object, name, nodeArgs).fail(deferred.reject);
+    this.dispatch("post", [name, nodeArgs]).fail(deferred.reject);
     return deferred.promise;
-}
+};
 
 /**
  * Calls a method of a Node-style object that accepts a Node-style
@@ -3152,21 +3437,44 @@ function npost(object, name, args) {
  * be provided by Q and appended to these arguments.
  * @returns a promise for the value or error
  */
-Q.nsend = nsend;
-Q.ninvoke = Q.nsend; // synonyms
-Q.nmcall = Q.nsend; // synonyms
-function nsend(object, name /*, ...args*/) {
+Q.nsend = // XXX Based on Mark Miller's proposed "send"
+Q.nmcall = // XXX Based on "Redsandro's" proposal
+Q.ninvoke = function (object, name /*...args*/) {
     var nodeArgs = array_slice(arguments, 2);
     var deferred = defer();
     nodeArgs.push(deferred.makeNodeResolver());
-    post(object, name, nodeArgs).fail(deferred.reject);
+    Q(object).dispatch("post", [name, nodeArgs]).fail(deferred.reject);
     return deferred.promise;
+};
+
+Promise.prototype.nsend = // XXX Based on Mark Miller's proposed "send"
+Promise.prototype.nmcall = // XXX Based on "Redsandro's" proposal
+Promise.prototype.ninvoke = function (name /*...args*/) {
+    var nodeArgs = array_slice(arguments, 1);
+    var deferred = defer();
+    nodeArgs.push(deferred.makeNodeResolver());
+    this.dispatch("post", [name, nodeArgs]).fail(deferred.reject);
+    return deferred.promise;
+};
+
+/**
+ * If a function would like to support both Node continuation-passing-style and
+ * promise-returning-style, it can end its internal promise chain with
+ * `nodeify(nodeback)`, forwarding the optional nodeback argument.  If the user
+ * elects to use a nodeback, the result will be sent there.  If they do not
+ * pass a nodeback, they will receive the result promise.
+ * @param object a result (or a promise for a result)
+ * @param {Function} nodeback a Node.js-style callback
+ * @returns either the promise or nothing
+ */
+Q.nodeify = nodeify;
+function nodeify(object, nodeback) {
+    return Q(object).nodeify(nodeback);
 }
 
-Q.nodeify = nodeify;
-function nodeify(promise, nodeback) {
+Promise.prototype.nodeify = function (nodeback) {
     if (nodeback) {
-        promise.then(function (value) {
+        this.then(function (value) {
             nextTick(function () {
                 nodeback(null, value);
             });
@@ -3176,9 +3484,9 @@ function nodeify(promise, nodeback) {
             });
         });
     } else {
-        return promise;
+        return this;
     }
-}
+};
 
 // All code before this point will be filtered from stack traces.
 var qEndingLine = captureLine();
