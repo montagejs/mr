@@ -1,3 +1,7 @@
+### 0.14.2
+
+ - Use overlays in config given to `loadPackage`.
+
 ### 0.14.1
 
  - Correct extension detection
