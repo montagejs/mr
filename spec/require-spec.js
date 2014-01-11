@@ -69,7 +69,8 @@ describe("Require", function () {
         "browser-alternatives",
         "extension-loader",
         "overlay",
-        "moduleTypes"
+        "moduleTypes",
+        "module-error"
     ].forEach(function (test) {
         if (typeof test === "object") {
             if (test.node === false && typeof process !== "undefined") {
