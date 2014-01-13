@@ -70,7 +70,8 @@ describe("Require", function () {
         "extension-loader",
         "overlay",
         "moduleTypes",
-        "module-error"
+        "module-error",
+        "dot-js-module"
     ].forEach(function (test) {
         if (typeof test === "object") {
             if (test.node === false && typeof process !== "undefined") {
