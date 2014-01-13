@@ -71,7 +71,7 @@ describe("Require", function () {
         "overlay",
         "moduleTypes",
         "module-error",
-        "dot-js-module"
+        {name: "dot-js-module", node: false},
     ].forEach(function (test) {
         if (typeof test === "object") {
             if (test.node === false && typeof process !== "undefined") {
