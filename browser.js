@@ -99,8 +99,9 @@ Require.Compiler = function (config) {
         // Here we use a couple tricks to make debugging better in various browsers:
         // TODO: determine if these are all necessary / the best options
         // 1. name the function with something inteligible since some debuggers display the first part of each eval (Firebug)
-        // 2. append the "//@ sourceMappingURL=dataURI"
+        // 2. append the "//# sourceMappingURL=dataURI"
         //  * http://www.html5rocks.com/en/tutorials/developertools/sourcemaps/
+        //  * dataURI scheme documented here: http://tools.ietf.org/html/rfc2397
         // 3. set displayName property on the factory function (Safari, Chrome)
 
         var displayName = __FILE__String+module.location.replace(/\.\w+$|\W/g, DoubleUnderscoreString);
