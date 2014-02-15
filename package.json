@@ -34,7 +34,7 @@
     "q-io": "~1.10.1",
     "jshint": "~2.1.4",
     "jasmine-node": "~1.11.0",
-    "phantom-wd": "~0.0.1",
+    "phantom-wd": "~0.0.2",
     "mop-integration": "git://github.com/montagejs/mop-integration.git#master"
   },
   "exclude": [
