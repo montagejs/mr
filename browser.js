@@ -79,8 +79,8 @@ if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
     globalEval = new Function("_", "return eval(_)");
 }
 
-var __FILE__String = "__FILE__",
-    DoubleUnderscoreString = "__",
+var DoubleUnderscore = "__",
+    Underscore = "_",
     globalEvalConstantA = "(function ",
     globalEvalConstantB = "(require, exports, module) {",
     globalEvalConstantC = "//*/\n})\n//# sourceMappingURL=data:text/text;base64,",
@@ -104,7 +104,7 @@ Require.Compiler = function (config) {
         //  * dataURI scheme documented here: http://tools.ietf.org/html/rfc2397
         // 3. set displayName property on the factory function (Safari, Chrome)
 
-        var displayName = __FILE__String+module.location.replace(/\.\w+$|\W/g, DoubleUnderscoreString);
+        var displayName = (module.require.config.name + DoubleUnderscore + module.id).replace(/[^\w\d]/g, Underscore);
 
         try {
             module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+btoa(sourceMapPrefix+module.location+sourceMapSuffix));
