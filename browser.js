@@ -15,8 +15,18 @@ var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";
 var FILE_PROTOCOL = "file:";
 var global = typeof global !== "undefined" ? global : window;
 
+var location;
 Require.getLocation = function() {
-    return URL.resolve(window.location, ".");
+    if (!location) {
+        var base = document.querySelector("head > base");
+        if (base) {
+            location = base.href;
+        } else {
+            location = window.location;
+        }
+        location = URL.resolve(location, ".");
+    }
+    return location;
 };
 
 Require.overlays = ["window", "browser", "montage"];
