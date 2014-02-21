@@ -84,8 +84,12 @@ var DoubleUnderscore = "__",
     globalEvalConstantA = "(function ",
     globalEvalConstantB = "(require, exports, module) {",
     globalEvalConstantC = "//*/\n})\n//# sourceMappingURL=data:text/text;base64,",
-    sourceMapPrefix = '{"version":3,"file":"x.js.map","names":["identity"],"mappings":"CAACA","sources":["',
-    sourceMapSuffix = '"]}';
+    sourceMapPrefixA = '{"version":3,"file":"x.js.map","names":["identity"],"mappings":"AAAA;',
+    sourceMapPrefixB = '","sources":["',
+    sourceMapIdentityLine = "AACA;",
+    sourceMapIdentityLastLine = "AACA",
+    sourceMapSuffix = '"]}',
+    LINEREGEX = /\n|\r|\n\r/g;
 
 Require.Compiler = function (config) {
     return function(module) {
@@ -104,10 +108,24 @@ Require.Compiler = function (config) {
         //  * dataURI scheme documented here: http://tools.ietf.org/html/rfc2397
         // 3. set displayName property on the factory function (Safari, Chrome)
 
-        var displayName = (module.require.config.name + DoubleUnderscore + module.id).replace(/[^\w\d]/g, Underscore);
+        var displayName = (module.require.config.name + DoubleUnderscore + module.id).replace(/[^\w\d]/g, Underscore),
+            moduleText = module.text;
 
+        sourceMapPrefixA += new Array(moduleText.match(LINEREGEX).length-1).join(sourceMapIdentityLine) + sourceMapIdentityLastLine;
         try {
-            module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+btoa(sourceMapPrefix+module.location+sourceMapSuffix));
+           module.factory = globalEval(
+               globalEvalConstantA
+               +  displayName
+               + globalEvalConstantB
+               + moduleText
+               + globalEvalConstantC
+               + btoa(
+                   sourceMapPrefixA
+                   + sourceMapPrefixB
+                   + module.location
+                   + sourceMapSuffix
+               )
+           );
         } catch (exception) {
             exception.message = exception.message + " in " + module.location;
             throw exception;
