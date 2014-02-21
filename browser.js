@@ -84,12 +84,12 @@ var DoubleUnderscore = "__",
     globalEvalConstantA = "(function ",
     globalEvalConstantB = "(require, exports, module) {",
     globalEvalConstantC = "//*/\n})\n//# sourceMappingURL=data:text/text;base64,",
-    LINEREGEX = /\n|\r|\n\r/g;
     sourceMapA = '{"version":3,"file":"x.js.map","names":["identity"],"mappings":"AAAA;',
     sourceMapLine = "AACA;",
     sourceMapLastLine = "AACA",
     sourceMapB = '","sources":["',
     sourceMapC = '"]}',
+    LINEREGEX = /\n|\r|\r\n/g;
 
 Require.Compiler = function (config) {
     return function(module) {
