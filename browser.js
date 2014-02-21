@@ -84,12 +84,12 @@ var DoubleUnderscore = "__",
     globalEvalConstantA = "(function ",
     globalEvalConstantB = "(require, exports, module) {",
     globalEvalConstantC = "//*/\n})\n//# sourceMappingURL=data:text/text;base64,",
-    sourceMapPrefixA = '{"version":3,"file":"x.js.map","names":["identity"],"mappings":"AAAA;',
-    sourceMapPrefixB = '","sources":["',
-    sourceMapIdentityLine = "AACA;",
-    sourceMapIdentityLastLine = "AACA",
-    sourceMapSuffix = '"]}',
     LINEREGEX = /\n|\r|\n\r/g;
+    sourceMapA = '{"version":3,"file":"x.js.map","names":["identity"],"mappings":"AAAA;',
+    sourceMapLine = "AACA;",
+    sourceMapLastLine = "AACA",
+    sourceMapB = '","sources":["',
+    sourceMapC = '"]}',
 
 Require.Compiler = function (config) {
     return function(module) {
@@ -109,22 +109,24 @@ Require.Compiler = function (config) {
         // 3. set displayName property on the factory function (Safari, Chrome)
 
         var displayName = (module.require.config.name + DoubleUnderscore + module.id).replace(/[^\w\d]/g, Underscore),
-            moduleText = module.text;
+            moduleText = module.text,
+            mapping;
 
-        sourceMapPrefixA += new Array(moduleText.match(LINEREGEX).length-1).join(sourceMapIdentityLine) + sourceMapIdentityLastLine;
+        mapping = new Array(moduleText.match(LINEREGEX).length-1).join(sourceMapLine) + sourceMapLastLine;
         try {
-           module.factory = globalEval(
-               globalEvalConstantA
-               +  displayName
-               + globalEvalConstantB
-               + moduleText
-               + globalEvalConstantC
-               + btoa(
-                   sourceMapPrefixA
-                   + sourceMapPrefixB
-                   + module.location
-                   + sourceMapSuffix
-               )
+            module.factory = globalEval(
+                globalEvalConstantA +
+                displayName +
+                globalEvalConstantB +
+                moduleText +
+                globalEvalConstantC +
+                btoa(
+                    sourceMapA +
+                    mapping +
+                    sourceMapB +
+                    module.location +
+                    sourceMapC
+                )
            );
         } catch (exception) {
             exception.message = exception.message + " in " + module.location;
