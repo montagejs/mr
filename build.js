@@ -1,4 +1,5 @@
 
+var Promise = require("bluebird");
 var FS = require("fs");
 var Path = require("path");
 var Require = require("./node");
@@ -9,8 +10,21 @@ module.exports = build;
 function build(path) {
     return Require.findPackageLocationAndModuleId(path)
     .then(function (arg) {
-        return Require.loadPackage(arg.location, {
-            overlays: ["browser"]
+        var cache = {};
+        return Promise.try(function () {
+            return Require.loadPackage(arg.location, {
+                overlays: ["node"],
+                cache: cache,
+                production: false
+            });
+        })
+        .then(function (preprocessorPackage) {
+            return Require.loadPackage(arg.location, {
+                overlays: ["browser"],
+                cache: cache,
+                production: true,
+                preprocessorPackage: preprocessorPackage
+            });
         })
         .then(function (package) {
             return package.deepLoad(arg.id)
@@ -20,17 +34,40 @@ function build(path) {
         });
     })
     .then(function (package) {
+
         var bundle = [];
         var packages = package.packages;
-        Object.keys(packages).forEach(function (location) {
+
+        // Ensure that the entry point comes first in the bundle
+        for (var location in packages) {
             var package = packages[location];
             var modules = package.modules;
-            Object.keys(modules).forEach(function (id) {
+            for (var id in modules) {
+                var module = modules[id];
+                if (module.text !== undefined) {
+                    bundle.push(module);
+                    module.bundled = true;
+                    break;
+                }
+            }
+            break;
+        }
+
+        // Otherwise, ensure that the modules are in lexicographic order to
+        // ensure that each build from the same sources is consistent.
+        Object.keys(packages).sort(function (a, b) {
+            a = packages[a].config.name || a;
+            b = packages[b].config.name || b;
+            return a === b ? 0 : a < b ? -1 : 1;
+        }).forEach(function (location) {
+            var package = packages[location];
+            var modules = package.modules;
+            Object.keys(modules).sort().forEach(function (id) {
                 var module = modules[id];
                 if (module.error) {
                     throw module.error;
                 }
-                if (module.text !== undefined) {
+                if (module.text !== undefined && !module.bundled) {
                     bundle.push(module);
                 }
             });
@@ -54,6 +91,8 @@ function build(path) {
             var heading = lead + title + lead + rule + "\n\n";
             var text = heading + module.text;
             return "[" +
+                JSON.stringify(module.require.config.name) + "," +
+                JSON.stringify(module.id) + "," +
                 JSON.stringify(dependencies) + "," +
                 "function (require, exports, module){\n" + text + "}" +
             "]";

@@ -6,9 +6,11 @@
 /*global montageDefine:true */
 /*jshint -W015, evil:true, camelcase:false */
 
-var Require = require("./require");
+var Require = require("./common");
 var Promise = require("bluebird");
 var URL = require("url");
+
+module.exports = Require;
 
 var GET = "GET";
 var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";

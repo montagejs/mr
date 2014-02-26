@@ -19,14 +19,17 @@
     "type": "git",
     "url": "https://github.com/montagejs/mr.git"
   },
+  "main": "./require",
   "browser": {
+      "require": "./browser",
       "url": "./mini-url.js"
   },
   "scripts": {
-    "build": "npm run build-boot && npm run build-preload",
-    "build-boot": "node bin/mrs.js boot/browser.js -e '().done()' > boot.js",
-    "build-preload": "node bin/mrs.js boot/preload-entry.js > boot/preload-boilerplate.js",
-    "test": "node test/run-node.js",
+    "build": "npm run build:boot && npm run build:jasminum",
+    "build:boot": "node bin/mrs.js boot/require.js -e '().done()' > boot.js",
+    "build:jasminum": "node bin/mrs.js boot/jasminum.js -e '().done()' > jasminum.js",
+    "test": "npm run build && jasminum test/spec/index.js",
+    "test:phantom": "node spec/phantom.js",
     "lint": "jshint .",
     "integration": "mop-integration",
     "test:karma": "npm run build && karma start --no-auto-watch --single-run",
@@ -41,7 +44,7 @@
   "production": true,
   "dependencies": {
     "bluebird": "~3.4.7",
-    "optimist": "~0.6.0"
+    "optimist": "~0.6.1"
   },
   "devDependencies": {
     "concurrently": "^3.4.0",
@@ -49,6 +52,7 @@
     "jasmine-console-reporter": "^1.2.7",
     "jasmine-core": "^2.5.2",
     "jshint": "^2.9.5",
+    "jasminum": "~0.0.0",
     "karma": "^1.5.0",
     "karma-chrome-launcher": "^2.0.0",
     "karma-coverage": "^1.1.1",
@@ -56,7 +60,8 @@
     "karma-jasmine": "^1.1.0",
     "karma-phantomjs-launcher": "^1.0.2",
     "mop-integration": "git://github.com/montagejs/mop-integration.git#master",
-    "open": "0.0.5"
+    "open": "0.0.5",
+    "websocket.io": "~0.2.1"
   },
   "exclude": [
     "README.md",
