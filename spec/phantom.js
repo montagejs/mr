@@ -1,13 +1,13 @@
 var COVERAGE = !!process.env["npm_config_coverage"];
 
-var PATH = require("path");
+var Path = require("path");
 var spawn = require("child_process").spawn;
 var util = require("util");
 
 var Q = require("q");
 var wd = require("wd");
-var joey = require("joey");
-var Apps = require("q-io/http-apps");
+var Http = require("q-io/http");
+var HttpApps = require("q-io/http-apps");
 
 if (COVERAGE) {
     var IGNORE_RE = /spec|packages/;
@@ -17,7 +17,7 @@ if (COVERAGE) {
     var instrumenter = new istanbul.Instrumenter();
 
     var fileTree = function (path) {
-        return Apps.FileTree(path, {
+        return HttpApps.FileTree(path, {
             // use a custom file reader to instrument the code
             file: function (request, path, contentType, fs) {
                 if (path.match(/.js$/) && !path.match(IGNORE_RE)) {
@@ -45,12 +45,12 @@ if (COVERAGE) {
                 }
 
                 // otherwise just serve the file
-                return Apps.file(request, path, contentType, fs);
+                return HttpApps.file(request, path, contentType, fs);
             }
         });
     };
 } else {
-    var fileTree = Apps.FileTree;
+    var fileTree = HttpApps.FileTree;
 }
 
 var TESTS_FAILED = {};
@@ -62,15 +62,14 @@ var phantom = spawn("phantomjs", ["--webdriver=127.0.0.1:8910"], {
 
 var browser = wd.promiseRemote("127.0.0.1", 8910);
 
-var server = joey
-.error(true)
-.app(fileTree(PATH.resolve(__dirname, "..")))
-.server();
+var app = fileTree(Path.resolve(__dirname, ".."));
+var app = HttpApps.Error(app, true);
+var server = new Http.Server(app);
 
 server.listen(0).done();
 
 var testPagePort = server.node.address().port;
-var testPageUrl = "http://127.0.0.1:" + testPagePort + "/spec/run.html";
+var testPageUrl = "http://127.0.0.1:" + testPagePort + "/spec/index.html";
 console.log("Test page at " + testPageUrl);
 
 // wait for Ghost Driver to start running
@@ -145,7 +144,7 @@ Q.delay(2000)
 .finally(function () {
     phantom.kill();
 })
-.fail(function (err) {
+.catch(function (err) {
     if (err === TESTS_FAILED) {
         process.exit(1);
     }

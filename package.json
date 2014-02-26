@@ -10,17 +10,19 @@
     "modules",
     "loader"
   ],
+  "main": "./require",
   "browser": {
-    "url": "./mini-url.js"
+    "require": "./browser",
+    "url": "./mini-url"
   },
   "scripts": {
-    "build": "npm run build-boot && npm run build-preload",
-    "build-boot": "node bin/mrs.js boot/browser.js -e '().done()' > boot.js",
-    "build-preload": "node bin/mrs.js boot/preload-entry.js > boot/preload-boilerplate.js",
-    "test": "npm run build && npm run node-test && npm run browser-test  && npm run lint",
-    "node-test": "jasmine-node spec/node-spec.js",
-    "browser-test": "node spec/phantom.js",
-    "lint": "jshint require.js browser.js node.js",
+    "build": "npm run build:boot && npm run build:jasminum",
+    "build:boot": "node bin/mrs.js boot/require.js -e '().done()' > boot.js",
+    "build:jasminum": "node bin/mrs.js boot/jasminum.js -e '().done()' > jasminum.js",
+    "test": "npm run build && npm run test:node && npm run test:phantom && npm run lint",
+    "test:node": "jasminum spec/index.js",
+    "test:phantom": "node spec/phantom.js",
+    "lint": "jshint common.js require.js browser.js",
     "integration": "MOP_VERSION=~0.13 MR_VERSION=. mop-integration"
   },
   "bin": {
@@ -28,17 +30,18 @@
     "mrs": "bin/mrs.js"
   },
   "dependencies": {
-    "q": "0.9.7",
-    "optimist": "~0.6.0"
+    "q": "2.0.0",
+    "optimist": "~0.6.1"
   },
   "devDependencies": {
     "qs": "~0.6.5",
     "wd": "~0.1.5",
-    "joey": "~1.3.0",
+    "joey": "~2.0.0",
     "istanbul": "~0.1.34",
-    "q-io": "~1.10.1",
-    "jshint": "~2.1.4",
-    "jasmine-node": "~1.11.0",
+    "q-io": "~2.0.0",
+    "jshint": "~2.3.0",
+    "jasminum": "~0.0.0",
+    "websocket.io": "~0.2.1",
     "mop-integration": "git://github.com/montagejs/mop-integration.git#master"
   },
   "exclude": [

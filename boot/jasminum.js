@@ -1,13 +1,14 @@
-"use strict";
 
-var Require = require("../browser");
+var Suite = require("jasminum");
+
+var Require = require("../require");
 var URL = require("url");
 var Q = require("q");
 var getParams = require("./script-params");
 
 module.exports = boot;
 function boot(preloaded, params) {
-    params = params || getParams("boot.js");
+    params = params || getParams("jasminum.js");
 
     var config = {preloaded: preloaded};
     var applicationLocation = URL.resolve(window.location, params.package || ".");
@@ -33,10 +34,13 @@ function boot(preloaded, params) {
                 hash: params.qHash
             })
             .then(function (qRequire) {
-                qRequire.inject("q", Q);
-                mrRequire.inject("mini-url", URL);
-                mrRequire.inject("require", Require);
-                return applicationRequire.async(moduleId);
+                return applicationRequire.deepLoad(moduleId)
+                .then(function () {
+                    var suite = new Suite(moduleId).describe(function () {
+                        applicationRequire(moduleId);
+                    });
+                    return suite.runAndReport();
+                });
             });
         });
     });

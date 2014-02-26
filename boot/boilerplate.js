@@ -1,21 +1,34 @@
+global = this;
+
 (function (modules) {
 
-    // unpack module tuples into module objects
+    // Bundle allows the run-time to extract already-loaded modules from the
+    // boot bundle.
+    var bundle = {};
+
+    // Unpack module tuples into module objects.
     for (var i = 0; i < modules.length; i++) {
-        modules[i] = new Module(modules[i][0], modules[i][1]);
+        var module = modules[i];
+        modules[i] = new Module(module[0], module[1], module[2], module[3]);
+        bundle[module.name] = bundle[module.id] || {};
+        bundle[module.name][module.id] = module;
     }
 
-    function Module(dependencies, factory) {
-        this.dependencies = dependencies;
+    function Module(name, id, map, factory) {
+        // Package name and module identifier are purely informative.
+        this.name = name;
+        this.id = id;
+        // Dependency map and factory are used to instantiate bundled modules.
+        this.map = map;
         this.factory = factory;
     }
 
     Module.prototype.getExports = function () {
         var module = this;
-        if (!module.exports) {
+        if (module.exports === void 0) {
             module.exports = {};
             var require = function (id) {
-                var index = module.dependencies[id];
+                var index = module.map[id];
                 var dependency = modules[index];
                 if (!dependency)
                     throw new Error("Bundle is missing a dependency: " + id);
@@ -25,6 +38,9 @@
         }
         return module.exports;
     };
+
+    // Communicate the bundle to all bundled modules
+    Module.prototype.bundle = bundle;
 
     return modules[0].getExports();
 })

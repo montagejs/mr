@@ -2,7 +2,7 @@
 var Q = require("q");
 var FS = require("fs");
 var Path = require("path");
-var Require = require("./node");
+var Require = require("./require");
 
 var template = FS.readFileSync(Path.join(__dirname, "boot/boilerplate.js"), "utf-8").trim();
 
@@ -11,7 +11,7 @@ function build(path) {
     return Require.findPackageLocationAndModuleId(path)
     .then(function (arg) {
         var cache = {};
-        return Q.fcall(function () {
+        return Q.try(function () {
             return Require.loadPackage(arg.location, {
                 overlays: ["node"],
                 cache: cache,
@@ -66,6 +66,8 @@ function build(path) {
             var heading = lead + title + lead + rule + "\n\n";
             var text = heading + module.text;
             return "[" +
+                JSON.stringify(module.require.config.name) + "," +
+                JSON.stringify(module.id) + "," +
                 JSON.stringify(dependencies) + "," +
                 "function (require, exports, module){\n" + text + "}" +
             "]";

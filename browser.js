@@ -1,17 +1,20 @@
-/* <copyright>
- This file contains proprietary software owned by Motorola Mobility, Inc.<br/>
- No rights, expressed or implied, whatsoever to this software are provided by Motorola Mobility, Inc. hereunder.<br/>
- (c) Copyright 2012 Motorola Mobility, Inc.  All Rights Reserved.
- </copyright> */
-/*global montageDefine:true */
+/*
+ * Based in part on Motorola Mobility’s Montage
+ * Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
+ * 3-Clause BSD License
+ * https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
+ */
+/*global montageDefine:true, -URL */
 /*jshint -W015, evil:true, camelcase:false */
 
-var Require = require("./require");
+var Require = require("./common");
 var URL = require("url");
 var Q = require("q");
 var GET = "GET";
 var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";
 var FILE_PROTOCOL = "file:";
+
+module.exports = Require;
 
 Require.getLocation = function() {
     return URL.resolve(window.location, ".");
@@ -152,7 +155,7 @@ Require.loadScript = require("./script");
 Require.ScriptLoader = function (config) {
     var hash = config.packageDescription.hash;
     return function (location, module) {
-        return Q.fcall(function () {
+        return Q.try(function () {
 
             // short-cut by predefinition
             if (definitions[hash] && definitions[hash][module.id]) {
@@ -227,6 +230,4 @@ function loadIfNotPreloaded(location, definition, preloaded) {
         Require.loadScript(location);
     }
 }
-
-module.exports = Require;
 

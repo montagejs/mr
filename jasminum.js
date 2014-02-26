@@ -43,12 +43,13 @@ global = this;
     Module.prototype.bundle = bundle;
 
     return modules[0].getExports();
-})((function (global){return[["mr","boot/require",{"../require":2,"url":3,"q":6,"./script-params":1},function (require, exports, module){
+})((function (global){return[["mr","boot/jasminum",{"jasminum":7,"../require":2,"url":3,"q":6,"./script-params":1},function (require, exports, module){
 
-// mr boot/require
-// ---------------
+// mr boot/jasminum
+// ----------------
 
-"use strict";
+
+var Suite = require("jasminum");
 
 var Require = require("../require");
 var URL = require("url");
@@ -57,7 +58,7 @@ var getParams = require("./script-params");
 
 module.exports = boot;
 function boot(preloaded, params) {
-    params = params || getParams(scriptName);
+    params = params || getParams("jasminum.js");
 
     var config = {preloaded: preloaded};
     var applicationLocation = URL.resolve(window.location, params.package || ".");
@@ -70,8 +71,6 @@ function boot(preloaded, params) {
     return Require.loadPackage({
         location: applicationLocation,
         hash: params.applicationHash
-    }, {
-        bundle: module.bundle
     })
     .then(function (applicationRequire) {
         return applicationRequire.loadPackage({
@@ -85,10 +84,13 @@ function boot(preloaded, params) {
                 hash: params.qHash
             })
             .then(function (qRequire) {
-                qRequire.inject("q", Q);
-                mrRequire.inject("mini-url", URL);
-                mrRequire.inject("require", Require);
-                return applicationRequire.async(moduleId);
+                return applicationRequire.deepLoad(moduleId)
+                .then(function () {
+                    var suite = new Suite(moduleId).describe(function () {
+                        applicationRequire(moduleId);
+                    });
+                    return suite.runAndReport();
+                });
             });
         });
     });
@@ -1516,7 +1518,7 @@ function load(location) {
     head.appendChild(script);
 };
 
-}],["q","q",{"asap":7,"collections/weak-map":15,"collections/iterator":9},function (require, exports, module){
+}],["q","q",{"asap":17,"collections/weak-map":27,"collections/iterator":19},function (require, exports, module){
 
 // q q
 // ---
@@ -3233,7 +3235,886 @@ Promise.prototype.nmcall = deprecate(Promise.prototype.ninvoke, "nmcall", "q/nod
 // All code before this point will be filtered from stack traces.
 var qEndingLine = captureLine();
 
-}],["asap","asap",{"./queue":8},function (require, exports, module){
+}],["jasminum","jasminum",{"./suite":8,"q":6},function (require, exports, module){
+
+// jasminum jasminum
+// -----------------
+
+
+var BaseSuite = require("./suite");
+var Q = require("q");
+
+module.exports = Suite;
+
+function Suite() {
+    BaseSuite.apply(this, arguments);
+}
+
+Suite.prototype = Object.create(BaseSuite.prototype);
+Suite.prototype.constructor = Suite;
+Suite.prototype.Promise = Q.Promise;
+
+}],["jasminum","suite",{"./dsl":9,"./test":10,"./expectation":11,"./reporter":12},function (require, exports, module){
+
+// jasminum suite
+// --------------
+
+// vim:ts=4:sts=4:sw=4:
+
+require("./dsl");
+
+var Test = require("./test");
+var Expectation = require("./expectation");
+var Reporter = require("./reporter");
+
+module.exports = Suite;
+
+function Suite(name) {
+    this.name = name;
+    this.parent = null;
+    this.root = this; // Unless overridden
+    this.children = [];
+    this.exclusive = false;
+    this.beforeEach = null;
+    this.afterEach = null;
+    this.testCount = 0;
+    this.skip = false;
+}
+
+Suite.prototype.type = "describe";
+
+// To be overriden if desired
+Suite.prototype.Promise = null;
+
+Suite.prototype.describe = function (callback) {
+    setCurrentSuite(this);
+    try {
+        callback();
+    } finally {
+        setCurrentSuite(this.parent);
+    }
+    return this;
+};
+
+Suite.prototype.nestSuite = function (name) {
+    var child = new this.constructor();
+    child.root = this.root;
+    child.parent = this;
+    child.name = name;
+    child.children = [];
+    child.exclusive = false;
+    this.children.push(child);
+
+    // Specialize the Expectation
+    function SuiteExpectation(value, report) {
+        Expectation.call(this, value, report);
+    }
+    SuiteExpectation.prototype = Object.create(this.Expectation.prototype);
+    child.Expectation = SuiteExpectation;
+
+    return child;
+};
+
+Suite.prototype.nestTest = function (name, callback) {
+    var child = new this.Test(name, callback, this, this.root);
+    this.root.testCount++;
+    child.exclusive = false;
+    this.children.push(child);
+    return child;
+};
+
+Suite.prototype.setExclusive = function () {
+    var child = this;
+    while (child) {
+        child.exclusive = true;
+        child = child.parent;
+    }
+};
+
+Suite.prototype.run = function (report, Promise) {
+    var self = this;
+    Promise = Promise || this.Promise;
+    var suiteReport = report.start(this);
+    return Promise.resolve().then(function () {
+        if (!self.skip) {
+            var exclusiveChildren = self.children.filter(function (child) {
+                return child.exclusive;
+            });
+            var children = exclusiveChildren.length ? exclusiveChildren : self.children;
+            return children.reduce(function (ready, child) {
+                return ready.then(function () {
+                    return child.run(suiteReport, Promise);
+                });
+            }, Promise.resolve())
+        } else {
+            suiteReport.skip(self);
+        }
+    })
+    .finally(function () {
+        suiteReport.end(self);
+    });
+
+};
+
+Suite.prototype.runSync = function (report) {
+    var suiteReport = report.start(this);
+    if (!this.skip) {
+        var exclusiveChildren = this.children.filter(function (child) {
+            return child.exclusive;
+        });
+        var children = exclusiveChildren.length ? exclusiveChildren : this.children;
+        try {
+            for (var index = 0; index < children.length; index++) {
+                var child = children[index];
+                child.runSync(suiteReport);
+            }
+        } finally {
+            suiteReport.end(this);
+        }
+    } else {
+        suiteReport.skip(this);
+        suiteReport.end(this);
+    }
+};
+
+Suite.prototype.runAndReport = function (Promise, options) {
+    var report = new this.Reporter();
+    var self = this;
+    return this.run(report, Promise)
+    .then(function () {
+        report.summarize(self, options)
+        if (report.exit) {
+            return report.exit();
+        }
+    });
+};
+
+Suite.prototype.runAndReportSync = function (options) {
+    var report = new this.Reporter();
+    var self = this;
+    this.runSync(report, options)
+    report.summarize(self, options)
+    if (report.exit) {
+        report.exit();
+    }
+};
+
+Suite.prototype.Test = Test;
+Suite.prototype.Expectation = Expectation;
+Suite.prototype.Reporter = Reporter;
+
+}],["jasminum","dsl",{"./any":13,"./spy":14,"./spy-object":15},function (require, exports, module){
+
+// jasminum dsl
+// ------------
+
+/* global describe, xdescribe, ddescribe, it, xit, iit,
+   expect, beforeEach, afterEach, spyOn, getCurrentSuite,
+   setCurrentSuite, getCurrentTest, setCurrentTest,
+   getCurrentReport, setCurrentReport, jasmine */
+
+var any = require("./any");
+var createSpy = require("./spy");
+var createSpyObject = require("./spy-object");
+
+// DEPRECATED
+jasmine = {
+    createSpy: createSpy,
+    createSpyObj: createSpyObject,
+    any: any
+};
+
+// During declaration
+var currentSuite;
+// During execution
+var currentReport;
+var currentTest;
+
+describe = function (name, callback) {
+    if (!currentSuite) {
+        throw new Error("Can't call describe when there is no active suite");
+    }
+    var suite = currentSuite.nestSuite(name);
+    suite.describe(callback);
+};
+
+xdescribe = function (name, callback) {
+    if (!currentSuite) {
+        throw new Error("Can't call xdescribe when there is no active suite");
+    }
+    var suite = currentSuite.nestSuite(name);
+    suite.skip = true;
+    suite.describe(callback);
+};
+
+ddescribe = function (name, callback) {
+    if (!currentSuite) {
+        throw new Error("Can't call ddescribe when there is no active suite");
+    }
+    var suite = currentSuite.nestSuite(name);
+    suite.setExclusive();
+    suite.describe(callback);
+};
+
+it = function (name, callback) {
+    if (!currentSuite) {
+        throw new Error("Can't call it when there is no active suite");
+    }
+    currentSuite.nestTest(name, callback);
+};
+
+iit = function (name, callback) {
+    if (!currentSuite) {
+        throw new Error("Can't call iit when there is no active suite");
+    }
+    var test = currentSuite.nestTest(name, callback);
+    currentSuite.setExclusive();
+    test.exclusive = true;
+};
+
+xit = function (name, callback) {
+    if (!currentSuite) {
+        throw new Error("Can't call xit when there is no active suite");
+    }
+    var test = currentSuite.nestTest(name, callback);
+    test.skip = true;
+};
+
+beforeEach = function (callback) {
+    if (!currentSuite) {
+        throw new Error("Cannot use `beforeEach` outside of a 'define' block");
+    }
+    currentSuite.beforeEach = callback;
+};
+
+afterEach = function (callback) {
+    if (!currentSuite) {
+        throw new Error("Cannot use `afterEach` outside of a 'define' block");
+    }
+    currentSuite.afterEach = callback;
+};
+
+expect = function (value) {
+    if (!currentReport) {
+        throw new Error("Cannot declare an expectation outside of an 'it' block");
+    }
+    if (value && typeof value.expect === "function") {
+        return value.expect(currentReport);
+    } else {
+        return new currentTest.suite.Expectation(
+            value,
+            currentReport
+        );
+    }
+};
+
+spyOn = function (object, name) {
+    object[name] = createSpy(name, object[name]);
+    return object[name];
+};
+
+// For internal linkage
+
+getCurrentSuite = function () {
+    return currentSuite;
+};
+
+setCurrentSuite = function (suite) {
+    currentSuite = suite;
+};
+
+getCurrentReport = function () {
+    return currentReport;
+};
+
+setCurrentReport = function (report) {
+    currentReport = report;
+};
+
+getCurrentTest = function () {
+    return currentTest
+};
+
+setCurrentTest = function (test) {
+    currentTest = test;
+};
+
+}],["jasminum","test",{},function (require, exports, module){
+
+// jasminum test
+// -------------
+
+// vim:ts=4:sts=4:sw=4:
+
+module.exports = Test;
+
+function Test(name, callback, suite) {
+    this.name = name;
+    this.callback = callback;
+    this.children = [];
+    this.suite = suite;
+    this.skip = !callback;
+}
+
+Test.prototype.type = "it";
+
+Test.prototype.run = function (report, Promise) {
+    var self = this;
+    var report = report.start(self);
+    setCurrentTest(self);
+    setCurrentReport(report);
+    return Promise.resolve().then(function () {
+        if (!self.skip) {
+            var context = {};
+            return Promise.resolve().then(function () {
+                return self.beforeEach(Promise, context, report);
+            })
+            .then(function () {
+                return self.call(self.callback, Promise, context, report, "during");
+            })
+            .finally(function () {
+                return self.afterEach(Promise, context, report);
+            })
+        } else {
+            report.skip(self);
+        }
+    })
+    .then(function (value) {
+        // TODO expect return value to be undefined
+    }, function (error) {
+        report.error(error, self);
+    })
+    .finally(function () {
+        report.end(self);
+        setCurrentTest();
+        setCurrentReport();
+    });
+};
+
+Test.prototype.beforeEach = function (Promise, context, report) {
+    var self = this;
+    var heritage = this.heritage();
+    return heritage.reduceRight(function (ready, suite) {
+        return ready.then(function () {
+            if (suite.beforeEach) {
+                return self.call(suite.beforeEach, context, report, "before");
+            }
+        });
+    }, Promise.resolve());
+};
+
+Test.prototype.afterEach = function (Promise, context, report) {
+    var self = this;
+    var heritage = this.heritage();
+    return heritage.reduceRight(function (ready, suite) {
+        return ready.then(function () {
+            if (suite.afterEach) {
+                return self.call(suite.afterEach, context, report, "after");
+            }
+        });
+    }, Promise.resolve());
+};
+
+Test.prototype.heritage = function () {
+    var heritage = [];
+    var suite = this.suite;
+    while (suite) {
+        heritage.push(suite);
+        suite = suite.parent;
+    }
+    return heritage;
+};
+
+Test.prototype.call = function (callback, Promise, context, report, phase) {
+    if (callback.length === 1) {
+        return new Promise(function (resolve, reject) {
+            var isDone;
+            function done(error) {
+                if (isDone) {
+                    report.error(new Error("`done` called multiple times " + phase + " " + JSON.stringify(test.name)), test);
+                }
+                isDone = true;
+                if (error) {
+                    reject(error);
+                } else {
+                    resolve();
+                }
+            }
+            callback.call(context, done);
+        });
+    } else {
+        return callback.call(context);
+    }
+};
+
+Test.prototype.runSync = function (report) {
+    var report = report.start(this)
+    setCurrentTest(this);
+    setCurrentReport(report);
+    try {
+        if (!this.skip) {
+            if (this.callback.length > 0) {
+                throw new Error(
+                    "Can't run asynchronous tests without providing a " +
+                    "Promise constructor to 'run'"
+                );
+            }
+            var context = {};
+            try {
+                this.beforeEachSync(context);
+                this.callback.call(context);
+            } finally {
+                this.afterEachSync(context);
+            }
+        } else {
+            report.skip(this);
+        }
+    } catch (error) {
+        report.error(error, this);
+    } finally {
+        report.end(this);
+        setCurrentTest();
+        setCurrentReport();
+    }
+};
+
+Test.prototype.beforeEachSync = function (context) {
+    var heritage = this.heritage();
+    for (var index = heritage.length - 1; index >= 0; index--) {
+        var suite = heritage[index];
+        if (suite.beforeEach) {
+            suite.beforeEach.call(context);
+        }
+    }
+};
+
+Test.prototype.afterEachSync = function (context) {
+    var heritage = this.heritage();
+    for (var index = heritage.length - 1; index >= 0; index--) {
+        var suite = heritage[index];
+        if (suite.afterEach) {
+            suite.afterEach.call(context);
+        }
+    }
+};
+
+}],["jasminum","expectation",{"collections/shim":21},function (require, exports, module){
+
+// jasminum expectation
+// --------------------
+
+
+require("collections/shim");
+
+module.exports = Expectation;
+function Expectation(value, report) {
+    this.value = value;
+    this.report = report;
+    this.not = Object.create(this);
+    this.not.isNot = true;
+    this.not.not = this;
+}
+
+function getStackTrace() {
+    var stack = new Error("").stack;
+    if (typeof stack === "string") {
+        return stack.replace(/^[^\n]*\n[^\n]\n/, "");
+    } else {
+        return stack;
+    }
+}
+
+Expectation.prototype.unaryExpectation = function (operator, operatorName) {
+    var guard = operator.call(this, this.value);
+    var stack = getStackTrace();
+    var assertion = {
+        operator: (this.isNot ? "not " : "") + operatorName,
+        not: this.isNot,
+        expected: this.value,
+        stack: stack || ""
+    };
+    if (!!guard === !!this.isNot) {
+        this.report.failUnaryAssertion(assertion);
+    } else {
+        this.report.passAssertion(assertion);
+    }
+};
+
+Expectation.prototype.binaryExpectation = function (operator, operatorName, value) {
+    var guard = operator.call(this, this.value, value);
+    var stack = getStackTrace();
+    var assertion = {
+        operator: (this.isNot ? "not " : "") + operatorName,
+        not: this.isNot,
+        expected: this.value,
+        actual: value,
+        stack: stack || ""
+    };
+    if (!!guard === !!this.isNot) {
+        this.report.failBinaryAssertion(assertion);
+    } else {
+        this.report.passAssertion(assertion);
+    }
+};
+
+Expectation.prototype.naryExpectation = function (operator, operatorName, args) {
+    args.unshift(this.value);
+    var guard = operator.apply(this, args);
+    var stack = getStackTrace();
+    var assertion = {
+        operator: (this.isNot ? "not " : "") + operatorName,
+        not: this.isNot,
+        expected: this.value,
+        actual: args[0],
+        stack: stack || ""
+    };
+    if (!!guard === !!this.isNot) {
+        this.report.failBinaryAssertion(assertion);
+    } else {
+        this.report.passAssertion(assertion);
+    }
+};
+
+Expectation.unaryMethod = expectationUnaryMethod;
+function expectationUnaryMethod(operator, operatorName) {
+    return function (value) {
+        return this.unaryExpectation(operator, operatorName, value);
+    };
+}
+
+Expectation.binaryMethod = expectationBinaryMethod;
+function expectationBinaryMethod(operator, operatorName) {
+    return function (value) {
+        return this.binaryExpectation(operator, operatorName, value);
+    };
+}
+
+Expectation.naryMethod = expectationNaryMethod;
+function expectationNaryMethod(operator, operatorName) {
+    return function () {
+        return this.naryExpectation(operator, operatorName, Array.prototype.slice.call(arguments));
+    };
+}
+
+function equals(left, right) {
+    // So that right can be an Any object with an equals override
+    return Object.equals(right, left);
+}
+
+Expectation.prototype.toEqual = Expectation.binaryMethod(equals, "to equal");
+
+Expectation.prototype.toBe = Expectation.binaryMethod(Object.is, "to be");
+
+Expectation.prototype.toNotBe = function (value) {
+    return this.not.toBe(value);
+};
+
+Expectation.prototype.toBeUndefined = function () {
+    return this.toBe(undefined);
+};
+
+Expectation.prototype.toBeDefined = function () {
+    return this.not.toBe(undefined);
+};
+
+Expectation.prototype.toBeNull = function () {
+    return this.toBe(null);
+};
+
+Expectation.prototype.toBeTruthy = Expectation.binaryMethod(Boolean, "to be truthy");
+
+Expectation.prototype.toBeFalsy = function () {
+    return this.not.toBeTruthy();
+};
+
+Expectation.prototype.toContain = Expectation.binaryMethod(Object.has, "to contain");
+
+function lessThan(a, b) {
+    return Object.compare(a, b) < 0;
+}
+
+Expectation.prototype.toBeLessThan = Expectation.binaryMethod(lessThan, "to be less than");
+
+function greaterThan(a, b) {
+    return Object.compare(a, b) > 0;
+}
+
+Expectation.prototype.toBeGreaterThan = Expectation.binaryMethod(greaterThan, "to be greater than");
+
+function near(a, b, epsilon) {
+    var difference = Math.abs(Object.compare(a, b));
+    if (difference === 0) {
+        return Object.equals(a, b);
+    } else {
+        return difference < epsilon;
+    }
+}
+
+function close(a, b, precision) {
+    return near(a, b, Math.pow(10, -precision));
+}
+
+Expectation.prototype.toBeNear = Expectation.naryMethod(near, "to be near to");
+Expectation.prototype.toBeCloseTo = Expectation.naryMethod(close, "to be close to");
+
+function match(a, b) {
+    if (typeof b === "string") {
+        b = new RegExp(RegExp.escape(b));
+    }
+    return b.exec(a) != null;
+}
+
+Expectation.prototype.toMatch = Expectation.binaryMethod(match, "to match");
+
+Expectation.prototype.toThrow = function () {
+    if (this.isNot) {
+        try {
+            this.value();
+            this.report.passAssertion();
+        } catch (error) {
+            this.report.failAssertion({
+                message: "expected function not to throw",
+                stack: getStackTrace()
+            });
+        }
+    } else {
+        try {
+            this.value();
+            this.report.failAssertion({
+                message: "expected function to throw",
+                stack: getStackTrace()
+            });
+        } catch (error) {
+            this.report.passAssertion();
+        }
+    }
+};
+
+}],["jasminum","browser/reporter",{},function (require, exports, module){
+
+// jasminum browser/reporter
+// -------------------------
+
+
+var body = document.querySelector("body");
+body.classList.add("testing");
+
+module.exports = Reporter;
+function Reporter() {
+    this.root = this;
+    this.passed = 0;
+    this.failed = 0;
+    this.skipped = 0;
+    this.errors = 0;
+    this.passedAssertions = 0;
+    this.failedAssertions = 0;
+    this.depth = 0;
+}
+
+Reporter.prototype.start = function (test) {
+    var child = Object.create(this);
+    child.test = test;
+    child.depth = this.depth + 1;
+    child.failed = false;
+    child.skipped = false;
+    console.group(test.type + " " + test.name);
+    return child;
+};
+
+Reporter.prototype.end = function (test) {
+    if (test.type === "it") {
+        if (this.failed) {
+            this.root.failed++;
+            body.classList.add("fail");
+            console.error("FAIL");
+        } else if (this.skipped) {
+            this.root.skipped++;
+        } else {
+            this.root.passed++;
+        }
+    }
+    console.groupEnd();
+};
+
+Reporter.prototype.summarize = function (suite) {
+    if (!this.failed) {
+        body.classList.add("pass");
+    }
+    console.log(this.passed + " passed tests");
+    console.log(this.passedAssertions + " passed assertions");
+    if (this.failed) {
+        console.error(this.failed + " failed tests");
+    } else {
+        console.log(this.failed + " failed tests");
+    }
+    if (this.failedAssertions) {
+        console.error(this.failedAssertions + " failed assertions");
+    } else {
+        console.log(this.failedAssertions + " failed assertions");
+    }
+    console.log(this.errors + " errors");
+    var skipped = suite.testCount - this.passed - this.failed;
+    console.log(skipped + " skipped tests");
+};
+
+Reporter.prototype.skip = function () {
+    this.skipped = true;
+    this.root.skipped++;
+};
+
+Reporter.prototype.failUnaryAssertion = function (assertion) {
+    this.failed = true;
+    this.root.failedAssertions++;
+};
+
+Reporter.prototype.failBinaryAssertion = function (assertion) {
+    console.error(
+        "expected",
+        assertion.expected,
+        assertion.operator,
+        assertion.actual
+    );
+    this.failed = true;
+    this.root.failedAssertions++;
+};
+
+Reporter.prototype.failNaryAssertion = function (assertion) {
+    this.failed = true;
+    this.root.failedAssertions++;
+};
+
+Reporter.prototype.passAssertion = function () {
+    this.root.passedAssertions++;
+};
+
+Reporter.prototype.error = function (error, test) {
+    this.failed = true;
+    this.root.errors++;
+    console.log(error.stack);
+};
+
+}],["jasminum","any",{},function (require, exports, module){
+
+// jasminum any
+// ------------
+
+
+/**
+ * @classdesc An object that considers itself equivalent to any object of the
+ * same type.
+ */
+module.exports = Any;
+function Any(constructor) {
+    if (!(this instanceof Any)) {
+        return new Any(constructor);
+    }
+    this.constructor = constructor;
+}
+
+Any.prototype.equals = function (other) {
+    if (typeof other === "object") {
+        return other instanceof this.constructor;
+    } else {
+        return typeof other === typeof this.constructor();
+    }
+};
+
+}],["jasminum","spy",{"./spy-expectation":16},function (require, exports, module){
+
+// jasminum spy
+// ------------
+
+
+var SpyExpectation = require("./spy-expectation");
+
+module.exports = createSpy;
+function createSpy(identity, spied) {
+    function spy() {
+        var args = Array.prototype.slice.call(arguments)
+        var call = {
+            args: args
+        };
+        spy.mostRecentCall = call;
+        spy.argsForCall.push(call.args);
+        spy.calls.push(call);
+        spy.callCount++;
+        if (spy.callThrough) {
+            return spy.spied.apply(this, arguments);
+        }
+    }
+    spy.identity = identity;
+    spy.calls = [];
+    spy.argsForCall = [];
+    spy.spied = spied;
+    spy.callThrough = false;
+    spy.callCount = 0;
+    spy.andCallFake = function (fake) {
+        spy.spied = fake;
+        spy.callThrough = true;
+    };
+    spy.andCallThrough = function () {
+        spy.callThrough = true;
+    };
+    spy.andReturn = function (value) {
+        spy.callThrough = true;
+        spy.spied = function () {
+            return value;
+        };
+    };
+    spy.expect = function () {
+        return expectation;
+    };
+    var expectation = new SpyExpectation(spy, getCurrentReport());
+    return spy;
+}
+
+}],["jasminum","spy-object",{"./spy":14},function (require, exports, module){
+
+// jasminum spy-object
+// -------------------
+
+
+var createSpy = require("./spy");
+
+module.exports = createSpyObj;
+function createSpyObj(name, names) {
+    var object = {};
+    names.forEach(function (name) {
+        object[name] = createSpy(object, name);
+    });
+    return object;
+}
+
+}],["jasminum","spy-expectation",{"./expectation":11},function (require, exports, module){
+
+// jasminum spy-expectation
+// ------------------------
+
+
+var Expectation = require("./expectation");
+
+module.exports = SpyExpectation;
+function SpyExpectation(value, report) {
+    this.value = value;
+    this.report = report;
+    this.not = Object.create(this);
+    this.not.isNot = true;
+    this.not.not = this;
+}
+
+SpyExpectation.prototype = Object.create(Expectation.prototype);
+
+SpyExpectation.prototype.constructor = SpyExpectation;
+
+SpyExpectation.prototype.toHaveBeenCalled = Expectation.unaryMethod(function () {
+    return this.value.argsForCall.length > 0;
+}, "to have been called");
+
+SpyExpectation.prototype.toHaveBeenCalledWith = function () {
+    expect(this.value.argsForCall).toContain(Array.prototype.slice.call(arguments));
+};
+
+}],["asap","asap",{"./queue":18},function (require, exports, module){
 
 // asap asap
 // ---------
@@ -3488,7 +4369,7 @@ function pow2AtLeast(n) {
     return n + 1;
 }
 
-}],["collections","iterator",{"./weak-map":15,"./generic-collection":10},function (require, exports, module){
+}],["collections","iterator",{"./weak-map":27,"./generic-collection":20},function (require, exports, module){
 
 // collections iterator
 // --------------------
@@ -4036,7 +4917,7 @@ Iterator.Iteration = Iteration;
 Iterator.DoneIteration = DoneIteration;
 Iterator.done = new DoneIteration();
 
-}],["collections","generic-collection",{"./shim-array":11},function (require, exports, module){
+}],["collections","generic-collection",{"./shim-array":22},function (require, exports, module){
 
 // collections generic-collection
 // ------------------------------
@@ -4302,7 +5183,18 @@ GenericCollection.prototype.only = function () {
 
 require("./shim-array");
 
-}],["collections","shim-array",{"./shim-function":12,"./generic-collection":10,"./generic-order":13,"./iterator":9,"weak-map":15},function (require, exports, module){
+}],["collections","shim",{"./shim-array":22,"./shim-object":23,"./shim-function":24,"./shim-regexp":25},function (require, exports, module){
+
+// collections shim
+// ----------------
+
+
+var Array = require("./shim-array");
+var Object = require("./shim-object");
+var Function = require("./shim-function");
+var RegExp = require("./shim-regexp");
+
+}],["collections","shim-array",{"./shim-function":24,"./generic-collection":20,"./generic-order":26,"./iterator":19,"weak-map":27},function (require, exports, module){
 
 // collections shim-array
 // ----------------------
@@ -4622,131 +5514,7 @@ define("iterate", function (start, stop, step) {
     return new Iterator(this, start, stop, step);
 });
 
-}],["collections","shim-function",{},function (require, exports, module){
-
-// collections shim-function
-// -------------------------
-
-
-module.exports = Function;
-
-/**
-    A utility to reduce unnecessary allocations of <code>function () {}</code>
-    in its many colorful variations.  It does nothing and returns
-    <code>undefined</code> thus makes a suitable default in some circumstances.
-
-    @function external:Function.noop
-*/
-Function.noop = function () {
-};
-
-/**
-    A utility to reduce unnecessary allocations of <code>function (x) {return
-    x}</code> in its many colorful but ultimately wasteful parameter name
-    variations.
-
-    @function external:Function.identity
-    @param {Any} any value
-    @returns {Any} that value
-*/
-Function.identity = function (value) {
-    return value;
-};
-
-/**
-    A utility for creating a comparator function for a particular aspect of a
-    figurative class of objects.
-
-    @function external:Function.by
-    @param {Function} relation A function that accepts a value and returns a
-    corresponding value to use as a representative when sorting that object.
-    @param {Function} compare an alternate comparator for comparing the
-    represented values.  The default is <code>Object.compare</code>, which
-    does a deep, type-sensitive, polymorphic comparison.
-    @returns {Function} a comparator that has been annotated with
-    <code>by</code> and <code>compare</code> properties so
-    <code>sorted</code> can perform a transform that reduces the need to call
-    <code>by</code> on each sorted object to just once.
- */
-Function.by = function (by , compare) {
-    compare = compare || Object.compare;
-    by = by || Function.identity;
-    var compareBy = function (a, b) {
-        return compare(by(a), by(b));
-    };
-    compareBy.compare = compare;
-    compareBy.by = by;
-    return compareBy;
-};
-
-// TODO document
-Function.get = function (key) {
-    return function (object) {
-        return Object.get(object, key);
-    };
-};
-
-}],["collections","generic-order",{"./shim-object":14},function (require, exports, module){
-
-// collections generic-order
-// -------------------------
-
-
-var Object = require("./shim-object");
-
-module.exports = GenericOrder;
-function GenericOrder() {
-    throw new Error("Can't construct. GenericOrder is a mixin.");
-}
-
-GenericOrder.prototype.equals = function (that, equals) {
-    equals = equals || this.contentEquals || Object.equals;
-
-    if (this === that) {
-        return true;
-    }
-    if (!that) {
-        return false;
-    }
-
-    var self = this;
-    return (
-        this.length === that.length &&
-        this.zip(that).every(function (pair) {
-            return equals(pair[0], pair[1]);
-        })
-    );
-};
-
-GenericOrder.prototype.compare = function (that, compare) {
-    compare = compare || this.contentCompare || Object.compare;
-
-    if (this === that) {
-        return 0;
-    }
-    if (!that) {
-        return 1;
-    }
-
-    var length = Math.min(this.length, that.length);
-    var comparison = this.zip(that).reduce(function (comparison, pair, index) {
-        if (comparison === 0) {
-            if (index >= length) {
-                return comparison;
-            } else {
-                return compare(pair[0], pair[1]);
-            }
-        } else {
-            return comparison;
-        }
-    }, 0);
-    if (comparison === 0) {
-        return this.length - that.length;
-    }
-    return comparison;
-};
-
-}],["collections","shim-object",{"weak-map":15},function (require, exports, module){
+}],["collections","shim-object",{"weak-map":27},function (require, exports, module){
 
 // collections shim-object
 // -----------------------
@@ -5268,6 +6036,149 @@ Object.clear = function (object) {
         }
     }
     return object;
+};
+
+}],["collections","shim-function",{},function (require, exports, module){
+
+// collections shim-function
+// -------------------------
+
+
+module.exports = Function;
+
+/**
+    A utility to reduce unnecessary allocations of <code>function () {}</code>
+    in its many colorful variations.  It does nothing and returns
+    <code>undefined</code> thus makes a suitable default in some circumstances.
+
+    @function external:Function.noop
+*/
+Function.noop = function () {
+};
+
+/**
+    A utility to reduce unnecessary allocations of <code>function (x) {return
+    x}</code> in its many colorful but ultimately wasteful parameter name
+    variations.
+
+    @function external:Function.identity
+    @param {Any} any value
+    @returns {Any} that value
+*/
+Function.identity = function (value) {
+    return value;
+};
+
+/**
+    A utility for creating a comparator function for a particular aspect of a
+    figurative class of objects.
+
+    @function external:Function.by
+    @param {Function} relation A function that accepts a value and returns a
+    corresponding value to use as a representative when sorting that object.
+    @param {Function} compare an alternate comparator for comparing the
+    represented values.  The default is <code>Object.compare</code>, which
+    does a deep, type-sensitive, polymorphic comparison.
+    @returns {Function} a comparator that has been annotated with
+    <code>by</code> and <code>compare</code> properties so
+    <code>sorted</code> can perform a transform that reduces the need to call
+    <code>by</code> on each sorted object to just once.
+ */
+Function.by = function (by , compare) {
+    compare = compare || Object.compare;
+    by = by || Function.identity;
+    var compareBy = function (a, b) {
+        return compare(by(a), by(b));
+    };
+    compareBy.compare = compare;
+    compareBy.by = by;
+    return compareBy;
+};
+
+// TODO document
+Function.get = function (key) {
+    return function (object) {
+        return Object.get(object, key);
+    };
+};
+
+}],["collections","shim-regexp",{},function (require, exports, module){
+
+// collections shim-regexp
+// -----------------------
+
+
+/**
+    accepts a string; returns the string with regex metacharacters escaped.
+    the returned string can safely be used within a regex to match a literal
+    string. escaped characters are [, ], {, }, (, ), -, *, +, ?, ., \, ^, $,
+    |, #, [comma], and whitespace.
+*/
+if (!RegExp.escape) {
+    var special = /[-[\]{}()*+?.\\^$|,#\s]/g;
+    RegExp.escape = function (string) {
+        return string.replace(special, "\\$&");
+    };
+}
+
+}],["collections","generic-order",{"./shim-object":23},function (require, exports, module){
+
+// collections generic-order
+// -------------------------
+
+
+var Object = require("./shim-object");
+
+module.exports = GenericOrder;
+function GenericOrder() {
+    throw new Error("Can't construct. GenericOrder is a mixin.");
+}
+
+GenericOrder.prototype.equals = function (that, equals) {
+    equals = equals || this.contentEquals || Object.equals;
+
+    if (this === that) {
+        return true;
+    }
+    if (!that) {
+        return false;
+    }
+
+    var self = this;
+    return (
+        this.length === that.length &&
+        this.zip(that).every(function (pair) {
+            return equals(pair[0], pair[1]);
+        })
+    );
+};
+
+GenericOrder.prototype.compare = function (that, compare) {
+    compare = compare || this.contentCompare || Object.compare;
+
+    if (this === that) {
+        return 0;
+    }
+    if (!that) {
+        return 1;
+    }
+
+    var length = Math.min(this.length, that.length);
+    var comparison = this.zip(that).reduce(function (comparison, pair, index) {
+        if (comparison === 0) {
+            if (index >= length) {
+                return comparison;
+            } else {
+                return compare(pair[0], pair[1]);
+            }
+        } else {
+            return comparison;
+        }
+    }, 0);
+    if (comparison === 0) {
+        return this.length - that.length;
+    }
+    return comparison;
 };
 
 }],["weak-map","weak-map",{},function (require, exports, module){
