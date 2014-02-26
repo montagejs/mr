@@ -10,8 +10,8 @@ global = this;
     for (var i = 0; i < modules.length; i++) {
         var module = modules[i];
         modules[i] = new Module(module[0], module[1], module[2], module[3]);
-        bundle[module.name] = bundle[module.id] || {};
-        bundle[module.name][module.id] = module;
+        bundle[module[0]] = bundle[module[1]] || {};
+        bundle[module[0]][module[1]] = module;
     }
 
     function Module(name, id, map, factory) {
