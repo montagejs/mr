@@ -32,17 +32,40 @@ function build(path) {
         })
     })
     .then(function (package) {
+
         var bundle = [];
         var packages = package.packages;
-        Object.keys(packages).forEach(function (location) {
+
+        // Ensure that the entry point comes first in the bundle
+        for (var location in packages) {
             var package = packages[location];
             var modules = package.modules;
-            Object.keys(modules).forEach(function (id) {
+            for (var id in modules) {
+                var module = modules[id];
+                if (module.text !== undefined) {
+                    bundle.push(module);
+                    module.bundled = true;
+                    break;
+                }
+            }
+            break;
+        }
+
+        // Otherwise, ensure that the modules are in lexicographic order to
+        // ensure that each build from the same sources is consistent.
+        Object.keys(packages).sort(function (a, b) {
+            a = packages[a].config.name || a;
+            b = packages[b].config.name || b;
+            return a === b ? 0 : a < b ? -1 : 1;
+        }).forEach(function (location) {
+            var package = packages[location];
+            var modules = package.modules;
+            Object.keys(modules).sort().forEach(function (id) {
                 var module = modules[id];
                 if (module.error) {
                     throw module.error;
                 }
-                if (module.text !== undefined) {
+                if (module.text !== undefined && !module.bundled) {
                     bundle.push(module);
                 }
             });
