@@ -20,8 +20,8 @@
     "build:boot": "node bin/mrs.js boot/require.js -e '().done()' > boot.js",
     "build:jasminum": "node bin/mrs.js boot/jasminum.js -e '().done()' > jasminum.js",
     "test": "npm run build && npm run test:node && npm run test:phantom && npm run lint",
-    "test:node": "jasminum spec/index.js",
-    "test:phantom": "node spec/phantom.js",
+    "test:node": "jasminum test/index.js",
+    "test:phantom": "node test/phantom.js",
     "lint": "jshint common.js require.js browser.js",
     "integration": "MOP_VERSION=~0.13 MR_VERSION=. mop-integration"
   },
