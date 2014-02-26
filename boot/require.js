@@ -1,13 +1,13 @@
 "use strict";
 
-var Require = require("../browser");
+var Require = require("../require");
 var URL = require("url");
 var Promise = require("bluebird");
 var getParams = require("./script-params");
 
 module.exports = boot;
 function boot(preloaded, params) {
-    params = params || getParams("boot.js");
+    params = params || getParams(scriptName);
 
     var config = {preloaded: preloaded};
     var applicationLocation = URL.resolve(Require.getLocation(), params.package || ".");
@@ -20,6 +20,8 @@ function boot(preloaded, params) {
     return Require.loadPackage({
         location: applicationLocation,
         hash: params.applicationHash
+    }, {
+        bundle: module.bundle
     })
     .then(function (applicationRequire) {
         return applicationRequire.loadPackage({

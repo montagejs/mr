@@ -1,4 +1,5 @@
 
+var Promise = require("bluebird");
 var FS = require("fs");
 var Path = require("path");
 var Require = require("./node");
@@ -9,8 +10,21 @@ module.exports = build;
 function build(path) {
     return Require.findPackageLocationAndModuleId(path)
     .then(function (arg) {
-        return Require.loadPackage(arg.location, {
-            overlays: ["browser"]
+        var cache = {};
+        return Promise.try(function () {
+            return Require.loadPackage(arg.location, {
+                overlays: ["node"],
+                cache: cache,
+                production: false
+            });
+        })
+        .then(function (preprocessorPackage) {
+            return Require.loadPackage(arg.location, {
+                overlays: ["browser"],
+                cache: cache,
+                production: true,
+                preprocessorPackage: preprocessorPackage
+            });
         })
         .then(function (package) {
             return package.deepLoad(arg.id)
@@ -54,6 +68,8 @@ function build(path) {
             var heading = lead + title + lead + rule + "\n\n";
             var text = heading + module.text;
             return "[" +
+                JSON.stringify(module.require.config.name) + "," +
+                JSON.stringify(module.id) + "," +
                 JSON.stringify(dependencies) + "," +
                 "function (require, exports, module){\n" + text + "}" +
             "]";
