@@ -10,6 +10,18 @@
     "modules",
     "loader"
   ],
+  "contributors": [
+    "Tom Robinson",
+    "Kris Kowal <kris@cixar.com> (https://github.com/kriskowal)",
+    "Stuart Knightly"
+  ],
+  "license": {
+    "type": "BSD 3-clause"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/montagejs/mr.git"
+  },
   "main": "./require",
   "browser": {
     "require": "./browser",
