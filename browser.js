@@ -132,8 +132,7 @@ RequireRead.onerror = onerror;
 //     globalEval = new Function("return eval(arguments[0])");
 // }
 
-var DoubleUnderscore = "__",
-    Underscore = "_",
+    var Underscore = "_",
     globalEvalConstantA = "(function ",
     globalEvalConstantB = "(require, exports, module, global, __filename, __dirname) {",
     globalEvalConstantC = "//*/\n})\n//# sourceURL=",
@@ -159,7 +158,7 @@ Require.Compiler = function (config) {
         // 3. set displayName property on the factory function (Safari, Chrome)
 
         // Prevent method to start with number to avoid Unexpected number
-        var displayName = [DoubleUnderscore, module.require.config.name, Underscore, module.id].join('').replace(nameRegex, Underscore);
+        var displayName = (module.require.config.name + Underscore + module.id).replace(nameRegex, Underscore);
 
         globalConcatenator[1] = displayName;
         globalConcatenator[3] = module.text;
