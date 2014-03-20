@@ -1,6 +1,6 @@
 {
   "name": "mr",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A refresh-only CommonJS module system for browsers, used in Montage",
   "keywords": [
     "montage",
@@ -41,7 +41,7 @@
     "mrs": "bin/mrs.js"
   },
   "dependencies": {
-    "q": "^2.0.0",
+    "q": "^2.0.1",
     "optimist": "^0.6.1",
     "util": "^0.10.3",
     "colors": "^0.6.2",
@@ -50,10 +50,10 @@
   "devDependencies": {
     "qs": "^0.6.5",
     "wd": "^0.1.5",
-    "joey": "^2.0.0",
-    "q-io": "^2.0.0",
+    "joey": "^2.0.1",
+    "q-io": "^2.0.2",
     "jshint": "^2.3.0",
-    "jasminum": "^2.0.0",
+    "jasminum": "^2.0.1",
     "websocket.io": "^0.2.1",
     "mop-integration": "git://github.com/montagejs/mop-integration.git#master"
   },
