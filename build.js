@@ -24,12 +24,12 @@ function build(path) {
                 cache: cache,
                 production: true,
                 preprocessorPackage: preprocessorPackage
-            })
+            });
         })
         .then(function (package) {
             return package.deepLoad(arg.id)
-            .thenResolve(package)
-        })
+            .thenResolve(package);
+        });
     })
     .then(function (package) {
 
@@ -38,17 +38,21 @@ function build(path) {
 
         // Ensure that the entry point comes first in the bundle
         for (var location in packages) {
-            var package = packages[location];
-            var modules = package.modules;
-            for (var id in modules) {
-                var module = modules[id];
-                if (module.text !== undefined) {
-                    bundle.push(module);
-                    module.bundled = true;
-                    break;
+            if (Object.prototype.hasOwnProperty.call(packages, location)) {
+                package = packages[location];
+                var modules = package.modules;
+                for (var id in modules) {
+                    if (Object.prototype.hasOwnProperty.call(modules, id)) {
+                        var module = modules[id];
+                        if (module.text !== undefined) {
+                            bundle.push(module);
+                            module.bundled = true;
+                            break;
+                        }
+                    }
                 }
+                break;
             }
-            break;
         }
 
         // Otherwise, ensure that the modules are in lexicographic order to
@@ -97,6 +101,6 @@ function build(path) {
         }).join(",") + "]";
 
         return template + "((function (global){return" + payload + "})(this))";
-    })
+    });
 }
 

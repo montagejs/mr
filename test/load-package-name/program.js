@@ -5,4 +5,4 @@ module.exports = require.loadPackage({name: "a"})
 })
 .then(function () {
     test.print("DONE", "info");
-})
+});

@@ -13,5 +13,5 @@ function load(location) {
     };
     script.defer = true;
     head.appendChild(script);
-};
+}
 

@@ -2,3 +2,5 @@
 **/node_modules/**
 **/packages/**
 **/spec/**
+boot/boilerplate.js
+boot.js

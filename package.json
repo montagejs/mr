@@ -22,7 +22,7 @@
     "test": "npm run build && npm run test:node && npm run test:phantom && npm run lint",
     "test:node": "jasminum test/index.js",
     "test:phantom": "node test/phantom.js",
-    "lint": "jshint common.js require.js browser.js",
+    "lint": "jshint .",
     "integration": "MOP_VERSION=~0.13 MR_VERSION=. mop-integration"
   },
   "bin": {

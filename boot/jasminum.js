@@ -1,3 +1,4 @@
+/* global -URL */
 
 var Suite = require("jasminum");
 
