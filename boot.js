@@ -43,7 +43,7 @@ global = this;
     Module.prototype.bundle = bundle;
 
     return modules[0].getExports();
-})((function (global){return[["mr","boot/require",{"../require":10,"url":12,"q":14,"./script-params":9},function (require, exports, module){
+})((function (global){return[["mr","boot/require",{"../require":12,"url":14,"q":16,"./script-params":11},function (require, exports, module){
 
 // mr boot/require
 // ---------------
@@ -57,7 +57,7 @@ var getParams = require("./script-params");
 
 module.exports = boot;
 function boot(preloaded, params) {
-    params = params || getParams(scriptName);
+    params = params || getParams("boot.js");
 
     var config = {preloaded: preloaded};
     var applicationLocation = URL.resolve(window.location, params.package || ".");
@@ -350,7 +350,7 @@ function pow2AtLeast(n) {
     return n + 1;
 }
 
-}],["collections","generic-collection",{"./shim-array":6},function (require, exports, module){
+}],["collections","generic-collection",{"./shim-array":7},function (require, exports, module){
 
 // collections generic-collection
 // ------------------------------
@@ -461,7 +461,7 @@ GenericCollection.prototype.filter = function (callback /*, thisp*/) {
     var result = this.constructClone();
     this.reduce(function (undefined, value, key, object, depth) {
         if (callback.call(thisp, value, key, object, depth)) {
-            result.add(value);
+            result.add(value, key);
         }
     }, undefined);
     return result;
@@ -616,7 +616,7 @@ GenericCollection.prototype.only = function () {
 
 require("./shim-array");
 
-}],["collections","generic-order",{"./shim-object":8},function (require, exports, module){
+}],["collections","generic-order",{"./shim-object":9},function (require, exports, module){
 
 // collections generic-order
 // -------------------------
@@ -676,7 +676,7 @@ GenericOrder.prototype.compare = function (that, compare) {
     return comparison;
 };
 
-}],["collections","iterator",{"./weak-map":15,"./generic-collection":3},function (require, exports, module){
+}],["collections","iterator",{"./weak-map":17,"./generic-collection":3},function (require, exports, module){
 
 // collections iterator
 // --------------------
@@ -1224,7 +1224,18 @@ Iterator.Iteration = Iteration;
 Iterator.DoneIteration = DoneIteration;
 Iterator.done = new DoneIteration();
 
-}],["collections","shim-array",{"./shim-function":7,"./generic-collection":3,"./generic-order":4,"./iterator":5,"weak-map":15},function (require, exports, module){
+}],["collections","shim",{"./shim-array":7,"./shim-object":9,"./shim-function":8,"./shim-regexp":10},function (require, exports, module){
+
+// collections shim
+// ----------------
+
+
+var Array = require("./shim-array");
+var Object = require("./shim-object");
+var Function = require("./shim-function");
+var RegExp = require("./shim-regexp");
+
+}],["collections","shim-array",{"./shim-function":8,"./generic-collection":3,"./generic-order":4,"./iterator":5,"weak-map":17},function (require, exports, module){
 
 // collections shim-array
 // ----------------------
@@ -1330,8 +1341,14 @@ define("get", function (index, defaultValue) {
 });
 
 define("set", function (index, value) {
-    this.splice(index, 1, value);
-    return true;
+    if (index < this.length) {
+        this.splice(index, 1, value);
+    } else {
+        // Must use swap instead of splice, dispite the unfortunate array
+        // argument, because splice would truncate index to length.
+        this.swap(index, 1, [value]);
+    }
+    return this;
 });
 
 define("add", function (value) {
@@ -1370,48 +1387,101 @@ define("findLastValue", function (value, equals) {
     return -1;
 });
 
-define("swap", function (start, length, plus) {
-    var args, plusLength, i, j, returnValue;
-    if (typeof plus !== "undefined") {
-        args = [start, length];
+define("swap", function (start, minusLength, plus) {
+    // Unrolled implementation into JavaScript for a couple reasons.
+    // Calling splice can cause large stack sizes for large swaps. Also,
+    // splice cannot handle array holes.
+    if (plus) {
         if (!Array.isArray(plus)) {
             plus = array_slice.call(plus);
         }
-        i = 0;
-        plusLength = plus.length;
-        // 1000 is a magic number, presumed to be smaller than the remaining
-        // stack length. For swaps this small, we take the fast path and just
-        // use the underlying Array splice. We could measure the exact size of
-        // the remaining stack using a try/catch around an unbounded recursive
-        // function, but this would defeat the purpose of short-circuiting in
-        // the common case.
-        if (plusLength < 1000) {
-            for (i; i < plusLength; i++) {
-                args[i+2] = plus[i];
-            }
-            return array_splice.apply(this, args);
-        } else {
-            // Avoid maximum call stack error.
-            // First delete the desired entries.
-            returnValue = array_splice.apply(this, args);
-            // Second batch in 1000s.
-            for (i; i < plusLength;) {
-                args = [start+i, 0];
-                for (j = 2; j < 1002 && i < plusLength; j++, i++) {
-                    args[j] = plus[i];
-                }
-                array_splice.apply(this, args);
-            }
-            return returnValue;
-        }
-    // using call rather than apply to cut down on transient objects
-    } else if (typeof length !== "undefined") {
-        return array_splice.call(this, start, length);
-    }  else if (typeof start !== "undefined") {
-        return array_splice.call(this, start);
     } else {
-        return [];
+        plus = Array.empty;
     }
+
+    if (start < 0) {
+        start = this.length + start;
+    } else if (start > this.length) {
+        this.length = start;
+    }
+
+    if (start + minusLength > this.length) {
+        // Truncate minus length if it extends beyond the length
+        minusLength = this.length - start;
+    } else if (minusLength < 0) {
+        // It is the JavaScript way.
+        minusLength = 0;
+    }
+
+    var diff = plus.length - minusLength;
+    var oldLength = this.length;
+    var newLength = this.length + diff;
+
+    if (diff > 0) {
+        // Head Tail Plus Minus
+        // H H H H M M T T T T
+        // H H H H P P P P T T T T
+        //         ^ start
+        //         ^-^ minus.length
+        //           ^ --> diff
+        //         ^-----^ plus.length
+        //             ^------^ tail before
+        //                 ^------^ tail after
+        //                   ^ start iteration
+        //                       ^ start iteration offset
+        //             ^ end iteration
+        //                 ^ end iteration offset
+        //             ^ start + minus.length
+        //                     ^ length
+        //                   ^ length - 1
+        for (var index = oldLength - 1; index >= start + minusLength; index--) {
+            var offset = index + diff;
+            if (index in this) {
+                this[offset] = this[index];
+            } else {
+                // Oddly, PhantomJS complains about deleting array
+                // properties, unless you assign undefined first.
+                this[offset] = void 0;
+                delete this[offset];
+            }
+        }
+    }
+    for (var index = 0; index < plus.length; index++) {
+        if (index in plus) {
+            this[start + index] = plus[index];
+        } else {
+            this[start + index] = void 0;
+            delete this[start + index];
+        }
+    }
+    if (diff < 0) {
+        // Head Tail Plus Minus
+        // H H H H M M M M T T T T
+        // H H H H P P T T T T
+        //         ^ start
+        //         ^-----^ length
+        //         ^-^ plus.length
+        //             ^ start iteration
+        //                 ^ offset start iteration
+        //                     ^ end
+        //                         ^ offset end
+        //             ^ start + minus.length - plus.length
+        //             ^ start - diff
+        //                 ^------^ tail before
+        //             ^------^ tail after
+        //                     ^ length - diff
+        //                     ^ newLength
+        for (var index = start + plus.length; index < oldLength - diff; index++) {
+            var offset = index - diff;
+            if (offset in this) {
+                this[index] = this[offset];
+            } else {
+                this[index] = void 0;
+                delete this[index];
+            }
+        }
+    }
+    this.length = newLength;
 });
 
 define("peek", function () {
@@ -1608,7 +1678,7 @@ Function.get = function (key) {
     };
 };
 
-}],["collections","shim-object",{"weak-map":15},function (require, exports, module){
+}],["collections","shim-object",{"weak-map":17},function (require, exports, module){
 
 // collections shim-object
 // -----------------------
@@ -1962,9 +2032,9 @@ Object.equals = function (a, b, equals, memo) {
     if (Object.isObject(a)) {
         memo = memo || new WeakMap();
         if (memo.has(a)) {
-            return memo.get(a) === b;
+            return true;
         }
-        memo.set(a, b);
+        memo.set(a, true);
     }
     if (Object.isObject(a) && typeof a.equals === "function") {
         return a.equals(b, equals, memo);
@@ -2047,19 +2117,15 @@ Object.compare = function (a, b) {
         return 0;
     var aType = typeof a;
     var bType = typeof b;
-    if (aType !== bType)
-        return 0;
-    if (a == null)
-        return b == null ? 0 : -1;
-    if (aType === "number")
+    if (aType === "number" && bType === "number")
         return a - b;
-    if (aType === "string")
-        return a < b ? -1 : 1;
+    if (aType === "string" && bType === "string")
+        return a < b ? -Infinity : Infinity;
         // the possibility of equality elimiated above
-    if (typeof a.compare === "function")
+    if (a && typeof a.compare === "function")
         return a.compare(b);
     // not commutative, the relationship is reversed
-    if (typeof b.compare === "function")
+    if (b && typeof b.compare === "function")
         return -b.compare(a);
     return 0;
 };
@@ -2089,7 +2155,9 @@ Object.clone = function (value, depth, memo) {
     } else if (depth === 0) {
         return value;
     }
-    if (Object.isObject(value)) {
+    if (typeof value === "function") {
+        return value;
+    } else if (Object.isObject(value)) {
         if (!memo.has(value)) {
             if (value && typeof value.clone === "function") {
                 memo.set(value, value.clone(depth, memo));
@@ -2132,7 +2200,26 @@ Object.clear = function (object) {
     return object;
 };
 
-}],["mr","boot/script-params",{"url":12},function (require, exports, module){
+}],["collections","shim-regexp",{},function (require, exports, module){
+
+// collections shim-regexp
+// -----------------------
+
+
+/**
+    accepts a string; returns the string with regex metacharacters escaped.
+    the returned string can safely be used within a regex to match a literal
+    string. escaped characters are [, ], {, }, (, ), -, *, +, ?, ., \, ^, $,
+    |, #, [comma], and whitespace.
+*/
+if (!RegExp.escape) {
+    var special = /[-[\]{}()*+?.\\^$|,#\s]/g;
+    RegExp.escape = function (string) {
+        return string.replace(special, "\\$&");
+    };
+}
+
+}],["mr","boot/script-params",{"url":14},function (require, exports, module){
 
 // mr boot/script-params
 // ---------------------
@@ -2202,7 +2289,7 @@ function getParams(scriptName) {
     return params;
 }
 
-}],["mr","browser",{"./common":11,"url":12,"q":14,"./script":13},function (require, exports, module){
+}],["mr","browser",{"./common":13,"url":14,"q":16,"./script":15},function (require, exports, module){
 
 // mr browser
 // ----------
@@ -2294,7 +2381,7 @@ if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
 }
 
 var __FILE__String = "__FILE__",
-    DoubleUnderscoreString = "__",
+    Underscore = "_",
     globalEvalConstantA = "(function ",
     globalEvalConstantB = "(require, exports, module, __filename, __dirname) {",
     globalEvalConstantC = "//*/\n})\n//@ sourceURL=";
@@ -2317,7 +2404,7 @@ Require.Compiler = function (config) {
         //      TODO: investigate why this isn't working in Firebug.
         // 3. set displayName property on the factory function (Safari, Chrome)
 
-        var displayName = __FILE__String+module.location.replace(/\.\w+$|\W/g, DoubleUnderscoreString);
+        var displayName = (module.require.config.name + Underscore + module.id).replace(/[^\w\d]|^\d/g, Underscore);
 
         try {
             module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+module.location);
@@ -2440,7 +2527,7 @@ function loadIfNotPreloaded(location, definition, preloaded) {
     }
 }
 
-}],["mr","common",{"q":14,"url":12},function (require, exports, module){
+}],["mr","common",{"q":16,"url":14},function (require, exports, module){
 
 // mr common
 // ---------
@@ -3167,7 +3254,12 @@ function configurePackage(location, description, parent) {
     // mappings, link this package to other packages.
     var mappings = description.mappings || {};
     // dependencies, devDependencies if not in production, if not installed by NPM
-    [description.dependencies, description._id || description.production ? null : description.devDependencies]
+    [
+        description.dependencies,
+        description._id || description.production ?
+            null :
+            description.devDependencies
+    ]
     .forEach(function (dependencies) {
         if (!dependencies) {
             return;
@@ -3551,9 +3643,9 @@ function load(location) {
     };
     script.defer = true;
     head.appendChild(script);
-};
+}
 
-}],["q","q",{"asap":1,"collections/weak-map":15,"collections/iterator":5},function (require, exports, module){
+}],["q","q",{"collections/shim":6,"collections/weak-map":17,"collections/iterator":5,"asap":1},function (require, exports, module){
 
 // q q
 // ---
@@ -3600,9 +3692,10 @@ try {
 var qStartingLine = captureLine();
 var qFileName;
 
-var asap = require("asap");
+require("collections/shim");
 var WeakMap = require("collections/weak-map");
 var Iterator = require("collections/iterator");
+var asap = require("asap");
 
 function isObject(value) {
     return value === Object(value);
@@ -3636,6 +3729,9 @@ function makeStackTraceLong(error, promise) {
 }
 
 function filterStackString(stackString) {
+    if (Q.isIntrospective) {
+        return stackString;
+    }
     var lines = stackString.split("\n");
     var desiredLines = [];
     for (var i = 0; i < lines.length; ++i) {
@@ -4087,14 +4183,21 @@ Q.promised = function Q_promised(callback) {
     };
 };
 
-// XXX experimental.  This method is a way to denote that a local value is
-// serializable and should be immediately dispatched to a remote upon request,
-// instead of passing a reference.
-Q.passByCopy = function Q_passByCopy(object) {
-    //freeze(object);
-    //passByCopies.set(object, true);
-    return object;
+/**
+ */
+Q.passByCopy = // TODO XXX experimental
+Q.push = function (value) {
+    if (Object(value) === value && !Q_isPromise(value)) {
+        passByCopies.set(value, true);
+    }
+    return value;
 };
+
+Q.isPortable = function (value) {
+    return Object(value) === value && passByCopies.has(value);
+};
+
+var passByCopies = new WeakMap();
 
 /**
  * The async function is a decorator for generator functions, turning
@@ -4128,16 +4231,16 @@ function Q_async(makeGenerator) {
         // when verb is "send", arg is a value
         // when verb is "throw", arg is an exception
         function continuer(verb, arg) {
-            var result;
+            var iteration;
             try {
-                result = generator[verb](arg);
+                iteration = generator[verb](arg);
             } catch (exception) {
                 return Q_reject(exception);
             }
-            if (result.done) {
-                return result.value;
+            if (iteration.done) {
+                return Q(iteration.value);
             } else {
-                return Q(result.value).then(callback, errback);
+                return Q(iteration.value).then(callback, errback);
             }
         }
         var generator = makeGenerator.apply(this, arguments);
@@ -4473,14 +4576,17 @@ Promise.prototype.catch = function Promise_catch(rejected) {
  * TODO
  */
 Promise.prototype.finally = function Promise_finally(callback, ms) {
+    if (!callback) {
+        return this;
+    }
     callback = Q(callback);
     return this.then(function (value) {
-        return callback.call().then(function () {
+        return callback.call().then(function Promise_finally_fulfilled() {
             return value;
         });
     }, function (reason) {
         // TODO attempt to recycle the rejection with "this".
-        return callback.call().then(function () {
+        return callback.call().then(function Promise_finally_rejected() {
             throw reason;
         });
     }, ms);
@@ -4506,11 +4612,17 @@ Promise.prototype.getEstimate = function Promise_getEstimate() {
  */
 Promise.prototype.dispatch = function Promise_dispatch(op, args) {
     var deferred = defer();
+    this.rawDispatch(deferred.resolve, op, args);
+    return deferred.promise;
+};
+
+/**
+ */
+Promise.prototype.rawDispatch = function Promise_rawDispatch(resolve, op, args) {
     var self = this;
     asap(function Promise_dispatch_task() {
-        Q_inspect(self).dispatch(deferred.resolve, op, args);
+        Q_inspect(self).dispatch(resolve, op, args);
     });
-    return deferred.promise;
 };
 
 /**
@@ -4638,19 +4750,8 @@ Promise.prototype.delay = function Promise_delay(ms) {
 /**
  * TODO
  */
-Promise.prototype.push = function Promise_push() {
-};
-
-/**
- * TODO
- */
 Promise.prototype.pull = function Promise_pull() {
-};
-
-/**
- * TODO
- */
-Promise.prototype.defend = function Promise_defend() {
+    return this.dispatch("pull", []);
 };
 
 
@@ -4665,8 +4766,15 @@ function Deferred(promise) {
     // different promise (as it is in a Queue), but the intrinsic promise does
     // not change.
     promises.set(this, promise);
-    this.resolve = this.resolve.bind(this);
-    this.reject = this.reject.bind(this);
+    var self = this;
+    var resolve = this.resolve;
+    this.resolve = function (value) {
+        resolve.call(self, value);
+    };
+    var reject = this.reject;
+    this.reject = function (error) {
+        reject.call(self, error);
+    };
 }
 
 /**
@@ -4736,7 +4844,8 @@ Fulfilled.prototype.dispatch = function Fulfilled_dispatch(
         op === "call" ||
         op === "invoke" ||
         op === "keys" ||
-        op === "iterate"
+        op === "iterate" ||
+        op === "pull"
     ) {
         try {
             result = this[op].apply(this, operands);
@@ -4780,6 +4889,19 @@ Fulfilled.prototype.keys = function Fulfilled_keys() {
 
 Fulfilled.prototype.iterate = function Fulfilled_iterate() {
     return new Iterator(this.value);
+};
+
+Fulfilled.prototype.pull = function Fulfilled_pull() {
+    var result;
+    if (Object(this.value) === this.value) {
+        result = Array.isArray(this.value) ? [] : {};
+        for (var name in this.value) {
+            result[name] = this.value[name];
+        }
+    } else {
+        result = this.value;
+    }
+    return Q.push(result);
 };
 
 
