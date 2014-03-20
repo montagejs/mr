@@ -7,7 +7,7 @@ var getParams = require("./script-params");
 
 module.exports = boot;
 function boot(preloaded, params) {
-    params = params || getParams(scriptName);
+    params = params || getParams("boot.js");
 
     var config = {preloaded: preloaded};
     var applicationLocation = URL.resolve(window.location, params.package || ".");

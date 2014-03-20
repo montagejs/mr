@@ -1,5 +1,6 @@
 
 var load = require("../script");
+var URL = require("url");
 var Q = require("q");
 
 module.exports = function preload(plan, params) {
@@ -20,7 +21,7 @@ module.exports = function preload(plan, params) {
     var preloaded = plan.reduce(function (previous, bundleLocations) {
         return previous.then(function () {
             return Q.all(bundleLocations.map(function (bundleLocation) {
-                load(resolve(params.location, bundleLocation));
+                load(URL.resolve(params.location, bundleLocation));
                 return getHook(bundleLocation).promise;
             }));
         });
