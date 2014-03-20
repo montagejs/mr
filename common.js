@@ -720,7 +720,12 @@ function configurePackage(location, description, parent) {
     // mappings, link this package to other packages.
     var mappings = description.mappings || {};
     // dependencies, devDependencies if not in production, if not installed by NPM
-    [description.dependencies, description._id || description.production ? null : description.devDependencies]
+    [
+        description.dependencies,
+        description._id || description.production ?
+            null :
+            description.devDependencies
+    ]
     .forEach(function (dependencies) {
         if (!dependencies) {
             return;
