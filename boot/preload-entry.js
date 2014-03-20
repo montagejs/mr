@@ -1,5 +1,5 @@
 
-var boot = require("./browser");
+var boot = require("./require");
 var preload = require("./preload");
 var getParams = require("./script-params");
 
