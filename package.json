@@ -16,39 +16,39 @@
     "url": "./mini-url"
   },
   "scripts": {
-    "build": "npm run build:boot && npm run build:jasminum",
-    "build:boot": "node bin/mrs.js boot/require.js -e '().done()' > boot.js",
-    "build:jasminum": "node bin/mrs.js boot/jasminum.js -e '().done()' > jasminum.js",
+    "build": "node bin/mrs.js boot/require.js -e '().done()' > boot.js",
     "test": "npm run build && npm run test:node && npm run test:phantom && npm run lint",
-    "test:node": "jasminum test/index.js",
-    "test:phantom": "node test/phantom.js",
+    "test:node": "jasminum test",
+    "test:phantom": "jasminum-phantom test",
     "lint": "jshint .",
-    "integration": "MOP_VERSION=~0.13 MR_VERSION=. mop-integration"
+    "integration": "MOP_VERSION=^0.13 MR_VERSION=. mop-integration"
   },
   "bin": {
     "mr": "bin/mr.js",
+    "mr-phantom": "bin/mr-phantom.js",
     "mrs": "bin/mrs.js"
   },
   "dependencies": {
-    "q": "2.0.0",
-    "optimist": "~0.6.1"
+    "q": "^2.0.0",
+    "optimist": "^0.6.1",
+    "util": "^0.10.3",
+    "colors": "^0.6.2",
+    "istanbul": "^0.1.34"
   },
   "devDependencies": {
-    "qs": "~0.6.5",
-    "wd": "~0.1.5",
-    "joey": "~2.0.0",
-    "istanbul": "~0.1.34",
-    "q-io": "~2.0.0",
-    "jshint": "~2.3.0",
-    "jasminum": "~0.0.0",
-    "websocket.io": "~0.2.1",
+    "qs": "^0.6.5",
+    "wd": "^0.1.5",
+    "joey": "^2.0.0",
+    "q-io": "^2.0.0",
+    "jshint": "^2.3.0",
+    "jasminum": "^0.0.0",
+    "websocket.io": "^0.2.1",
     "mop-integration": "git://github.com/montagejs/mop-integration.git#master"
   },
   "exclude": [
     "README.md",
     "CHANGES.md",
     "LICENSE.md",
-    "bootstrap-node.js",
     "node.js",
     "adhoc.*",
     "bin",

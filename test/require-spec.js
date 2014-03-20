@@ -29,7 +29,14 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 </copyright> */
 
-describe("Require", function () {
+var Require = require("../require");
+
+var location = __dirname;
+if (Require.directoryPathToLocation) {
+    location = Require.directoryPathToLocation(location);
+}
+
+describe("require", function () {
     [
         "cyclic",
         "determinism",
@@ -70,47 +77,32 @@ describe("Require", function () {
         "compiler-package",
         "translator-package",
         "redirect-patterns",
-        "main",
-        "json",
-        "optimizer",
-        {name: "optimizer", optimize: false}
+        "main"
     ].forEach(function (test) {
-
-        if (typeof test === "string") test = {name: test};
-
-        if (test.optimize === undefined) test.optimize = true;
-        if (test.node === undefined) test.node = true;
-        if (test.browser === undefined) test.browser = true;
-
-        if (!test.node && typeof process !== "undefined") return;
-        if (!test.browser && typeof window !== "undefined") return;
-
-        it(test.name, function () {
+        if (typeof test === "object") {
+            if (test.node === false && typeof process !== "undefined") {
+                return;
+            }
+            test = test.name;
+        }
+        it(test, function () {
             var spec = this;
             var done;
             var message;
 
-            //console.log(test.name + ":", "START", test.optimize);
+            //console.log(test + ":", "START");
 
-            return require.loadPackage(module.directory + test.name + "/", {})
-            .then(function (preprocessorPackage) {
-                return require.loadPackage(module.directory + test.name + "/", {
-                    preprocessorPackage: test.optimize ? preprocessorPackage : null
-                })
-            })
+            return Require.loadPackage(location + test + "/", {})
             .then(function (pkg) {
                 pkg.inject("test", {
                     print: function (_message, level) {
-                        //console.log(test.name + ":", _message);
+                        //console.log(test + ":", _message);
                         if (_message === "DONE") {
                             message = _message;
                         }
                     },
                     assert: function (guard, message) {
-                        //console.log(test.name + ":", guard ? "PASS" : "FAIL", message);
-                        if (!guard && message) {
-                            console.error("FAIL", message);
-                        }
+                        //console.log(test + ":", guard ? "PASS" : "FAIL", message);
                         expect(!!guard).toBe(true);
                     }
                 });
@@ -119,10 +111,7 @@ describe("Require", function () {
             })
             .then(function () {
                 expect(message).toBe("DONE");
-            }, function (reason) {
-                spec.fail(reason);
             });
-
         });
     });
 });
