@@ -19,27 +19,6 @@ module.exports = Require;
 
 Require.overlays = ["node"];
 
-Require.boot = function () {
-    var command = process.argv.slice(0, 3);
-    var args = process.argv.slice(2);
-    var program = args.shift();
-    return Require.findPackageLocationAndModuleId(program)
-    .then(function (info) {
-        return Require.loadPackage(info.location)
-        .invoke("async", info.id);
-    }, function (error) {
-        var location = Require.filePathToLocation(program);
-        var directory = URL.resolve(location, "./");
-        var file = Path.relative(directory, location);
-        var descriptions = {};
-        descriptions[directory] = Q({});
-        return Require.loadPackage(directory, {
-            descriptions: descriptions
-        })
-        .invoke("async", file);
-    });
-};
-
 Require.getLocation = function getLocation() {
     return URL.resolve("file:///", process.cwd() + "/");
 };
