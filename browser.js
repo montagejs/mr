@@ -85,7 +85,7 @@ if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
 }
 
 var __FILE__String = "__FILE__",
-    DoubleUnderscoreString = "__",
+    Underscore = "_",
     globalEvalConstantA = "(function ",
     globalEvalConstantB = "(require, exports, module, __filename, __dirname) {",
     globalEvalConstantC = "//*/\n})\n//@ sourceURL=";
@@ -108,7 +108,7 @@ Require.Compiler = function (config) {
         //      TODO: investigate why this isn't working in Firebug.
         // 3. set displayName property on the factory function (Safari, Chrome)
 
-        var displayName = __FILE__String+module.location.replace(/\.\w+$|\W/g, DoubleUnderscoreString);
+        var displayName = (module.require.config.name + Underscore + module.id).replace(/[^\w\d]|^\d/g, Underscore);
 
         try {
             module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+module.location);
