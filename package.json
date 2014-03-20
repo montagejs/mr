@@ -54,7 +54,7 @@
     "jasmine-console-reporter": "^1.2.7",
     "jasmine-core": "^2.5.2",
     "jshint": "^2.9.5",
-    "jasminum": "~0.0.0",
+    "jasminum": "^2.0.0",
     "karma": "^1.5.0",
     "karma-chrome-launcher": "^2.0.0",
     "karma-coverage": "^1.1.1",
