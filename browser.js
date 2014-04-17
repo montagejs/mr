@@ -83,11 +83,12 @@ Require.read = function (url) {
 // http://www.davidflanagan.com/2010/12/global-eval-in.html
 // Unfortunately execScript doesn't always return the value of the evaluated expression (at least in Chrome)
 var globalEval = /*this.execScript ||*/eval;
-// For Firebug evaled code isn't debuggable otherwise
+
+// For Firebug, evaled code wasn't debuggable otherwise
 // http://code.google.com/p/fbug/issues/detail?id=2198
-if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
-    globalEval = new Function("_", "return eval(_)");
-}
+// if (global.navigator && global.navigator.userAgent.indexOf("Firefox") >= 0) {
+//     globalEval = new Function("return eval(arguments[0])");
+// }
 
 var DoubleUnderscore = "__",
     Underscore = "_",
