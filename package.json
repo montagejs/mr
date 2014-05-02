@@ -1,6 +1,6 @@
 {
   "name": "mr",
-  "version": "0.15.5",
+  "version": "0.15.6",
   "description": "A refresh-only CommonJS module system for browsers, used in Montage",
   "keywords": [
     "montage",
@@ -29,7 +29,7 @@
     }
   },
   "dependencies": {
-    "q": "0.9.7"
+    "q": "1.0.1"
   },
   "devDependencies": {
     "qs": "~0.6.5",
