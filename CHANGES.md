@@ -1,4 +1,33 @@
-<!-- vim:ts=4:sts=4:sw=4:et:tw=60 -->
+<!-- vim:ts=4:sts=4:sw=4:et:tw=70 -->
+
+## 1.0.1
+
+ - Adds support for `Q.Promise`, which implements common usage of the
+   ES6 `Promise` constructor and its methods. `Promise` does not have
+   a valid promise constructor and a proper implementation awaits
+   version 2 of Q.
+ - Removes the console stopgap for a promise inspector. This no longer
+   works with any degree of reliability.
+ - Fixes support for content security policies that forbid eval. Now
+   using the `StopIteration` global to distinguish SpiderMonkey
+   generators from ES6 generators, assuming that they will never
+   coexist.
+
+## 1.0.0
+
+:cake: This is all but a re-release of version 0.9, which has settled
+into a gentle maintenance mode and rightly deserves an official 1.0.
+An ambitious 2.0 release is already around the corner, but 0.9/1.0
+have been distributed far and wide and demand long term support.
+
+ - Q will now attempt to post a debug message in browsers regardless
+   of whether window.Touch is defined. Chrome at least now has this
+   property regardless of whether touch is supported by the underlying
+   hardware.
+ - Remove deprecation warning from `promise.valueOf`. The function is
+   called by the browser in various ways so there is no way to
+   distinguish usage that should be migrated from usage that cannot be
+   altered.
 
 ## 0.9.7
 
