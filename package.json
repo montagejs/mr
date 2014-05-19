@@ -1,8 +1,8 @@
 {
   "name": "mr",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "publishConfig": {
-      "tag": "future"
+    "tag": "future"
   },
   "description": "A refresh-only CommonJS module system for browsers, used in Montage",
   "keywords": [
