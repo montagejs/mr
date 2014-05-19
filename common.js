@@ -555,7 +555,7 @@ Require.loadPackage = function (dependency, config) {
                 loadedPackages[location] = pkg;
                 return Q.all(Object.keys(subconfig.mappings).map(function (prefix) {
                     var dependency = subconfig.mappings[prefix];
-                    return config.loadPackage(subconfig.mappings[prefix], subconfig, loading);
+                    return config.loadPackage(dependency, subconfig, loading);
                 }))
                 .then(function () {
                     postConfigurePackage(subconfig, packageDescription);
@@ -705,7 +705,7 @@ function configurePackage(location, description, parent) {
 
     }
 
-    //Deal with redirects
+    // Deal with redirects
     var redirects = description.redirects;
     if (redirects !== void 0) {
         Object.keys(redirects).forEach(function (name) {
@@ -744,7 +744,7 @@ function configurePackage(location, description, parent) {
     });
     // mappings
     Object.keys(mappings).forEach(function (name) {
-        var mapping = mappings[name] = normalizeDependency(
+        mappings[name] = normalizeDependency(
             mappings[name],
             config,
             name
