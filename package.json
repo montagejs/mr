@@ -1,6 +1,9 @@
 {
   "name": "mr",
   "version": "17.0.12",
+  "publishConfig": {
+      "tag": "future"
+  },
   "description": "A refresh-only CommonJS module system for browsers, used in Montage",
   "license": "BSD-3-Clause",
   "keywords": [
@@ -27,7 +30,7 @@
   "scripts": {
     "build": "node bin/mrs.js boot/require.js -e '().done()' > boot.js",
     "test": "jasminum test",
-    "test:phantom": "jasminum-phantom test",
+    "test:phantom": "(cd node_modules/mr && jasminum-phantom test)",
     "lint": "jshint .",
     "integration": "mop-integration",
     "test:karma": "npm run build && karma start --no-auto-watch --single-run",
