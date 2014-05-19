@@ -4,4 +4,20 @@
 .DS_Store
 lcov.info
 lcov-report/
-/node_modules
+# It is necessary to explicate the ignorable node_modules because
+# node_modules/mr is a checked-in symlink, necessary for resolving the
+# Jasminum/PhantomJS cyclic dependency upon Mr.
+/node_modules/.bin
+/node_modules/colors
+/node_modules/istanbul
+/node_modules/jasminum
+/node_modules/joey
+/node_modules/jshint
+/node_modules/mop-integration
+/node_modules/optimist
+/node_modules/q-io
+/node_modules/q
+/node_modules/qs
+/node_modules/util
+/node_modules/wd
+/node_modules/websocket.io

@@ -7,6 +7,10 @@
 /*global -URL */
 /*jshint node:true */
 
+// This is the Node.js implementation for "mr".
+// For browsers, this module identifier is redirected to browser.js by
+// package.json.
+
 var Require = require("./common");
 var Q = require("q");
 var FS = require("fs");

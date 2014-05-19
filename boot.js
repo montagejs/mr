@@ -3089,7 +3089,7 @@ Require.loadPackage = function (dependency, config) {
                 loadedPackages[location] = pkg;
                 return Q.all(Object.keys(subconfig.mappings).map(function (prefix) {
                     var dependency = subconfig.mappings[prefix];
-                    return config.loadPackage(subconfig.mappings[prefix], subconfig, loading);
+                    return config.loadPackage(dependency, subconfig, loading);
                 }))
                 .then(function () {
                     postConfigurePackage(subconfig, packageDescription);
@@ -3239,7 +3239,7 @@ function configurePackage(location, description, parent) {
 
     }
 
-    //Deal with redirects
+    // Deal with redirects
     var redirects = description.redirects;
     if (redirects !== void 0) {
         Object.keys(redirects).forEach(function (name) {
@@ -3278,7 +3278,7 @@ function configurePackage(location, description, parent) {
     });
     // mappings
     Object.keys(mappings).forEach(function (name) {
-        var mapping = mappings[name] = normalizeDependency(
+        mappings[name] = normalizeDependency(
             mappings[name],
             config,
             name
@@ -3595,6 +3595,29 @@ function memoize(callback, cache) {
 // mr mini-url
 // -----------
 
+
+// This is the browser implementation for "mr/url",
+// redirected from "url" within the Mr package by the Montage Require
+// loader because of the "browser" redirects in package.json.
+
+// This is a very small subset of the Node.js URL module, suitable only for
+// resolving relative module identifiers relative to fully qualified base
+// URL’s.
+// Because Montage Require only needs this part of the URL module, a
+// very compact implementation is possible, teasing the necessary behavior out
+// of the browser's own URL resolution mechanism, even though at time of
+// writing, browsers do not provide an explicit JavaScript interface.
+
+// The implementation takes advantage of the "href" getter/setter on an "a"
+// (anchor) tag in the presence of a "base" tag on the document.
+// We either use an existing "base" tag or temporarily introduce a fake
+// "base" tag into the header of the page.
+// We then temporarily modify the "href" of the base tag to be the base URL
+// for the duration of a call to URL.resolve, to be the base URL argument.
+// We then apply the relative URL to the "href" setter of an anchor tag,
+// and read back the absolute URL from the "href" getter.
+// The browser guarantees that the "href" property will report the fully
+// qualified URL relative to the page's location, albeit its "base" location.
 
 var head = document.querySelector("head"),
     baseElement = document.createElement("base"),
