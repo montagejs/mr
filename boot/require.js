@@ -25,9 +25,10 @@ function boot(preloaded, params) {
     })
     .then(function (applicationRequire) {
         return applicationRequire.loadPackage({
-            location: params.location,
+            name: "mr",
+            location: params.mrLocation,
             hash: params.mrHash
-        }, config)
+        })
         .then(function (mrRequire) {
             return mrRequire.loadPackage({
                 name: "bluebird",
