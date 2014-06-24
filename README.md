@@ -27,7 +27,7 @@ would in Node. Have a look at the [demo](https://github.com/montagejs/mr/tree/ma
 for working example.
 
 You can place your `package.json` in a different location, or avoid having one
-at all, with other [script tag attributes](https://github.com/montagejs/mr/tree/master/docs/Script-attribute.md).
+at all, with other [script tag attributes](https://github.com/montagejs/mr/tree/master/docs/Script-attributes.md).
 
 ## Optimization
 
