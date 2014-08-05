@@ -1,3 +1,4 @@
+//"use strict";
 
 var Q = require("q");
 var FS = require("fs");
@@ -10,37 +11,34 @@ module.exports = build;
 function build(path) {
     return Require.findPackageLocationAndModuleId(path)
     .then(function (arg) {
-        var cache = {};
         return Q.try(function () {
             return Require.loadPackage(arg.location, {
                 overlays: ["node"],
-                cache: cache,
                 production: false
             });
         })
         .then(function (preprocessorPackage) {
             return Require.loadPackage(arg.location, {
                 overlays: ["browser"],
-                cache: cache,
                 production: true,
                 preprocessorPackage: preprocessorPackage
             });
         })
-        .then(function (package) {
-            return package.deepLoad(arg.id)
-            .thenResolve(package);
+        .then(function (pkg) {
+            return pkg.deepLoad(arg.id)
+            .thenResolve(pkg);
         });
     })
-    .then(function (package) {
+    .then(function (pkg) {
 
         var bundle = [];
-        var packages = package.packages;
+        var pkgs = pkg.packages;
 
         // Ensure that the entry point comes first in the bundle
-        for (var location in packages) {
-            if (Object.prototype.hasOwnProperty.call(packages, location)) {
-                package = packages[location];
-                var modules = package.modules;
+        for (var location in pkgs) {
+            if (Object.prototype.hasOwnProperty.call(pkgs, location)) {
+                pkg = pkgs[location];
+                var modules = pkg.modules;
                 for (var id in modules) {
                     if (Object.prototype.hasOwnProperty.call(modules, id)) {
                         var module = modules[id];
@@ -57,13 +55,13 @@ function build(path) {
 
         // Otherwise, ensure that the modules are in lexicographic order to
         // ensure that each build from the same sources is consistent.
-        Object.keys(packages).sort(function (a, b) {
-            a = packages[a].config.name || a;
-            b = packages[b].config.name || b;
+        Object.keys(pkgs).sort(function (a, b) {
+            a = pkgs[a].config.name || a;
+            b = pkgs[b].config.name || b;
             return a === b ? 0 : a < b ? -1 : 1;
         }).forEach(function (location) {
-            var package = packages[location];
-            var modules = package.modules;
+            var pkg = pkgs[location];
+            var modules = pkg.modules;
             Object.keys(modules).sort().forEach(function (id) {
                 var module = modules[id];
                 if (module.error) {

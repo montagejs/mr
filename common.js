@@ -63,13 +63,14 @@ Require.makeRequire = function (config) {
             } else {
                 type = "js";
             }
-            modules[lookupId] = {
+            var module = {
                 id: id,
                 extension: extension,
                 type: type,
                 display: (config.name || config.location) + "#" + id,
                 require: makeRequire(id)
             };
+            modules[lookupId] = module;
         }
         return modules[lookupId];
     }
@@ -100,7 +101,7 @@ Require.makeRequire = function (config) {
                 module.exports === void 0 &&
                 module.redirect === void 0
             ) {
-                return Q(config.load).call(void 0, topId, module);
+                return config.load(topId, module);
             }
         })
         .then(function () {
