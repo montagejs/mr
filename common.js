@@ -10,6 +10,8 @@
 var Require = exports;
 var Q = require("q");
 var URL = require("url");
+var merge = require("./merge");
+var Identifier = require("./identifier");
 
 if (!this) {
     throw new Error("Require does not work in strict mode.");
@@ -49,14 +51,14 @@ Require.makeRequire = function (config) {
     // ``module`` free variable inside the corresponding module.
     function getModuleDescriptor(id) {
         var lookupId = id.toLowerCase();
-        if (!has(modules, lookupId)) {
-            var extension = Require.extension(id);
+        if (!has.call(modules, lookupId)) {
+            var extension = Identifier.extension(id);
             var type;
             if (
                 extension && (
-                    has(config.optimizers, extension) ||
-                    has(config.translators, extension) ||
-                    has(config.compilers, extension)
+                    has.call(config.optimizers, extension) ||
+                    has.call(config.translators, extension) ||
+                    has.call(config.compilers, extension)
                 )
             ) {
                 type = extension;
@@ -107,7 +109,7 @@ Require.makeRequire = function (config) {
         .then(function () {
             // Translate (to JavaScript, optionally provide dependency analysis
             // services).
-            if (module.type !== "js" && has(config.translators, module.type)) {
+            if (module.type !== "js" && has.call(config.translators, module.type)) {
                 var translatorId = config.translators[module.type];
                 return Q.try(function () {
                     // The use of a preprocessor package is optional for
@@ -137,7 +139,7 @@ Require.makeRequire = function (config) {
 
             // Run optional optimizers.
             // {text, type} to {text', type')
-            if (config.hasPreprocessorPackage && has(config.optimizers, module.type)) {
+            if (config.hasPreprocessorPackage && has.call(config.optimizers, module.type)) {
                 var optimizerId = config.optimizers[module.type];
                 return config.loadPreprocessorPackage()
                 .invoke("async", optimizerId)
@@ -154,7 +156,7 @@ Require.makeRequire = function (config) {
             ) {
                 // Then apply configured compilers.  module {text, type} to
                 // {dependencies, factory || exports || redirect}
-                if (has(config.compilers, module.type)) {
+                if (has.call(config.compilers, module.type)) {
                     var compilerId = config.compilers[module.type];
                     return deepLoad(compilerId, "", loading)
                     .then(function () {
@@ -186,7 +188,7 @@ Require.makeRequire = function (config) {
         // data-lock on a cycle of dependencies.
         loading = loading || {};
         // has this all happened before?  will it happen again?
-        if (has(loading, topId)) {
+        if (has.call(loading, topId)) {
             return; // break the cycle of violence.
         }
         loading[topId] = true; // this has happened before
@@ -196,7 +198,7 @@ Require.makeRequire = function (config) {
             // recursion.
             var dependencies = module.dependencies = module.dependencies || [];
             return Q.all(module.dependencies.map(function (depId) {
-                depId = resolve(depId, topId);
+                depId = Identifier.resolve(depId, topId);
                 // create dependees set, purely for debug purposes
                 var module = getModuleDescriptor(depId);
                 var dependees = module.dependees = module.dependees || {};
@@ -209,7 +211,7 @@ Require.makeRequire = function (config) {
     }
 
     function lookup(topId, viaId) {
-        topId = resolve(topId, viaId);
+        topId = Identifier.resolve(topId, viaId);
         var module = getModuleDescriptor(topId);
 
         // check for consistent case convention
@@ -317,7 +319,7 @@ Require.makeRequire = function (config) {
 
         var internal = !!seen;
         seen = seen || {};
-        if (has(seen, location)) {
+        if (has.call(seen, location)) {
             return null; // break the cycle of violence.
         }
         seen[location] = true;
@@ -354,14 +356,14 @@ Require.makeRequire = function (config) {
 
         // Main synchronously executing "require()" function
         var require = function(id) {
-            var topId = resolve(id, viaId);
+            var topId = Identifier.resolve(id, viaId);
             return getExports(topId, viaId);
         };
 
         // Asynchronous "require.async()" which ensures async executation
         // (even with synchronous loaders)
         require.async = function (id) {
-            var topId = resolve(id, viaId);
+            var topId = Identifier.resolve(id, viaId);
             var module = getModuleDescriptor(id);
             return deepLoad(topId, viaId)
             .then(function () {
@@ -374,7 +376,7 @@ Require.makeRequire = function (config) {
         };
 
         require.resolve = function (id) {
-            return normalize(resolve(id, viaId));
+            return Identifier.normalize(Identifier.resolve(id, viaId));
         };
 
         require.getModule = getModuleDescriptor; // XXX deprecated, use:
@@ -703,7 +705,7 @@ function configurePackage(location, description, parent) {
         // loaded definition from the given path.
         modules[""] = {
             id: "",
-            redirect: normalize(resolve(description.main, "")),
+            redirect: Identifier.normalize(Identifier.resolve(description.main, "")),
             location: config.location
         };
 
@@ -715,7 +717,7 @@ function configurePackage(location, description, parent) {
         Object.keys(redirects).forEach(function (name) {
             modules[name] = {
                 id: name,
-                redirect: normalize(resolve(redirects[name], "")),
+                redirect: Identifier.normalize(Identifier.resolve(redirects[name], "")),
                 location: URL.resolve(location, name)
             };
         });
@@ -812,30 +814,11 @@ function postConfigurePackage(config, description) {
     if (description["redirect-patterns"]) {
         var describedPatterns = description["redirect-patterns"];
         for (var pattern in describedPatterns) {
-            if (has(describedPatterns, pattern)) {
+            if (has.call(describedPatterns, pattern)) {
                 redirectTable.push([
                     new RegExp(pattern),
                     describedPatterns[pattern]
                 ]);
-            }
-        }
-    }
-}
-
-function merge(target, source) {
-    for (var name in source) {
-        if (has(source, name)) {
-            var sourceValue = source[name];
-            var targetValue = target[name];
-            if (sourceValue === null) {
-                delete target[name];
-            } else if (
-                typeof sourceValue === "object" && !Array.isArray(sourceValue) &&
-                typeof targetValue === "object" && !Array.isArray(targetValue)
-            ) {
-                merge(targetValue, sourceValue);
-            } else {
-                target[name] = source[name];
             }
         }
     }
@@ -917,9 +900,6 @@ Require.MappingsLoader = function(config, load) {
         var prefixes = Object.keys(mappings);
         var length = prefixes.length;
 
-        if (Require.isAbsolute(id)) {
-            return load(id, module);
-        }
         var i, prefix;
         for (i = 0; i < length; i++) {
             prefix = prefixes[i];
@@ -965,9 +945,9 @@ Require.LocationLoader = function (config, load) {
         var base = id;
         var extension = module.extension;
         if (
-            !has(config.optimizers, extension) &&
-            !has(config.translators, extension) &&
-            !has(config.compilers, extension) &&
+            !has.call(config.optimizers, extension) &&
+            !has.call(config.translators, extension) &&
+            !has.call(config.compilers, extension) &&
             extension !== "js" &&
             extension !== "json"
         ) {
@@ -985,75 +965,33 @@ Require.MemoizedLoader = function (config, load) {
 
 // Helper functions:
 
-// Resolves CommonJS module IDs (not paths)
-Require.resolve = resolve;
-function resolve(id, baseId) {
-    id = String(id);
-    var source = id.split("/");
-    var target = [];
-    if (source.length && source[0] === "." || source[0] === "..") {
-        var parts = baseId.split("/");
-        parts.pop();
-        source.unshift.apply(source, parts);
-    }
-    for (var i = 0, ii = source.length; i < ii; i++) {
-        /*jshint -W035 */
-        var part = source[i];
-        if (part === "" || part === ".") {
-        } else if (part === "..") {
-            if (target.length) {
-                target.pop();
-            }
-        } else {
-            target.push(part);
-        }
-        /*jshint +W035 */
-    }
-    return target.join("/");
-}
+Require.resolve = Identifier.resolve;
+Require.normalize = Identifier.normalize;
+Require.extension = Identifier.extension;
 
-Require.normalize = normalize;
-function normalize(id) {
-    var match = /^(.*)\.js$/.exec(id);
-    if (match) {
-        id = match[1];
-    }
-    return id;
-}
-
-Require.extension = extension;
-function extension(location) {
-    var match = /\.([^\/\.]+)$/.exec(location);
-    if (match) {
-        return match[1];
-    }
-}
-
-// Tests whether the location or URL is a absolute.
+// Tests whether the URL is a absolute.
 Require.isAbsolute = isAbsolute;
 function isAbsolute(location) {
     return (/^[\w\-]+:/).test(location);
 }
 
 // Extracts dependencies by parsing code and looking for "require" (currently
-// using a simple regexp)
+// using a regexp)
 Require.parseDependencies = parseDependencies;
 function parseDependencies(text) {
-    var o = {};
+    var dependsUpon = {};
     String(text).replace(/(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g, function(_, id) {
-        o[id] = true;
+        dependsUpon[id] = true;
     });
-    return Object.keys(o);
+    return Object.keys(dependsUpon);
 }
 
-function has(object, property) {
-    return Object.prototype.hasOwnProperty.call(object, property);
-}
+var has = Object.prototype.hasOwnProperty;
 
 function memoize(callback, cache) {
     cache = cache || {};
     return function (key, arg) {
-        if (!has(cache, key)) {
+        if (!has.call(cache, key)) {
             cache[key] = Q(callback).call(void 0, key, arg);
         }
         return cache[key];

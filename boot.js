@@ -43,7 +43,7 @@ global = this;
     Module.prototype.bundle = bundle;
 
     return modules[0].getExports();
-})((function (global){return[["mr","boot/require",{"../require":12,"url":14,"q":16,"./script-params":11},function (require, exports, module){
+})((function (global){return[["mr","boot/require",{"../require":11,"url":15,"q":17,"./script-params":10},function (require, exports, module){
 
 // mr boot/require
 // ---------------
@@ -96,130 +96,100 @@ function boot(preloaded, params) {
 
 }
 
-}],["asap","asap",{"./queue":2},function (require, exports, module){
+}],["asap","asap",{},function (require, exports, module){
 
 // asap asap
 // ---------
 
-"use strict";
 
 // Use the fastest possible means to execute a task in a future turn
 // of the event loop.
 
-// Queue is a circular buffer with good locality of reference and doesn't
-// allocate new memory unless there are more than `InitialCapacity` parallel
-// tasks in which case it will resize itself generously to x8 more capacity.
-// The use case of asap should require no or few amount of resizes during
-// runtime.
-// Calling a task frees a slot immediately so if the calling
-// has a side effect of queuing itself again, it can be sustained
-// without additional memory
-// Queue specifically uses
-// http://en.wikipedia.org/wiki/Circular_buffer#Use_a_Fill_Count
-// Because:
-// 1. We need fast .length operation, since queue
-//   could have changed after every iteration
-// 2. Modulus can be negated by using power-of-two
-//   capacities and replacing it with bitwise AND
-// 3. It will not be used in a multi-threaded situation.
-
-var Queue = require("./queue");
-
-//1024 = InitialCapacity
-var queue = new Queue(1024);
+// linked list of tasks (single, with head node)
+var head = {task: void 0, next: null};
+var tail = head;
 var flushing = false;
 var requestFlush = void 0;
-var hasSetImmediate = typeof setImmediate === "function";
-var domain;
-
-// Avoid shims from browserify.
-// The existence of `global` in browsers is guaranteed by browserify.
-var process = global.process;
-
-// Note that some fake-Node environments,
-// like the Mocha test runner, introduce a `process` global.
-var isNodeJS = !!process && ({}).toString.call(process) === "[object process]";
+var isNodeJS = false;
 
 function flush() {
     /* jshint loopfunc: true */
 
-    while (queue.length > 0) {
-        var task = queue.shift();
+    while (head.next) {
+        head = head.next;
+        var task = head.task;
+        head.task = void 0;
+        var domain = head.domain;
+
+        if (domain) {
+            head.domain = void 0;
+            domain.enter();
+        }
 
         try {
-            task.call();
+            task();
 
         } catch (e) {
             if (isNodeJS) {
                 // In node, uncaught exceptions are considered fatal errors.
-                // Re-throw them to interrupt flushing!
+                // Re-throw them synchronously to interrupt flushing!
 
-                // Ensure continuation if an uncaught exception is suppressed
-                // listening process.on("uncaughtException") or domain("error").
-                requestFlush();
+                // Ensure continuation if the uncaught exception is suppressed
+                // listening "uncaughtException" events (as domains does).
+                // Continue in next event to avoid tick recursion.
+                if (domain) {
+                    domain.exit();
+                }
+                setTimeout(flush, 0);
+                if (domain) {
+                    domain.enter();
+                }
 
                 throw e;
 
             } else {
                 // In browsers, uncaught exceptions are not fatal.
                 // Re-throw them asynchronously to avoid slow-downs.
-                setTimeout(function () {
-                    throw e;
+                setTimeout(function() {
+                   throw e;
                 }, 0);
             }
+        }
+
+        if (domain) {
+            domain.exit();
         }
     }
 
     flushing = false;
 }
 
-if (isNodeJS) {
-    // Node.js
-    requestFlush = function () {
-        // Ensure flushing is not bound to any domain.
-        var currentDomain = process.domain;
-        if (currentDomain) {
-            domain = domain || (1,require)("domain");
-            domain.active = process.domain = null;
-        }
+if (typeof process !== "undefined" && process.nextTick) {
+    // Node.js before 0.9. Note that some fake-Node environments, like the
+    // Mocha test runner, introduce a `process` global without a `nextTick`.
+    isNodeJS = true;
 
-        // Avoid tick recursion - use setImmediate if it exists.
-        if (flushing && hasSetImmediate) {
+    requestFlush = function () {
+        process.nextTick(flush);
+    };
+
+} else if (typeof setImmediate === "function") {
+    // In IE10, Node.js 0.9+, or https://github.com/NobleJS/setImmediate
+    if (typeof window !== "undefined") {
+        requestFlush = setImmediate.bind(window, flush);
+    } else {
+        requestFlush = function () {
             setImmediate(flush);
-        } else {
-            process.nextTick(flush);
-        }
-
-        if (currentDomain) {
-            domain.active = process.domain = currentDomain;
-        }
-    };
-
-} else if (hasSetImmediate) {
-    // In IE10, or https://github.com/NobleJS/setImmediate
-    requestFlush = function () {
-        setImmediate(flush);
-    };
+        };
+    }
 
 } else if (typeof MessageChannel !== "undefined") {
     // modern browsers
     // http://www.nonblocking.io/2011/06/windownexttick.html
     var channel = new MessageChannel();
-    // At least Safari Version 6.0.5 (8536.30.1) intermittently cannot create
-    // working message ports the first time a page loads.
-    channel.port1.onmessage = function () {
-        requestFlush = requestPortFlush;
-        channel.port1.onmessage = flush;
-        flush();
-    };
-    var requestPortFlush = function () {
-        // Opera requires us to provide a message payload, regardless of
-        // whether we use it.
-        channel.port2.postMessage(0);
-    };
+    channel.port1.onmessage = flush;
     requestFlush = function () {
-        setTimeout(flush, 0);
-        requestPortFlush();
+        channel.port2.postMessage(0);
     };
 
 } else {
@@ -230,128 +200,21 @@ if (isNodeJS) {
 }
 
 function asap(task) {
-    if (isNodeJS && process.domain) {
-        task = process.domain.bind(task);
-    }
-
-    queue.push(task);
+    tail = tail.next = {
+        task: task,
+        domain: isNodeJS && process.domain,
+        next: null
+    };
 
     if (!flushing) {
-        requestFlush();
         flushing = true;
+        requestFlush();
     }
 };
 
 module.exports = asap;
 
-}],["asap","queue",{},function (require, exports, module){
-
-// asap queue
-// ----------
-
-"use strict";
-
-module.exports = Queue;
-function Queue(capacity) {
-    this.capacity = this.snap(capacity);
-    this.length = 0;
-    this.front = 0;
-    this.initialize();
-}
-
-Queue.prototype.push = function (value) {
-    var length = this.length;
-    if (this.capacity <= length) {
-        this.grow(this.snap(this.capacity * this.growFactor));
-    }
-    var index = (this.front + length) & (this.capacity - 1);
-    this[index] = value;
-    this.length = length + 1;
-};
-
-Queue.prototype.shift = function () {
-    var front = this.front;
-    var result = this[front];
-
-    this[front] = void 0;
-    this.front = (front + 1) & (this.capacity - 1);
-    this.length--;
-    return result;
-};
-
-Queue.prototype.grow = function (capacity) {
-    var oldFront = this.front;
-    var oldCapacity = this.capacity;
-    var oldQueue = new Array(oldCapacity);
-    var length = this.length;
-
-    copy(this, 0, oldQueue, 0, oldCapacity);
-    this.capacity = capacity;
-    this.initialize();
-    this.front = 0;
-    if (oldFront + length <= oldCapacity) {
-        // Can perform direct linear copy
-        copy(oldQueue, oldFront, this, 0, length);
-    } else {
-        // Cannot perform copy directly, perform as much as possible at the
-        // end, and then copy the rest to the beginning of the buffer
-        var lengthBeforeWrapping =
-            length - ((oldFront + length) & (oldCapacity - 1));
-        copy(
-            oldQueue,
-            oldFront,
-            this,
-            0,
-            lengthBeforeWrapping
-        );
-        copy(
-            oldQueue,
-            0,
-            this,
-            lengthBeforeWrapping,
-            length - lengthBeforeWrapping
-        );
-    }
-};
-
-Queue.prototype.initialize = function () {
-    var length = this.capacity;
-    for (var i = 0; i < length; ++i) {
-        this[i] = void 0;
-    }
-};
-
-Queue.prototype.snap = function (capacity) {
-    if (typeof capacity !== "number") {
-        return this.minCapacity;
-    }
-    return pow2AtLeast(
-        Math.min(this.maxCapacity, Math.max(this.minCapacity, capacity))
-    );
-};
-
-Queue.prototype.maxCapacity = (1 << 30) | 0;
-Queue.prototype.minCapacity = 16;
-Queue.prototype.growFactor = 8;
-
-function copy(source, sourceIndex, target, targetIndex, length) {
-    for (var index = 0; index < length; ++index) {
-        target[index + targetIndex] = source[index + sourceIndex];
-    }
-}
-
-function pow2AtLeast(n) {
-    n = n >>> 0;
-    n = n - 1;
-    n = n | (n >> 1);
-    n = n | (n >> 2);
-    n = n | (n >> 4);
-    n = n | (n >> 8);
-    n = n | (n >> 16);
-    return n + 1;
-}
-
-}],["collections","generic-collection",{"./shim-array":7},function (require, exports, module){
+}],["collections","generic-collection",{"./shim-array":6},function (require, exports, module){
 
 // collections generic-collection
 // ------------------------------
@@ -617,7 +480,7 @@ GenericCollection.prototype.only = function () {
 
 require("./shim-array");
 
-}],["collections","generic-order",{"./shim-object":9},function (require, exports, module){
+}],["collections","generic-order",{"./shim-object":8},function (require, exports, module){
 
 // collections generic-order
 // -------------------------
@@ -677,7 +540,7 @@ GenericOrder.prototype.compare = function (that, compare) {
     return comparison;
 };
 
-}],["collections","iterator",{"./weak-map":17,"./generic-collection":3},function (require, exports, module){
+}],["collections","iterator",{"./weak-map":18,"./generic-collection":2},function (require, exports, module){
 
 // collections iterator
 // --------------------
@@ -1225,7 +1088,7 @@ Iterator.Iteration = Iteration;
 Iterator.DoneIteration = DoneIteration;
 Iterator.done = new DoneIteration();
 
-}],["collections","shim",{"./shim-array":7,"./shim-object":9,"./shim-function":8,"./shim-regexp":10},function (require, exports, module){
+}],["collections","shim",{"./shim-array":6,"./shim-object":8,"./shim-function":7,"./shim-regexp":9},function (require, exports, module){
 
 // collections shim
 // ----------------
@@ -1236,7 +1099,7 @@ var Object = require("./shim-object");
 var Function = require("./shim-function");
 var RegExp = require("./shim-regexp");
 
-}],["collections","shim-array",{"./shim-function":8,"./generic-collection":3,"./generic-order":4,"./iterator":5,"weak-map":17},function (require, exports, module){
+}],["collections","shim-array",{"./shim-function":7,"./generic-collection":2,"./generic-order":3,"./iterator":4,"weak-map":18},function (require, exports, module){
 
 // collections shim-array
 // ----------------------
@@ -1679,7 +1542,7 @@ Function.get = function (key) {
     };
 };
 
-}],["collections","shim-object",{"weak-map":17},function (require, exports, module){
+}],["collections","shim-object",{"weak-map":18},function (require, exports, module){
 
 // collections shim-object
 // -----------------------
@@ -2220,7 +2083,7 @@ if (!RegExp.escape) {
     };
 }
 
-}],["mr","boot/script-params",{"url":14},function (require, exports, module){
+}],["mr","boot/script-params",{"url":15},function (require, exports, module){
 
 // mr boot/script-params
 // ---------------------
@@ -2290,7 +2153,7 @@ function getParams(scriptName) {
     return params;
 }
 
-}],["mr","browser",{"./common":13,"url":14,"q":16,"./script":15},function (require, exports, module){
+}],["mr","browser",{"./common":12,"url":15,"q":17,"./script":16},function (require, exports, module){
 
 // mr browser
 // ----------
@@ -2528,7 +2391,7 @@ function loadIfNotPreloaded(location, definition, preloaded) {
     }
 }
 
-}],["mr","common",{"q":16,"url":14},function (require, exports, module){
+}],["mr","common",{"q":17,"url":15,"./merge":14,"./identifier":13},function (require, exports, module){
 
 // mr common
 // ---------
@@ -2545,6 +2408,8 @@ function loadIfNotPreloaded(location, definition, preloaded) {
 var Require = exports;
 var Q = require("q");
 var URL = require("url");
+var merge = require("./merge");
+var Identifier = require("./identifier");
 
 if (!this) {
     throw new Error("Require does not work in strict mode.");
@@ -2584,27 +2449,28 @@ Require.makeRequire = function (config) {
     // ``module`` free variable inside the corresponding module.
     function getModuleDescriptor(id) {
         var lookupId = id.toLowerCase();
-        if (!has(modules, lookupId)) {
-            var extension = Require.extension(id);
+        if (!has.call(modules, lookupId)) {
+            var extension = Identifier.extension(id);
             var type;
             if (
                 extension && (
-                    has(config.optimizers, extension) ||
-                    has(config.translators, extension) ||
-                    has(config.compilers, extension)
+                    has.call(config.optimizers, extension) ||
+                    has.call(config.translators, extension) ||
+                    has.call(config.compilers, extension)
                 )
             ) {
                 type = extension;
             } else {
                 type = "js";
             }
-            modules[lookupId] = {
+            var module = {
                 id: id,
                 extension: extension,
                 type: type,
                 display: (config.name || config.location) + "#" + id,
                 require: makeRequire(id)
             };
+            modules[lookupId] = module;
         }
         return modules[lookupId];
     }
@@ -2635,13 +2501,13 @@ Require.makeRequire = function (config) {
                 module.exports === void 0 &&
                 module.redirect === void 0
             ) {
-                return Q(config.load).call(void 0, topId, module);
+                return config.load(topId, module);
             }
         })
         .then(function () {
             // Translate (to JavaScript, optionally provide dependency analysis
             // services).
-            if (module.type !== "js" && has(config.translators, module.type)) {
+            if (module.type !== "js" && has.call(config.translators, module.type)) {
                 var translatorId = config.translators[module.type];
                 return Q.try(function () {
                     // The use of a preprocessor package is optional for
@@ -2671,7 +2537,7 @@ Require.makeRequire = function (config) {
 
             // Run optional optimizers.
             // {text, type} to {text', type')
-            if (config.hasPreprocessorPackage && has(config.optimizers, module.type)) {
+            if (config.hasPreprocessorPackage && has.call(config.optimizers, module.type)) {
                 var optimizerId = config.optimizers[module.type];
                 return config.loadPreprocessorPackage()
                 .invoke("async", optimizerId)
@@ -2688,7 +2554,7 @@ Require.makeRequire = function (config) {
             ) {
                 // Then apply configured compilers.  module {text, type} to
                 // {dependencies, factory || exports || redirect}
-                if (has(config.compilers, module.type)) {
+                if (has.call(config.compilers, module.type)) {
                     var compilerId = config.compilers[module.type];
                     return deepLoad(compilerId, "", loading)
                     .then(function () {
@@ -2720,7 +2586,7 @@ Require.makeRequire = function (config) {
         // data-lock on a cycle of dependencies.
         loading = loading || {};
         // has this all happened before?  will it happen again?
-        if (has(loading, topId)) {
+        if (has.call(loading, topId)) {
             return; // break the cycle of violence.
         }
         loading[topId] = true; // this has happened before
@@ -2730,7 +2596,7 @@ Require.makeRequire = function (config) {
             // recursion.
             var dependencies = module.dependencies = module.dependencies || [];
             return Q.all(module.dependencies.map(function (depId) {
-                depId = resolve(depId, topId);
+                depId = Identifier.resolve(depId, topId);
                 // create dependees set, purely for debug purposes
                 var module = getModuleDescriptor(depId);
                 var dependees = module.dependees = module.dependees || {};
@@ -2743,7 +2609,7 @@ Require.makeRequire = function (config) {
     }
 
     function lookup(topId, viaId) {
-        topId = resolve(topId, viaId);
+        topId = Identifier.resolve(topId, viaId);
         var module = getModuleDescriptor(topId);
 
         // check for consistent case convention
@@ -2851,7 +2717,7 @@ Require.makeRequire = function (config) {
 
         var internal = !!seen;
         seen = seen || {};
-        if (has(seen, location)) {
+        if (has.call(seen, location)) {
             return null; // break the cycle of violence.
         }
         seen[location] = true;
@@ -2888,14 +2754,14 @@ Require.makeRequire = function (config) {
 
         // Main synchronously executing "require()" function
         var require = function(id) {
-            var topId = resolve(id, viaId);
+            var topId = Identifier.resolve(id, viaId);
             return getExports(topId, viaId);
         };
 
         // Asynchronous "require.async()" which ensures async executation
         // (even with synchronous loaders)
-        require.async = function(id) {
-            var topId = resolve(id, viaId);
+        require.async = function (id) {
+            var topId = Identifier.resolve(id, viaId);
             var module = getModuleDescriptor(id);
             return deepLoad(topId, viaId)
             .then(function () {
@@ -2903,13 +2769,16 @@ Require.makeRequire = function (config) {
             });
         };
 
+        require.lookup = function (id) {
+            return lookup(id, viaId);
+        };
+
         require.resolve = function (id) {
-            return normalize(resolve(id, viaId));
+            return Identifier.normalize(Identifier.resolve(id, viaId));
         };
 
         require.getModule = getModuleDescriptor; // XXX deprecated, use:
         require.getModuleDescriptor = getModuleDescriptor;
-        require.lookup = lookup;
         require.load = load;
         require.deepLoad = deepLoad;
 
@@ -3234,7 +3103,7 @@ function configurePackage(location, description, parent) {
         // loaded definition from the given path.
         modules[""] = {
             id: "",
-            redirect: normalize(resolve(description.main, "")),
+            redirect: Identifier.normalize(Identifier.resolve(description.main, "")),
             location: config.location
         };
 
@@ -3246,7 +3115,7 @@ function configurePackage(location, description, parent) {
         Object.keys(redirects).forEach(function (name) {
             modules[name] = {
                 id: name,
-                redirect: normalize(resolve(redirects[name], "")),
+                redirect: Identifier.normalize(Identifier.resolve(redirects[name], "")),
                 location: URL.resolve(location, name)
             };
         });
@@ -3343,30 +3212,11 @@ function postConfigurePackage(config, description) {
     if (description["redirect-patterns"]) {
         var describedPatterns = description["redirect-patterns"];
         for (var pattern in describedPatterns) {
-            if (has(describedPatterns, pattern)) {
+            if (has.call(describedPatterns, pattern)) {
                 redirectTable.push([
                     new RegExp(pattern),
                     describedPatterns[pattern]
                 ]);
-            }
-        }
-    }
-}
-
-function merge(target, source) {
-    for (var name in source) {
-        if (has(source, name)) {
-            var sourceValue = source[name];
-            var targetValue = target[name];
-            if (sourceValue === null) {
-                delete target[name];
-            } else if (
-                typeof sourceValue === "object" && !Array.isArray(sourceValue) &&
-                typeof targetValue === "object" && !Array.isArray(targetValue)
-            ) {
-                merge(targetValue, sourceValue);
-            } else {
-                target[name] = source[name];
             }
         }
     }
@@ -3448,9 +3298,6 @@ Require.MappingsLoader = function(config, load) {
         var prefixes = Object.keys(mappings);
         var length = prefixes.length;
 
-        if (Require.isAbsolute(id)) {
-            return load(id, module);
-        }
         var i, prefix;
         for (i = 0; i < length; i++) {
             prefix = prefixes[i];
@@ -3496,9 +3343,9 @@ Require.LocationLoader = function (config, load) {
         var base = id;
         var extension = module.extension;
         if (
-            !has(config.optimizers, extension) &&
-            !has(config.translators, extension) &&
-            !has(config.compilers, extension) &&
+            !has.call(config.optimizers, extension) &&
+            !has.call(config.translators, extension) &&
+            !has.call(config.compilers, extension) &&
             extension !== "js" &&
             extension !== "json"
         ) {
@@ -3516,8 +3363,47 @@ Require.MemoizedLoader = function (config, load) {
 
 // Helper functions:
 
+Require.resolve = Identifier.resolve;
+Require.normalize = Identifier.normalize;
+Require.extension = Identifier.extension;
+
+// Tests whether the URL is a absolute.
+Require.isAbsolute = isAbsolute;
+function isAbsolute(location) {
+    return (/^[\w\-]+:/).test(location);
+}
+
+// Extracts dependencies by parsing code and looking for "require" (currently
+// using a regexp)
+Require.parseDependencies = parseDependencies;
+function parseDependencies(text) {
+    var dependsUpon = {};
+    String(text).replace(/(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g, function(_, id) {
+        dependsUpon[id] = true;
+    });
+    return Object.keys(dependsUpon);
+}
+
+var has = Object.prototype.hasOwnProperty;
+
+function memoize(callback, cache) {
+    cache = cache || {};
+    return function (key, arg) {
+        if (!has.call(cache, key)) {
+            cache[key] = Q(callback).call(void 0, key, arg);
+        }
+        return cache[key];
+    };
+}
+
+}],["mr","identifier",{},function (require, exports, module){
+
+// mr identifier
+// -------------
+
+
 // Resolves CommonJS module IDs (not paths)
-Require.resolve = resolve;
+exports.resolve = resolve;
 function resolve(id, baseId) {
     id = String(id);
     var source = id.split("/");
@@ -3543,7 +3429,7 @@ function resolve(id, baseId) {
     return target.join("/");
 }
 
-Require.normalize = normalize;
+exports.normalize = normalize;
 function normalize(id) {
     var match = /^(.*)\.js$/.exec(id);
     if (match) {
@@ -3552,7 +3438,7 @@ function normalize(id) {
     return id;
 }
 
-Require.extension = extension;
+exports.extension = extension;
 function extension(location) {
     var match = /\.([^\/\.]+)$/.exec(location);
     if (match) {
@@ -3560,36 +3446,33 @@ function extension(location) {
     }
 }
 
-// Tests whether the location or URL is a absolute.
-Require.isAbsolute = isAbsolute;
-function isAbsolute(location) {
-    return (/^[\w\-]+:/).test(location);
-}
+}],["mr","merge",{},function (require, exports, module){
 
-// Extracts dependencies by parsing code and looking for "require" (currently
-// using a simple regexp)
-Require.parseDependencies = parseDependencies;
-function parseDependencies(text) {
-    var o = {};
-    String(text).replace(/(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g, function(_, id) {
-        o[id] = true;
-    });
-    return Object.keys(o);
-}
+// mr merge
+// --------
 
-function has(object, property) {
-    return Object.prototype.hasOwnProperty.call(object, property);
-}
 
-function memoize(callback, cache) {
-    cache = cache || {};
-    return function (key, arg) {
-        if (!has(cache, key)) {
-            cache[key] = Q(callback).call(void 0, key, arg);
+module.exports = merge;
+function merge(target, source) {
+    for (var name in source) {
+        if (has.call(source, name)) {
+            var sourceValue = source[name];
+            var targetValue = target[name];
+            if (sourceValue === null) {
+                delete target[name];
+            } else if (
+                typeof sourceValue === "object" && !Array.isArray(sourceValue) &&
+                typeof targetValue === "object" && !Array.isArray(targetValue)
+            ) {
+                merge(targetValue, sourceValue);
+            } else {
+                target[name] = source[name];
+            }
         }
-        return cache[key];
-    };
+    }
 }
+
+var has = Object.prototype.hasOwnProperty;
 
 }],["mr","mini-url",{},function (require, exports, module){
 
@@ -3669,12 +3552,12 @@ function load(location) {
     head.appendChild(script);
 }
 
-}],["q","q",{"collections/shim":6,"collections/weak-map":17,"collections/iterator":5,"asap":1},function (require, exports, module){
+}],["q","q",{"collections/shim":5,"collections/weak-map":18,"collections/iterator":4,"asap":1},function (require, exports, module){
 
 // q q
 // ---
 
-// vim:ts=4:sts=4:sw=4:
+/* vim:ts=4:sts=4:sw=4: */
 /*!
  *
  * Copyright 2009-2013 Kris Kowal under the terms of the MIT
@@ -3857,7 +3740,7 @@ function deprecate(callback, name, alternative) {
 
 var handlers = new WeakMap();
 
-function Q_inspect(promise) {
+function Q_getHandler(promise) {
     var handler = handlers.get(promise);
     if (!handler || !handler.became) {
         return handler;
@@ -3878,7 +3761,7 @@ function follow(handler) {
 
 var theViciousCycleError = new Error("Can't resolve a promise with itself");
 var theViciousCycleRejection = Q_reject(theViciousCycleError);
-var theViciousCycle = Q_inspect(theViciousCycleRejection);
+var theViciousCycle = Q_getHandler(theViciousCycleRejection);
 
 var thenables = new WeakMap();
 
@@ -4000,7 +3883,7 @@ function Q_all(questions) {
         var handler;
         if (
             Q_isPromise(promise) &&
-            (handler = Q_inspect(promise)).state === "fulfilled"
+            (handler = Q_getHandler(promise)).state === "fulfilled"
         ) {
             answers[index] = handler.value;
         } else {
@@ -4300,7 +4183,7 @@ function Promise(handler) {
     if (typeof handler === "function") {
         var setup = handler;
         var deferred = defer();
-        handler = Q_inspect(deferred.promise);
+        handler = Q_getHandler(deferred.promise);
         try {
             setup(deferred.resolve, deferred.reject, deferred.setEstimate);
         } catch (error) {
@@ -4381,14 +4264,14 @@ Promise.prototype.inspect = function Promise_inspect() {
     // the second layer captures only the relevant "state" properties of the
     // handler to prevent leaking the capability to access or alter the
     // handler.
-    return Q_inspect(this).inspect();
+    return Q_getHandler(this).inspect();
 };
 
 /**
  * @returns {boolean} whether the promise is waiting for a result.
  */
 Promise.prototype.isPending = function Promise_isPending() {
-    return Q_inspect(this).state === "pending";
+    return Q_getHandler(this).state === "pending";
 };
 
 /**
@@ -4396,7 +4279,7 @@ Promise.prototype.isPending = function Promise_isPending() {
  * fulfillment value.
  */
 Promise.prototype.isFulfilled = function Promise_isFulfilled() {
-    return Q_inspect(this).state === "fulfilled";
+    return Q_getHandler(this).state === "fulfilled";
 };
 
 /**
@@ -4404,7 +4287,14 @@ Promise.prototype.isFulfilled = function Promise_isFulfilled() {
  * its rejection.
  */
 Promise.prototype.isRejected = function Promise_isRejected() {
-    return Q_inspect(this).state === "rejected";
+    return Q_getHandler(this).state === "rejected";
+};
+
+/**
+ * TODO
+ */
+Promise.prototype.toBePassed = function Promise_toBePassed() {
+    return Q_getHandler(this).state === "passed";
 };
 
 /**
@@ -4538,7 +4428,7 @@ Promise.prototype.done = function Promise_done(fulfilled, rejected) {
             _rejected = process.domain.bind(_rejected);
         }
 
-        Q_inspect(self).dispatch(_fulfilled, "then", [_rejected]);
+        Q_getHandler(self).dispatch(_fulfilled, "then", [_rejected]);
     });
 };
 
@@ -4620,7 +4510,7 @@ Promise.prototype.finally = function Promise_finally(callback, ms) {
  * TODO
  */
 Promise.prototype.observeEstimate = function Promise_observeEstimate(emit) {
-    this.dispatch("estimate", [emit]);
+    this.rawDispatch(null, "estimate", [emit]);
     return this;
 };
 
@@ -4628,7 +4518,7 @@ Promise.prototype.observeEstimate = function Promise_observeEstimate(emit) {
  * TODO
  */
 Promise.prototype.getEstimate = function Promise_getEstimate() {
-    return Q_inspect(this).estimate;
+    return Q_getHandler(this).estimate;
 };
 
 /**
@@ -4645,15 +4535,15 @@ Promise.prototype.dispatch = function Promise_dispatch(op, args) {
 Promise.prototype.rawDispatch = function Promise_rawDispatch(resolve, op, args) {
     var self = this;
     asap(function Promise_dispatch_task() {
-        Q_inspect(self).dispatch(resolve, op, args);
+        Q_getHandler(self).dispatch(resolve, op, args);
     });
 };
 
 /**
  * TODO
  */
-Promise.prototype.get = function Promise_get(key) {
-    return this.dispatch("get", [key]);
+Promise.prototype.get = function Promise_get(name) {
+    return this.dispatch("get", [name]);
 };
 
 /**
@@ -4778,6 +4668,17 @@ Promise.prototype.pull = function Promise_pull() {
     return this.dispatch("pull", []);
 };
 
+/**
+ * TODO
+ */
+Promise.prototype.pass = function Promise_pass() {
+    if (!this.toBePassed()) {
+        return new Promise(new Passed(this));
+    } else {
+        return this;
+    }
+};
+
 
 // Thus begins the portion dedicated to the deferred
 
@@ -4805,7 +4706,7 @@ function Deferred(promise) {
  * TODO
  */
 Deferred.prototype.resolve = function Deferred_resolve(value) {
-    var handler = Q_inspect(promises.get(this));
+    var handler = Q_getHandler(promises.get(this));
     if (!handler.messages) {
         return;
     }
@@ -4816,7 +4717,7 @@ Deferred.prototype.resolve = function Deferred_resolve(value) {
  * TODO
  */
 Deferred.prototype.reject = function Deferred_reject(reason) {
-    var handler = Q_inspect(promises.get(this));
+    var handler = Q_getHandler(promises.get(this));
     if (!handler.messages) {
         return;
     }
@@ -4834,7 +4735,7 @@ Deferred.prototype.setEstimate = function Deferred_setEstimate(estimate) {
     if (estimate < 1e12 && estimate !== -Infinity) {
         throw new Error("Estimate values should be a number of miliseconds in the future");
     }
-    var handler = Q_inspect(promises.get(this));
+    var handler = Q_getHandler(promises.get(this));
     // TODO There is a bit of capability leakage going on here. The Deferred
     // should only be able to set the estimate for its original
     // Pending, not for any handler that promise subsequently became.
@@ -4897,14 +4798,36 @@ Fulfilled.prototype.get = function Fulfilled_get(name) {
     return this.value[name];
 };
 
-Fulfilled.prototype.invoke = function Fulfilled_invoke(
-    name, args
-) {
-    return this.value[name].apply(this.value, args);
+Fulfilled.prototype.call = function Fulfilled_call(args, thisp) {
+    return this.callInvoke(this.value, args, thisp);
 };
 
-Fulfilled.prototype.call = function Fulfilled_call(args, thisp) {
-    return this.value.apply(thisp, args);
+Fulfilled.prototype.invoke = function Fulfilled_invoke(name, args) {
+    return this.callInvoke(this.value[name], args, this.value);
+};
+
+Fulfilled.prototype.callInvoke = function Fulfilled_callInvoke(callback, args, thisp) {
+    var waitToBePassed;
+    for (var index = 0; index < args.length; index++) {
+        if (Q_isPromise(args[index]) && args[index].toBePassed()) {
+            waitToBePassed = waitToBePassed || [];
+            waitToBePassed.push(args[index]);
+        }
+    }
+    if (waitToBePassed) {
+        var self = this;
+        return Q_all(waitToBePassed).then(function () {
+            return self.callInvoke(callback, args.map(function (arg) {
+                if (Q_isPromise(arg) && arg.toBePassed()) {
+                    return arg.inspect().value;
+                } else {
+                    return arg;
+                }
+            }), thisp);
+        });
+    } else {
+        return callback.apply(thisp, args);
+    }
 };
 
 Fulfilled.prototype.keys = function Fulfilled_keys() {
@@ -4992,7 +4915,7 @@ Pending.prototype.dispatch = function Pending_dispatch(resolve, op, operands) {
 
 Pending.prototype.become = function Pending_become(promise) {
     this.became = theViciousCycle;
-    var handler = Q_inspect(promise);
+    var handler = Q_getHandler(promise);
     this.became = handler;
 
     handlers.set(promise, handler);
@@ -5002,7 +4925,7 @@ Pending.prototype.become = function Pending_become(promise) {
         // makeQ does not have this asap call, so it must be queueing events
         // downstream. TODO look at makeQ to ascertain
         asap(function Pending_become_eachMessage_task() {
-            var handler = Q_inspect(promise);
+            var handler = Q_getHandler(promise);
             handler.dispatch.apply(handler, message);
         });
     });
@@ -5046,13 +4969,28 @@ Thenable.prototype.cast = function Thenable_cast() {
                 deferred.reject(exception);
             }
         });
-        this.became = Q_inspect(deferred.promise);
+        this.became = Q_getHandler(deferred.promise);
     }
     return this.became;
 };
 
 Thenable.prototype.dispatch = function Thenable_dispatch(resolve, op, args) {
     this.cast().dispatch(resolve, op, args);
+};
+
+
+function Passed(promise) {
+    this.promise = promise;
+}
+
+Passed.prototype.state = "passed";
+
+Passed.prototype.inspect = function Passed_inspect() {
+    return this.promise.inspect();
+};
+
+Passed.prototype.dispatch = function Passed_dispatch(resolve, op, args) {
+    return this.promise.rawDispatch(resolve, op, args);
 };
 
 
@@ -5074,8 +5012,19 @@ Q.ninvoke = function Q_ninvoke(object, name /*...args*/) {
         args[index - 2] = arguments[index];
     }
     var deferred = Q.defer();
-    args[index - 2] = makeNodebackResolver(deferred.resolve);
+    args[index - 2] = deferred.makeNodeResolver();
     Q(object).dispatch("invoke", [name, args]).catch(deferred.reject);
+    return deferred.promise;
+};
+
+Promise.prototype.ninvoke = function Promise_ninvoke(name /*...args*/) {
+    var args = new Array(arguments.length);
+    for (var index = 1; index < arguments.length; index++) {
+        args[index - 1] = arguments[index];
+    }
+    var deferred = Q.defer();
+    args[index - 1] = deferred.makeNodeResolver();
+    this.dispatch("invoke", [name, args]).catch(deferred.reject);
     return deferred.promise;
 };
 
@@ -5095,7 +5044,7 @@ Q.denodeify = function Q_denodeify(callback, pattern) {
             args[index] = arguments[index];
         }
         var deferred = Q.defer();
-        args[index] = makeNodebackResolver(deferred.resolve, pattern);
+        args[index] = deferred.makeNodeResolver(pattern);
         Q(callback).apply(this, args).catch(deferred.reject);
         return deferred.promise;
     };
@@ -5104,12 +5053,17 @@ Q.denodeify = function Q_denodeify(callback, pattern) {
 /**
  * Creates a Node.js-style callback that will resolve or reject the deferred
  * promise.
- * TODO
+ * @param unpack `true` means that the Node.js-style-callback accepts a
+ * fixed or variable number of arguments and that the deferred should be resolved
+ * with an array of these value arguments, or rejected with the error argument.
+ * An array of names means that the Node.js-style-callback accepts a fixed
+ * number of arguments, and that the resolution should be an object with
+ * properties corresponding to the given names and respective value arguments.
  * @returns a nodeback
- * @private
  */
-function makeNodebackResolver(resolve, names) {
-    if (names === true) {
+Deferred.prototype.makeNodeResolver = function (unpack) {
+    var resolve = this.resolve;
+    if (unpack === true) {
         return function variadicNodebackToResolver(error) {
             if (error) {
                 resolve(Q_reject(error));
@@ -5121,14 +5075,14 @@ function makeNodebackResolver(resolve, names) {
                 resolve(value);
             }
         };
-    } else if (names) {
+    } else if (unpack) {
         return function namedArgumentNodebackToResolver(error) {
             if (error) {
                 resolve(Q_reject(error));
             } else {
                 var value = {};
-                for (var index in names) {
-                    value[names[index]] = arguments[index + 1];
+                for (var index in unpack) {
+                    value[unpack[index]] = arguments[index + 1];
                 }
                 resolve(value);
             }
@@ -5142,7 +5096,7 @@ function makeNodebackResolver(resolve, names) {
             }
         };
     }
-}
+};
 
 /**
  * TODO
@@ -5329,7 +5283,7 @@ Promise.prototype.passByCopy = deprecate(function (value) {
 Q.nfapply = deprecate(function (callback, args) {
     var deferred = Q.defer();
     var nodeArgs = Array.prototype.slice.call(args);
-    nodeArgs.push(makeNodebackResolver(deferred.resolve));
+    nodeArgs.push(deferred.makeNodeResolver());
     Q(callback).apply(this, nodeArgs).catch(deferred.reject);
     return deferred.promise;
 }, "nfapply");
@@ -5356,7 +5310,7 @@ Q.nfbind = deprecate(function (callback /*...args*/) {
     return function () {
         var nodeArgs = baseArgs.concat(Array.prototype.slice.call(arguments));
         var deferred = Q.defer();
-        nodeArgs.push(makeNodebackResolver(deferred.resolve));
+        nodeArgs.push(deferred.makeNodeResolver());
         Q(callback).apply(this, nodeArgs).catch(deferred.reject);
         return deferred.promise;
     };
@@ -5375,7 +5329,7 @@ Q.nbind = deprecate(function (callback, thisp /*...args*/) {
     return function () {
         var nodeArgs = baseArgs.concat(Array.prototype.slice.call(arguments));
         var deferred = Q.defer();
-        nodeArgs.push(makeNodebackResolver(deferred.resolve));
+        nodeArgs.push(deferred.makeNodeResolver());
         function bound() {
             return callback.apply(thisp, arguments);
         }
@@ -5386,7 +5340,7 @@ Q.nbind = deprecate(function (callback, thisp /*...args*/) {
 
 Q.npost = deprecate(function (object, name, nodeArgs) {
     var deferred = Q.defer();
-    nodeArgs.push(makeNodebackResolver(deferred.resolve));
+    nodeArgs.push(deferred.makeNodeResolver());
     Q(object).dispatch("invoke", [name, nodeArgs]).catch(deferred.reject);
     return deferred.promise;
 }, "npost", "ninvoke (with spread arguments)");
@@ -5394,16 +5348,6 @@ Q.npost = deprecate(function (object, name, nodeArgs) {
 Promise.prototype.npost = deprecate(function (name, args) {
     return Q.npost(this, name, args);
 }, "npost", "Q.ninvoke (with caveats)");
-
-Q.makeNodeResolver = deprecate(makeNodebackResolver, "makeNodeResolver");
-
-Promise.prototype.ninvoke = deprecate(function (name) {
-    var args = new Array(arguments.length - 1);
-    for (var index = 1; index < arguments.length; index++) {
-        args[index - 1] = arguments[index];
-    }
-    return Q.npost(this, name, args);
-}, "ninvoke", "Q.ninvoke");
 
 Q.nmapply = deprecate(Q.nmapply, "nmapply", "q/node nmapply");
 Promise.prototype.nmapply = deprecate(Promise.prototype.npost, "nmapply", "Q.nmapply");
@@ -5761,13 +5705,22 @@ var qEndingLine = captureLine();
     // Object.prototype might not be frozen and
     // Object.create(null) might not be reliable.
 
-    defProp(key, HIDDEN_NAME, {
-      value: hiddenRecord,
-      writable: false,
-      enumerable: false,
-      configurable: false
-    });
-    return hiddenRecord;
+    try {
+      defProp(key, HIDDEN_NAME, {
+        value: hiddenRecord,
+        writable: false,
+        enumerable: false,
+        configurable: false
+      });
+      return hiddenRecord;
+    } catch (error) {
+      // Under some circumstances, isExtensible seems to misreport whether
+      // the HIDDEN_NAME can be defined.
+      // The circumstances have not been isolated, but at least affect
+      // Node.js v0.10.26 on TravisCI / Linux, but not the same version of
+      // Node.js on OS X.
+      return void 0;
+    }
   }
 
   /**
