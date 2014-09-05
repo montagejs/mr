@@ -360,7 +360,7 @@ Require.makeRequire = function (config) {
 
         // Asynchronous "require.async()" which ensures async executation
         // (even with synchronous loaders)
-        require.async = function(id) {
+        require.async = function (id) {
             var topId = resolve(id, viaId);
             var module = getModuleDescriptor(id);
             return deepLoad(topId, viaId)
@@ -369,13 +369,16 @@ Require.makeRequire = function (config) {
             });
         };
 
+        require.lookup = function (id) {
+            return lookup(id, viaId);
+        };
+
         require.resolve = function (id) {
             return normalize(resolve(id, viaId));
         };
 
         require.getModule = getModuleDescriptor; // XXX deprecated, use:
         require.getModuleDescriptor = getModuleDescriptor;
-        require.lookup = lookup;
         require.load = load;
         require.deepLoad = deepLoad;
 
