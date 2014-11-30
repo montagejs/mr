@@ -22,6 +22,7 @@
   "bin": {
     "mr": "bin/mr"
   },
+  "production": true,
   "mappings": {
     "q": {
       "name": "q",
