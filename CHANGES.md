@@ -1,3 +1,7 @@
+### 0.15.7
+
+ - Don't load Mr's `devDependencies` into the mappings
+
 ### 0.15.6
 
  - Update Q to v1.0.1
