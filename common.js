@@ -157,7 +157,7 @@ Require.makeRequire = function (config) {
                 // Then apply configured compilers.  module {text, type} to
                 // {dependencies, factory || exports || redirect}
                 if (has.call(config.compilers, module.type)) {
-                    var compilerId = resolve(config.compilers[module.type], "");
+                    var compilerId = Identifier.resolve(config.compilers[module.type], "");
                     return deepLoad(compilerId, "", loading)
                     .then(function () {
                         var compile = require(compilerId);
