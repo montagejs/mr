@@ -124,8 +124,8 @@ Require.makeRequire = function (config) {
                 })
                 .invoke("async", translatorId)
                 .then(function (translate) {
-                    module.text = translate(module.text, module);
                     module.type = "js";
+                    return translate(module);
                 });
             }
         })
@@ -144,7 +144,7 @@ Require.makeRequire = function (config) {
                 return config.loadPreprocessorPackage()
                 .invoke("async", optimizerId)
                 .then(function (optimize) {
-                    optimize(module);
+                    return optimize(module);
                 });
             }
         })
@@ -186,10 +186,10 @@ Require.makeRequire = function (config) {
         var module = getModuleDescriptor(topId);
         // this is a memo of modules already being loaded so we don’t
         // data-lock on a cycle of dependencies.
-        loading = loading || {};
         // has this all happened before?  will it happen again?
+        loading = loading || {};
         if (has.call(loading, topId)) {
-            return; // break the cycle of violence.
+            return Q(); // break the cycle of violence.
         }
         loading[topId] = true; // this has happened before
         return load(topId, viaId)
@@ -279,7 +279,8 @@ Require.makeRequire = function (config) {
         if (module.factory === void 0) {
             throw new Error(
                 "Can't require module " + JSON.stringify(topId) +
-                " via " + JSON.stringify(viaId) + " " + JSON.stringify(module)
+                " via " + JSON.stringify(viaId) + " " + JSON.stringify(module) +
+                " because no factory was or exports were created by the module loader configuration"
             );
         }
 
@@ -365,7 +366,7 @@ Require.makeRequire = function (config) {
         require.async = function (id) {
             var topId = Identifier.resolve(id, viaId);
             var module = getModuleDescriptor(id);
-            return deepLoad(topId, viaId)
+            return deepLoad(topId, viaId, {})
             .then(function () {
                 return require(topId);
             });
@@ -379,10 +380,16 @@ Require.makeRequire = function (config) {
             return Identifier.normalize(Identifier.resolve(id, viaId));
         };
 
+        require.load = function (id) {
+            return load(id, viaId);
+        };
+
+        require.deepLoad = function (id) {
+            return deepLoad(id, viaId, {});
+        };
+
         require.getModule = getModuleDescriptor; // XXX deprecated, use:
         require.getModuleDescriptor = getModuleDescriptor;
-        require.load = load;
-        require.deepLoad = deepLoad;
 
         require.loadPackage = function (dependency, givenConfig) {
             if (givenConfig) { // explicit configuration, fresh environment
@@ -714,11 +721,14 @@ function configurePackage(location, description, parent) {
     // Deal with redirects
     var redirects = description.redirects;
     if (redirects !== void 0) {
-        Object.keys(redirects).forEach(function (name) {
-            modules[name] = {
-                id: name,
-                redirect: Identifier.normalize(Identifier.resolve(redirects[name], "")),
-                location: URL.resolve(location, name)
+        Object.keys(redirects).forEach(function (source) {
+            var target = redirects[source];
+            source = Identifier.normalize(Identifier.resolve(source, ""));
+            target = Identifier.normalize(Identifier.resolve(target, ""));
+            modules[source] = {
+                id: source,
+                redirect: target,
+                location: URL.resolve(location, target)
             };
         });
     }

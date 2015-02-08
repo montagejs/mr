@@ -43,7 +43,7 @@ global = this;
     Module.prototype.bundle = bundle;
 
     return modules[0].getExports();
-})((function (global){return[["mr","boot/require",{"../require":11,"url":15,"q":17,"./script-params":10},function (require, exports, module){
+})((function (global){return[["mr","boot/require",{"../require":4,"url":8,"q":14,"./script-params":3},function (require, exports, module){
 
 // mr boot/require
 // ---------------
@@ -96,1994 +96,304 @@ function boot(preloaded, params) {
 
 }
 
-}],["asap","asap",{},function (require, exports, module){
+}],["asap","browser-asap",{"./raw":2},function (require, exports, module){
 
-// asap asap
-// ---------
+// asap browser-asap
+// -----------------
 
+"use strict";
 
-// Use the fastest possible means to execute a task in a future turn
-// of the event loop.
+// rawAsap provides everything we need except exception management.
+var rawAsap = require("./raw");
+// RawTasks are recycled to reduce GC churn.
+var freeTasks = [];
+// We queue errors to ensure they are thrown in right order (FIFO).
+// Array-as-queue is good enough here, since we are just dealing with exceptions.
+var pendingErrors = [];
+var requestErrorThrow = rawAsap.makeRequestCallFromTimer(throwFirstError);
 
-// linked list of tasks (single, with head node)
-var head = {task: void 0, next: null};
-var tail = head;
+function throwFirstError() {
+    if (pendingErrors.length) {
+        throw pendingErrors.shift();
+    }
+}
+
+/**
+ * Calls a task as soon as possible after returning, in its own event, with priority
+ * over other events like animation, reflow, and repaint. An error thrown from an
+ * event will not interrupt, nor even substantially slow down the processing of
+ * other events, but will be rather postponed to a lower priority event.
+ * @param {{call}} task A callable object, typically a function that takes no
+ * arguments.
+ */
+module.exports = asap;
+function asap(task) {
+    var rawTask;
+    if (freeTasks.length) {
+        rawTask = freeTasks.pop();
+    } else {
+        rawTask = new RawTask();
+    }
+    rawTask.task = task;
+    rawAsap(rawTask);
+}
+
+// We wrap tasks with recyclable task objects.  A task object implements
+// `call`, just like a function.
+function RawTask() {
+    this.task = null;
+}
+
+// The sole purpose of wrapping the task is to catch the exception and recycle
+// the task object after its single use.
+RawTask.prototype.call = function () {
+    try {
+        this.task.call();
+    } catch (error) {
+        if (asap.onerror) {
+            // This hook exists purely for testing purposes.
+            // Its name will be periodically randomized to break any code that
+            // depends on its existence.
+            asap.onerror(error);
+        } else {
+            // In a web browser, exceptions are not fatal. However, to avoid
+            // slowing down the queue of pending tasks, we rethrow the error in a
+            // lower priority turn.
+            pendingErrors.push(error);
+            requestErrorThrow();
+        }
+    } finally {
+        this.task = null;
+        freeTasks[freeTasks.length] = this;
+    }
+};
+}],["asap","browser-raw",{},function (require, exports, module){
+
+// asap browser-raw
+// ----------------
+
+"use strict";
+
+// Use the fastest means possible to execute a task in its own turn, with
+// priority over other events including IO, animation, reflow, and redraw
+// events in browsers.
+//
+// An exception thrown by a task will permanently interrupt the processing of
+// subsequent tasks. The higher level `asap` function ensures that if an
+// exception is thrown by a task, that the task queue will continue flushing as
+// soon as possible, but if you use `rawAsap` directly, you are responsible to
+// either ensure that no exceptions are thrown from your task, or to manually
+// call `rawAsap.requestFlush` if an exception is thrown.
+module.exports = rawAsap;
+function rawAsap(task) {
+    if (!queue.length) {
+        requestFlush();
+        flushing = true;
+    }
+    // Equivalent to push, but avoids a function call.
+    queue[queue.length] = task;
+}
+
+var queue = [];
+// Once a flush has been requested, no further calls to `requestFlush` are
+// necessary until the next `flush` completes.
 var flushing = false;
-var requestFlush = void 0;
-var isNodeJS = false;
+// `requestFlush` is an implementation-specific method that attempts to kick
+// off a `flush` event as quickly as possible. `flush` will attempt to exhaust
+// the event queue before yielding to the browser's own event loop.
+var requestFlush;
+// The position of the next task to execute in the task queue. This is
+// preserved between calls to `flush` so that it can be resumed if
+// a task throws an exception.
+var index = 0;
+// If a task schedules additional tasks recursively, the task queue can grow
+// unbounded. To prevent memory exhaustion, the task queue will periodically
+// truncate already-completed tasks.
+var capacity = 1024;
 
+// The flush function processes all tasks that have been scheduled with
+// `rawAsap` unless and until one of those tasks throws an exception.
+// If a task throws an exception, `flush` ensures that its state will remain
+// consistent and will resume where it left off when called again.
+// However, `flush` does not make any arrangements to be called again if an
+// exception is thrown.
 function flush() {
-    /* jshint loopfunc: true */
-
-    while (head.next) {
-        head = head.next;
-        var task = head.task;
-        head.task = void 0;
-        var domain = head.domain;
-
-        if (domain) {
-            head.domain = void 0;
-            domain.enter();
-        }
-
-        try {
-            task();
-
-        } catch (e) {
-            if (isNodeJS) {
-                // In node, uncaught exceptions are considered fatal errors.
-                // Re-throw them synchronously to interrupt flushing!
-
-                // Ensure continuation if the uncaught exception is suppressed
-                // listening "uncaughtException" events (as domains does).
-                // Continue in next event to avoid tick recursion.
-                if (domain) {
-                    domain.exit();
-                }
-                setTimeout(flush, 0);
-                if (domain) {
-                    domain.enter();
-                }
-
-                throw e;
-
-            } else {
-                // In browsers, uncaught exceptions are not fatal.
-                // Re-throw them asynchronously to avoid slow-downs.
-                setTimeout(function() {
-                   throw e;
-                }, 0);
+    while (index < queue.length) {
+        var currentIndex = index;
+        // Advance the index before calling the task. This ensures that we will
+        // begin flushing on the next task the task throws an error.
+        index = index + 1;
+        queue[currentIndex].call();
+        // Prevent leaking memory for long chains of recursive calls to `asap`.
+        // If we call `asap` within tasks scheduled by `asap`, the queue will
+        // grow, but to avoid an O(n) walk for every task we execute, we don't
+        // shift tasks off the queue after they have been executed.
+        // Instead, we periodically shift 1024 tasks off the queue.
+        if (index > capacity) {
+            // Manually shift all values starting at the index back to the
+            // beginning of the queue.
+            for (var scan = 0; scan < index; scan++) {
+                queue[scan] = queue[scan + index];
             }
-        }
-
-        if (domain) {
-            domain.exit();
+            queue.length -= index;
+            index = 0;
         }
     }
-
+    queue.length = 0;
+    index = 0;
     flushing = false;
 }
 
-if (typeof process !== "undefined" && process.nextTick) {
-    // Node.js before 0.9. Note that some fake-Node environments, like the
-    // Mocha test runner, introduce a `process` global without a `nextTick`.
-    isNodeJS = true;
+// `requestFlush` is implemented using a strategy based on data collected from
+// every available SauceLabs Selenium web driver worker at time of writing.
+// https://docs.google.com/spreadsheets/d/1mG-5UYGup5qxGdEMWkhP6BWCz053NUb2E1QoUTU16uA/edit#gid=783724593
 
-    requestFlush = function () {
-        process.nextTick(flush);
-    };
+// Safari 6 and 6.1 for desktop, iPad, and iPhone are the only browsers that
+// have WebKitMutationObserver but not un-prefixed MutationObserver.
+// Must use `global` instead of `window` to work in both frames and web
+// workers. `global` is a provision of Browserify, Mr, Mrs, or Mop.
+var BrowserMutationObserver = global.MutationObserver || global.WebKitMutationObserver;
 
-} else if (typeof setImmediate === "function") {
-    // In IE10, Node.js 0.9+, or https://github.com/NobleJS/setImmediate
-    if (typeof window !== "undefined") {
-        requestFlush = setImmediate.bind(window, flush);
-    } else {
-        requestFlush = function () {
-            setImmediate(flush);
-        };
-    }
+// MutationObservers are desirable because they have high priority and work
+// reliably everywhere they are implemented.
+// They are implemented in all modern browsers.
+//
+// - Android 4-4.3
+// - Chrome 26-34
+// - Firefox 14-29
+// - Internet Explorer 11
+// - iPad Safari 6-7.1
+// - iPhone Safari 7-7.1
+// - Safari 6-7
+if (typeof BrowserMutationObserver === "function") {
+    requestFlush = makeRequestCallFromMutationObserver(flush);
 
-} else if (typeof MessageChannel !== "undefined") {
-    // modern browsers
-    // http://www.nonblocking.io/2011/06/windownexttick.html
-    var channel = new MessageChannel();
-    channel.port1.onmessage = flush;
-    requestFlush = function () {
-        channel.port2.postMessage(0);
-    };
+// MessageChannels are desirable because they give direct access to the HTML
+// task queue, are implemented in Internet Explorer 10, Safari 5.0-1, and Opera
+// 11-12, and in web workers in many engines.
+// Although message channels yield to any queued rendering and IO tasks, they
+// would be better than imposing the 4ms delay of timers.
+// However, they do not work reliably in Internet Explorer or Safari.
 
+// Internet Explorer 10 is the only browser that has setImmediate but does
+// not have MutationObservers.
+// Although setImmediate yields to the browser's renderer, it would be
+// preferrable to falling back to setTimeout since it does not have
+// the minimum 4ms penalty.
+// Unfortunately there appears to be a bug in Internet Explorer 10 Mobile (and
+// Desktop to a lesser extent) that renders both setImmediate and
+// MessageChannel useless for the purposes of ASAP.
+// https://github.com/kriskowal/q/issues/396
+
+// Timers are implemented universally.
+// We fall back to timers in workers in most engines, and in foreground
+// contexts in the following browsers.
+// However, note that even this simple case requires nuances to operate in a
+// broad spectrum of browsers.
+//
+// - Firefox 3-13
+// - Internet Explorer 6-9
+// - iPad Safari 4.3
+// - Lynx 2.8.7
 } else {
-    // old browsers
-    requestFlush = function () {
-        setTimeout(flush, 0);
+    requestFlush = makeRequestCallFromTimer(flush);
+}
+
+// `requestFlush` requests that the high priority event queue be flushed as
+// soon as possible.
+// This is useful to prevent an error thrown in a task from stalling the event
+// queue if the exception handled by Node.js’s
+// `process.on("uncaughtException")` or by a domain.
+rawAsap.requestFlush = requestFlush;
+
+// To request a high priority event, we induce a mutation observer by toggling
+// the text of a text node between "1" and "-1".
+function makeRequestCallFromMutationObserver(callback) {
+    var toggle = 1;
+    var observer = new BrowserMutationObserver(callback);
+    var node = document.createTextNode("");
+    observer.observe(node, {characterData: true});
+    return function requestCall() {
+        toggle = -toggle;
+        node.data = toggle;
     };
 }
 
-function asap(task) {
-    tail = tail.next = {
-        task: task,
-        domain: isNodeJS && process.domain,
-        next: null
-    };
-
-    if (!flushing) {
-        flushing = true;
-        requestFlush();
-    }
-};
-
-module.exports = asap;
-
-}],["collections","generic-collection",{"./shim-array":6},function (require, exports, module){
-
-// collections generic-collection
-// ------------------------------
-
-"use strict";
-
-module.exports = GenericCollection;
-function GenericCollection() {
-    throw new Error("Can't construct. GenericCollection is a mixin.");
-}
-
-GenericCollection.prototype.addEach = function (values) {
-    if (values && Object(values) === values) {
-        if (typeof values.forEach === "function") {
-            values.forEach(this.add, this);
-        } else if (typeof values.length === "number") {
-            // Array-like objects that do not implement forEach, ergo,
-            // Arguments
-            for (var i = 0; i < values.length; i++) {
-                this.add(values[i], i);
-            }
-        } else {
-            Object.keys(values).forEach(function (key) {
-                this.add(values[key], key);
-            }, this);
-        }
-    }
-    return this;
-};
-
-// This is sufficiently generic for Map (since the value may be a key)
-// and ordered collections (since it forwards the equals argument)
-GenericCollection.prototype.deleteEach = function (values, equals) {
-    values.forEach(function (value) {
-        this["delete"](value, equals);
-    }, this);
-    return this;
-};
-
-// all of the following functions are implemented in terms of "reduce".
-// some need "constructClone".
-
-GenericCollection.prototype.forEach = function (callback /*, thisp*/) {
-    var thisp = arguments[1];
-    return this.reduce(function (undefined, value, key, object, depth) {
-        callback.call(thisp, value, key, object, depth);
-    }, undefined);
-};
-
-GenericCollection.prototype.map = function (callback /*, thisp*/) {
-    var thisp = arguments[1];
-    var result = [];
-    this.reduce(function (undefined, value, key, object, depth) {
-        result.push(callback.call(thisp, value, key, object, depth));
-    }, undefined);
-    return result;
-};
-
-GenericCollection.prototype.enumerate = function (start) {
-    if (start == null) {
-        start = 0;
-    }
-    var result = [];
-    this.reduce(function (undefined, value) {
-        result.push([start++, value]);
-    }, undefined);
-    return result;
-};
-
-GenericCollection.prototype.group = function (callback, thisp, equals) {
-    equals = equals || Object.equals;
-    var groups = [];
-    var keys = [];
-    this.forEach(function (value, key, object) {
-        var key = callback.call(thisp, value, key, object);
-        var index = keys.indexOf(key, equals);
-        var group;
-        if (index === -1) {
-            group = [];
-            groups.push([key, group]);
-            keys.push(key);
-        } else {
-            group = groups[index][1];
-        }
-        group.push(value);
-    });
-    return groups;
-};
-
-GenericCollection.prototype.toArray = function () {
-    return this.map(Function.identity);
-};
-
-// this depends on stringable keys, which apply to Array and Iterator
-// because they have numeric keys and all Maps since they may use
-// strings as keys.  List, Set, and SortedSet have nodes for keys, so
-// toObject would not be meaningful.
-GenericCollection.prototype.toObject = function () {
-    var object = {};
-    this.reduce(function (undefined, value, key) {
-        object[key] = value;
-    }, undefined);
-    return object;
-};
-
-GenericCollection.prototype.filter = function (callback /*, thisp*/) {
-    var thisp = arguments[1];
-    var result = this.constructClone();
-    this.reduce(function (undefined, value, key, object, depth) {
-        if (callback.call(thisp, value, key, object, depth)) {
-            result.add(value, key);
-        }
-    }, undefined);
-    return result;
-};
-
-GenericCollection.prototype.every = function (callback /*, thisp*/) {
-    var thisp = arguments[1];
-    var iterator = this.iterate();
-    while (true) {
-        var iteration = iterator.next();
-        if (iteration.done) {
-            return true;
-        } else if (!callback.call(thisp, iteration.value, iteration.index, this)) {
-            return false;
-        }
-    }
-};
-
-GenericCollection.prototype.some = function (callback /*, thisp*/) {
-    var thisp = arguments[1];
-    var iterator = this.iterate();
-    while (true) {
-        var iteration = iterator.next();
-        if (iteration.done) {
-            return false;
-        } else if (callback.call(thisp, iteration.value, iteration.index, this)) {
-            return true;
-        }
-    }
-};
-
-GenericCollection.prototype.min = function (compare) {
-    compare = compare || this.contentCompare || Object.compare;
-    var first = true;
-    return this.reduce(function (result, value) {
-        if (first) {
-            first = false;
-            return value;
-        } else {
-            return compare(value, result) < 0 ? value : result;
-        }
-    }, undefined);
-};
-
-GenericCollection.prototype.max = function (compare) {
-    compare = compare || this.contentCompare || Object.compare;
-    var first = true;
-    return this.reduce(function (result, value) {
-        if (first) {
-            first = false;
-            return value;
-        } else {
-            return compare(value, result) > 0 ? value : result;
-        }
-    }, undefined);
-};
-
-GenericCollection.prototype.sum = function (zero) {
-    zero = zero === undefined ? 0 : zero;
-    return this.reduce(function (a, b) {
-        return a + b;
-    }, zero);
-};
-
-GenericCollection.prototype.average = function (zero) {
-    var sum = zero === undefined ? 0 : zero;
-    var count = zero === undefined ? 0 : zero;
-    this.reduce(function (undefined, value) {
-        sum += value;
-        count += 1;
-    }, undefined);
-    return sum / count;
-};
-
-GenericCollection.prototype.concat = function () {
-    var result = this.constructClone(this);
-    for (var i = 0; i < arguments.length; i++) {
-        result.addEach(arguments[i]);
-    }
-    return result;
-};
-
-GenericCollection.prototype.flatten = function () {
-    var self = this;
-    return this.reduce(function (result, array) {
-        array.forEach(function (value) {
-            this.push(value);
-        }, result, self);
-        return result;
-    }, []);
-};
-
-GenericCollection.prototype.zip = function () {
-    var table = Array.prototype.slice.call(arguments);
-    table.unshift(this);
-    return Array.unzip(table);
-}
-
-GenericCollection.prototype.join = function (delimiter) {
-    return this.reduce(function (result, string) {
-        return result + delimiter + string;
-    });
-};
-
-GenericCollection.prototype.sorted = function (compare, by, order) {
-    compare = compare || this.contentCompare || Object.compare;
-    // account for comparators generated by Function.by
-    if (compare.by) {
-        by = compare.by;
-        compare = compare.compare || this.contentCompare || Object.compare;
-    } else {
-        by = by || Function.identity;
-    }
-    if (order === undefined)
-        order = 1;
-    return this.map(function (item) {
-        return {
-            by: by(item),
-            value: item
-        };
-    })
-    .sort(function (a, b) {
-        return compare(a.by, b.by) * order;
-    })
-    .map(function (pair) {
-        return pair.value;
-    });
-};
-
-GenericCollection.prototype.reversed = function () {
-    return this.constructClone(this).reverse();
-};
-
-GenericCollection.prototype.clone = function (depth, memo) {
-    if (depth === undefined) {
-        depth = Infinity;
-    } else if (depth === 0) {
-        return this;
-    }
-    var clone = this.constructClone();
-    this.forEach(function (value, key) {
-        clone.add(Object.clone(value, depth - 1, memo), key);
-    }, this);
-    return clone;
-};
-
-GenericCollection.prototype.only = function () {
-    if (this.length === 1) {
-        return this.one();
-    }
-};
-
-require("./shim-array");
-
-}],["collections","generic-order",{"./shim-object":8},function (require, exports, module){
-
-// collections generic-order
-// -------------------------
-
-
-var Object = require("./shim-object");
-
-module.exports = GenericOrder;
-function GenericOrder() {
-    throw new Error("Can't construct. GenericOrder is a mixin.");
-}
-
-GenericOrder.prototype.equals = function (that, equals) {
-    equals = equals || this.contentEquals || Object.equals;
-
-    if (this === that) {
-        return true;
-    }
-    if (!that) {
-        return false;
-    }
-
-    var self = this;
-    return (
-        this.length === that.length &&
-        this.zip(that).every(function (pair) {
-            return equals(pair[0], pair[1]);
-        })
-    );
-};
-
-GenericOrder.prototype.compare = function (that, compare) {
-    compare = compare || this.contentCompare || Object.compare;
-
-    if (this === that) {
-        return 0;
-    }
-    if (!that) {
-        return 1;
-    }
-
-    var length = Math.min(this.length, that.length);
-    var comparison = this.zip(that).reduce(function (comparison, pair, index) {
-        if (comparison === 0) {
-            if (index >= length) {
-                return comparison;
-            } else {
-                return compare(pair[0], pair[1]);
-            }
-        } else {
-            return comparison;
-        }
-    }, 0);
-    if (comparison === 0) {
-        return this.length - that.length;
-    }
-    return comparison;
-};
-
-}],["collections","iterator",{"./weak-map":18,"./generic-collection":2},function (require, exports, module){
-
-// collections iterator
-// --------------------
-
-"use strict";
-
-module.exports = Iterator;
-
-var WeakMap = require("./weak-map");
-var GenericCollection = require("./generic-collection");
-
-// upgrades an iterable to a Iterator
-function Iterator(iterable, start, stop, step) {
-    if (!iterable) {
-        return Iterator.empty;
-    } else if (iterable instanceof Iterator) {
-        return iterable;
-    } else if (!(this instanceof Iterator)) {
-        return new Iterator(iterable, start, stop, step);
-    } else if (Array.isArray(iterable) || typeof iterable === "string") {
-        iterators.set(this, new IndexIterator(iterable, start, stop, step));
-        return;
-    }
-    iterable = Object(iterable);
-    if (iterable.next) {
-        iterators.set(this, iterable);
-    } else if (iterable.iterate) {
-        iterators.set(this, iterable.iterate(start, stop, step));
-    } else if (Object.prototype.toString.call(iterable) === "[object Function]") {
-        this.next = iterable;
-    } else {
-        throw new TypeError("Can't iterate " + iterable);
-    }
-}
-
-// Using iterators as a hidden table associating a full-fledged Iterator with
-// an underlying, usually merely "nextable", iterator.
-var iterators = new WeakMap();
-
-// Selectively apply generic methods of GenericCollection
-Iterator.prototype.forEach = GenericCollection.prototype.forEach;
-Iterator.prototype.map = GenericCollection.prototype.map;
-Iterator.prototype.filter = GenericCollection.prototype.filter;
-Iterator.prototype.every = GenericCollection.prototype.every;
-Iterator.prototype.some = GenericCollection.prototype.some;
-Iterator.prototype.min = GenericCollection.prototype.min;
-Iterator.prototype.max = GenericCollection.prototype.max;
-Iterator.prototype.sum = GenericCollection.prototype.sum;
-Iterator.prototype.average = GenericCollection.prototype.average;
-Iterator.prototype.flatten = GenericCollection.prototype.flatten;
-Iterator.prototype.zip = GenericCollection.prototype.zip;
-Iterator.prototype.enumerate = GenericCollection.prototype.enumerate;
-Iterator.prototype.sorted = GenericCollection.prototype.sorted;
-Iterator.prototype.group = GenericCollection.prototype.group;
-Iterator.prototype.reversed = GenericCollection.prototype.reversed;
-Iterator.prototype.toArray = GenericCollection.prototype.toArray;
-Iterator.prototype.toObject = GenericCollection.prototype.toObject;
-
-// This is a bit of a cheat so flatten and such work with the generic reducible
-Iterator.prototype.constructClone = function (values) {
-    var clone = [];
-    clone.addEach(values);
-    return clone;
-};
-
-// A level of indirection so a full-interface iterator can proxy for a simple
-// nextable iterator, and to allow the child iterator to replace its governing
-// iterator, as with drop-while iterators.
-Iterator.prototype.next = function () {
-    var nextable = iterators.get(this);
-    if (nextable) {
-        return nextable.next();
-    } else {
-        return Iterator.done;
-    }
-};
-
-Iterator.prototype.iterateMap = function (callback /*, thisp*/) {
-    var self = Iterator(this),
-        thisp = arguments[1];
-    return new MapIterator(self, callback, thisp);
-};
-
-function MapIterator(iterator, callback, thisp) {
-    this.iterator = iterator;
-    this.callback = callback;
-    this.thisp = thisp;
-}
-
-MapIterator.prototype = Object.create(Iterator.prototype);
-MapIterator.prototype.constructor = MapIterator;
-
-MapIterator.prototype.next = function () {
-    var iteration = this.iterator.next();
-    if (iteration.done) {
-        return iteration;
-    } else {
-        return new Iteration(
-            this.callback.call(
-                this.thisp,
-                iteration.value,
-                iteration.index,
-                this.iteration
-            ),
-            iteration.index
-        );
-    }
-};
-
-Iterator.prototype.iterateFilter = function (callback /*, thisp*/) {
-    var self = Iterator(this),
-        thisp = arguments[1],
-        index = 0;
-
-    return new FilterIterator(self, callback, thisp);
-};
-
-function FilterIterator(iterator, callback, thisp) {
-    this.iterator = iterator;
-    this.callback = callback;
-    this.thisp = thisp;
-}
-
-FilterIterator.prototype = Object.create(Iterator.prototype);
-FilterIterator.prototype.constructor = FilterIterator;
-
-FilterIterator.prototype.next = function () {
-    var iteration;
-    while (true) {
-        iteration = this.iterator.next();
-        if (iteration.done || this.callback.call(
-            this.thisp,
-            iteration.value,
-            iteration.index,
-            this.iteration
-        )) {
-            return iteration;
-        }
-    }
-};
-
-Iterator.prototype.reduce = function (callback /*, initial, thisp*/) {
-    var self = Iterator(this),
-        result = arguments[1],
-        thisp = arguments[2],
-        iteration;
-
-    // First iteration unrolled
-    iteration = self.next();
-    if (iteration.done) {
-        if (arguments.length > 1) {
-            return arguments[1];
-        } else {
-            throw TypeError("Reduce of empty iterator with no initial value");
-        }
-    } else if (arguments.length > 1) {
-        result = callback.call(
-            thisp,
-            result,
-            iteration.value,
-            iteration.index,
-            self
-        );
-    } else {
-        result = iteration.value;
-    }
-
-    // Remaining entries
-    while (true) {
-        iteration = self.next();
-        if (iteration.done) {
-            return result;
-        } else {
-            result = callback.call(
-                thisp,
-                result,
-                iteration.value,
-                iteration.index,
-                self
-            );
-        }
-    }
-};
-
-Iterator.prototype.dropWhile = function (callback /*, thisp */) {
-    var self = Iterator(this),
-        thisp = arguments[1],
-        iteration;
-
-    while (true) {
-        iteration = self.next();
-        if (iteration.done) {
-            return Iterator.empty;
-        } else if (!callback.call(thisp, iteration.value, iteration.index, self)) {
-            return new DropWhileIterator(iteration, self);
-        }
-    }
-};
-
-function DropWhileIterator(iteration, iterator) {
-    this.iteration = iteration;
-    this.iterator = iterator;
-    this.parent = null;
-}
-
-DropWhileIterator.prototype = Object.create(Iterator.prototype);
-DropWhileIterator.prototype.constructor = DropWhileIterator;
-
-DropWhileIterator.prototype.next = function () {
-    var result = this.iteration;
-    if (result) {
-        this.iteration = null;
-        return result;
-    } else {
-        return this.iterator.next();
-    }
-};
-
-Iterator.prototype.takeWhile = function (callback /*, thisp*/) {
-    var self = Iterator(this),
-        thisp = arguments[1];
-    return new TakeWhileIterator(self, callback, thisp);
-};
-
-function TakeWhileIterator(iterator, callback, thisp) {
-    this.iterator = iterator;
-    this.callback = callback;
-    this.thisp = thisp;
-}
-
-TakeWhileIterator.prototype = Object.create(Iterator.prototype);
-TakeWhileIterator.prototype.constructor = TakeWhileIterator;
-
-TakeWhileIterator.prototype.next = function () {
-    var iteration = this.iterator.next();
-    if (iteration.done) {
-        return iteration;
-    } else if (this.callback.call(
-        this.thisp,
-        iteration.value,
-        iteration.index,
-        this.iterator
-    )) {
-        return iteration;
-    } else {
-        return Iterator.done;
-    }
-};
-
-Iterator.prototype.iterateZip = function () {
-    return Iterator.unzip(Array.prototype.concat.apply(this, arguments));
-};
-
-Iterator.prototype.iterateUnzip = function () {
-    return Iterator.unzip(this);
-};
-
-Iterator.prototype.iterateEnumerate = function (start) {
-    return Iterator.count(start).iterateZip(this);
-};
-
-Iterator.prototype.iterateConcat = function () {
-    return Iterator.flatten(Array.prototype.concat.apply(this, arguments));
-};
-
-Iterator.prototype.iterateFlatten = function () {
-    return Iterator.flatten(this);
-};
-
-Iterator.prototype.recount = function (start) {
-    return new RecountIterator(this, start);
-};
-
-function RecountIterator(iterator, start) {
-    this.iterator = iterator;
-    this.index = start || 0;
-}
-
-RecountIterator.prototype = Object.create(Iterator.prototype);
-RecountIterator.prototype.constructor = RecountIterator;
-
-RecountIterator.prototype.next = function () {
-    var iteration = this.iterator.next();
-    if (iteration.done) {
-        return iteration;
-    } else {
-        return new Iteration(
-            iteration.value,
-            this.index++
-        );
-    }
-};
-
-// creates an iterator for Array and String
-function IndexIterator(iterable, start, stop, step) {
-    if (step == null) {
-        step = 1;
-    }
-    if (stop == null) {
-        stop = start;
-        start = 0;
-    }
-    if (start == null) {
-        start = 0;
-    }
-    if (step == null) {
-        step = 1;
-    }
-    if (stop == null) {
-        stop = iterable.length;
-    }
-    this.iterable = iterable;
-    this.start = start;
-    this.stop = stop;
-    this.step = step;
-}
-
-IndexIterator.prototype.next = function () {
-    // Advance to next owned entry
-    if (typeof this.iterable === "object") { // as opposed to string
-        while (!(this.start in this.iterable)) {
-            if (this.start >= this.stop) {
-                return Iterator.done;
-            } else {
-                this.start += this.step;
-            }
-        }
-    }
-    if (this.start >= this.stop) { // end of string
-        return Iterator.done;
-    }
-    var iteration = new Iteration(
-        this.iterable[this.start],
-        this.start
-    );
-    this.start += this.step;
-    return iteration;
-};
-
-Iterator.cycle = function (cycle, times) {
-    if (arguments.length < 2) {
-        times = Infinity;
-    }
-    return new CycleIterator(cycle, times);
-};
-
-function CycleIterator(cycle, times) {
-    this.cycle = cycle;
-    this.times = times;
-    this.iterator = Iterator.empty;
-}
-
-CycleIterator.prototype = Object.create(Iterator.prototype);
-CycleIterator.prototype.constructor = CycleIterator;
-
-CycleIterator.prototype.next = function () {
-    var iteration = this.iterator.next();
-    if (iteration.done) {
-        if (this.times > 0) {
-            this.times--;
-            this.iterator = new Iterator(this.cycle);
-            return this.iterator.next();
-        } else {
-            return iteration;
-        }
-    } else {
-        return iteration;
-    }
-};
-
-Iterator.concat = function (/* ...iterators */) {
-    return Iterator.flatten(Array.prototype.slice.call(arguments));
-};
-
-Iterator.flatten = function (iterators) {
-    iterators = Iterator(iterators);
-    return new ChainIterator(iterators);
-};
-
-function ChainIterator(iterators) {
-    this.iterators = iterators;
-    this.iterator = Iterator.empty;
-}
-
-ChainIterator.prototype = Object.create(Iterator.prototype);
-ChainIterator.prototype.constructor = ChainIterator;
-
-ChainIterator.prototype.next = function () {
-    var iteration = this.iterator.next();
-    if (iteration.done) {
-        var iteratorIteration = this.iterators.next();
-        if (iteratorIteration.done) {
-            return Iterator.done;
-        } else {
-            this.iterator = new Iterator(iteratorIteration.value);
-            return this.iterator.next();
-        }
-    } else {
-        return iteration;
-    }
-};
-
-Iterator.unzip = function (iterators) {
-    iterators = Iterator(iterators).map(Iterator);
-    if (iterators.length === 0)
-        return new Iterator.empty;
-    return new UnzipIterator(iterators);
-};
-
-function UnzipIterator(iterators) {
-    this.iterators = iterators;
-    this.index = 0;
-}
-
-UnzipIterator.prototype = Object.create(Iterator.prototype);
-UnzipIterator.prototype.constructor = UnzipIterator;
-
-UnzipIterator.prototype.next = function () {
-    var done = false
-    var result = this.iterators.map(function (iterator) {
-        var iteration = iterator.next();
-        if (iteration.done) {
-            done = true;
-        } else {
-            return iteration.value;
-        }
-    });
-    if (done) {
-        return Iterator.done;
-    } else {
-        return new Iteration(result, this.index++);
-    }
-};
-
-Iterator.zip = function () {
-    return Iterator.unzip(Array.prototype.slice.call(arguments));
-};
-
-Iterator.range = function (start, stop, step) {
-    if (arguments.length < 3) {
-        step = 1;
-    }
-    if (arguments.length < 2) {
-        stop = start;
-        start = 0;
-    }
-    start = start || 0;
-    step = step || 1;
-    return new RangeIterator(start, stop, step);
-};
-
-Iterator.count = function (start, step) {
-    return Iterator.range(start, Infinity, step);
-};
-
-function RangeIterator(start, stop, step) {
-    this.start = start;
-    this.stop = stop;
-    this.step = step;
-    this.index = 0;
-}
-
-RangeIterator.prototype = Object.create(Iterator.prototype);
-RangeIterator.prototype.constructor = RangeIterator;
-
-RangeIterator.prototype.next = function () {
-    if (this.start >= this.stop) {
-        return Iterator.done;
-    } else {
-        var result = this.start;
-        this.start += this.step;
-        return new Iteration(result, this.index++);
-    }
-};
-
-Iterator.repeat = function (value, times) {
-    if (times == null) {
-        times = Infinity;
-    }
-    return new RepeatIterator(value, times);
-};
-
-function RepeatIterator(value, times) {
-    this.value = value;
-    this.times = times;
-    this.index = 0;
-}
-
-RepeatIterator.prototype = Object.create(Iterator.prototype);
-RepeatIterator.prototype.constructor = RepeatIterator;
-
-RepeatIterator.prototype.next = function () {
-    if (this.index < this.times) {
-        return new Iteration(this.value, this.index++);
-    } else {
-        return Iterator.done;
-    }
-};
-
-Iterator.enumerate = function (values, start) {
-    return Iterator.count(start).iterateZip(new Iterator(values));
-};
-
-function EmptyIterator() {}
-
-EmptyIterator.prototype = Object.create(Iterator.prototype);
-EmptyIterator.prototype.constructor = EmptyIterator;
-
-EmptyIterator.prototype.next = function () {
-    return Iterator.done;
-};
-
-Iterator.empty = new EmptyIterator();
-
-// Iteration and DoneIteration exist here only to encourage hidden classes.
-// Otherwise, iterations are merely duck-types.
-
-function Iteration(value, index) {
-    this.value = value;
-    this.index = index;
-}
-
-Iteration.prototype.done = false;
-
-Iteration.prototype.equals = function (that, equals, memo) {
-    if (!that) return false;
-    return (
-        equals(this.value, that.value, equals, memo) &&
-        this.index === that.index &&
-        this.done === that.done
-    );
-
-};
-
-function DoneIteration(value) {
-    Iteration.call(this, value);
-    this.done = true; // reflected on the instance to make it more obvious
-}
-
-DoneIteration.prototype = Object.create(Iteration.prototype);
-DoneIteration.prototype.constructor = DoneIteration;
-DoneIteration.prototype.done = true;
-
-Iterator.Iteration = Iteration;
-Iterator.DoneIteration = DoneIteration;
-Iterator.done = new DoneIteration();
-
-}],["collections","shim",{"./shim-array":6,"./shim-object":8,"./shim-function":7,"./shim-regexp":9},function (require, exports, module){
-
-// collections shim
-// ----------------
-
-
-var Array = require("./shim-array");
-var Object = require("./shim-object");
-var Function = require("./shim-function");
-var RegExp = require("./shim-regexp");
-
-}],["collections","shim-array",{"./shim-function":7,"./generic-collection":2,"./generic-order":3,"./iterator":4,"weak-map":18},function (require, exports, module){
-
-// collections shim-array
-// ----------------------
-
-"use strict";
-
-/*
-    Based in part on extras from Motorola Mobility’s Montage
-    Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
-    3-Clause BSD License
-    https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
-*/
-
-var Function = require("./shim-function");
-var GenericCollection = require("./generic-collection");
-var GenericOrder = require("./generic-order");
-var Iterator = require("./iterator");
-var WeakMap = require("weak-map");
-
-module.exports = Array;
-
-var array_splice = Array.prototype.splice;
-var array_slice = Array.prototype.slice;
-
-Array.empty = [];
-
-if (Object.freeze) {
-    Object.freeze(Array.empty);
-}
-
-Array.from = function (values) {
-    var array = [];
-    array.addEach(values);
-    return array;
-};
-
-Array.unzip = function (table) {
-    var transpose = [];
-    var length = Infinity;
-    // compute shortest row
-    for (var i = 0; i < table.length; i++) {
-        var row = table[i];
-        table[i] = row.toArray();
-        if (row.length < length) {
-            length = row.length;
-        }
-    }
-    for (var i = 0; i < table.length; i++) {
-        var row = table[i];
-        for (var j = 0; j < row.length; j++) {
-            if (j < length && j in row) {
-                transpose[j] = transpose[j] || [];
-                transpose[j][i] = row[j];
-            }
-        }
-    }
-    return transpose;
-};
-
-function define(key, value) {
-    Object.defineProperty(Array.prototype, key, {
-        value: value,
-        writable: true,
-        configurable: true,
-        enumerable: false
-    });
-}
-
-define("addEach", GenericCollection.prototype.addEach);
-define("deleteEach", GenericCollection.prototype.deleteEach);
-define("toArray", GenericCollection.prototype.toArray);
-define("toObject", GenericCollection.prototype.toObject);
-define("min", GenericCollection.prototype.min);
-define("max", GenericCollection.prototype.max);
-define("sum", GenericCollection.prototype.sum);
-define("average", GenericCollection.prototype.average);
-define("only", GenericCollection.prototype.only);
-define("flatten", GenericCollection.prototype.flatten);
-define("zip", GenericCollection.prototype.zip);
-define("enumerate", GenericCollection.prototype.enumerate);
-define("group", GenericCollection.prototype.group);
-define("sorted", GenericCollection.prototype.sorted);
-define("reversed", GenericCollection.prototype.reversed);
-
-define("constructClone", function (values) {
-    var clone = new this.constructor();
-    clone.addEach(values);
-    return clone;
-});
-
-define("has", function (value, equals) {
-    return this.findValue(value, equals) !== -1;
-});
-
-define("get", function (index, defaultValue) {
-    if (+index !== index)
-        throw new Error("Indicies must be numbers");
-    if (!index in this) {
-        return defaultValue;
-    } else {
-        return this[index];
-    }
-});
-
-define("set", function (index, value) {
-    if (index < this.length) {
-        this.splice(index, 1, value);
-    } else {
-        // Must use swap instead of splice, dispite the unfortunate array
-        // argument, because splice would truncate index to length.
-        this.swap(index, 1, [value]);
-    }
-    return this;
-});
-
-define("add", function (value) {
-    this.push(value);
-    return true;
-});
-
-define("delete", function (value, equals) {
-    var index = this.findValue(value, equals);
-    if (index !== -1) {
-        this.splice(index, 1);
-        return true;
-    }
-    return false;
-});
-
-define("findValue", function (value, equals) {
-    equals = equals || this.contentEquals || Object.equals;
-    for (var index = 0; index < this.length; index++) {
-        if (index in this && equals(this[index], value)) {
-            return index;
-        }
-    }
-    return -1;
-});
-
-define("findLastValue", function (value, equals) {
-    equals = equals || this.contentEquals || Object.equals;
-    var index = this.length;
-    do {
-        index--;
-        if (index in this && equals(this[index], value)) {
-            return index;
-        }
-    } while (index > 0);
-    return -1;
-});
-
-define("swap", function (start, minusLength, plus) {
-    // Unrolled implementation into JavaScript for a couple reasons.
-    // Calling splice can cause large stack sizes for large swaps. Also,
-    // splice cannot handle array holes.
-    if (plus) {
-        if (!Array.isArray(plus)) {
-            plus = array_slice.call(plus);
-        }
-    } else {
-        plus = Array.empty;
-    }
-
-    if (start < 0) {
-        start = this.length + start;
-    } else if (start > this.length) {
-        this.length = start;
-    }
-
-    if (start + minusLength > this.length) {
-        // Truncate minus length if it extends beyond the length
-        minusLength = this.length - start;
-    } else if (minusLength < 0) {
-        // It is the JavaScript way.
-        minusLength = 0;
-    }
-
-    var diff = plus.length - minusLength;
-    var oldLength = this.length;
-    var newLength = this.length + diff;
-
-    if (diff > 0) {
-        // Head Tail Plus Minus
-        // H H H H M M T T T T
-        // H H H H P P P P T T T T
-        //         ^ start
-        //         ^-^ minus.length
-        //           ^ --> diff
-        //         ^-----^ plus.length
-        //             ^------^ tail before
-        //                 ^------^ tail after
-        //                   ^ start iteration
-        //                       ^ start iteration offset
-        //             ^ end iteration
-        //                 ^ end iteration offset
-        //             ^ start + minus.length
-        //                     ^ length
-        //                   ^ length - 1
-        for (var index = oldLength - 1; index >= start + minusLength; index--) {
-            var offset = index + diff;
-            if (index in this) {
-                this[offset] = this[index];
-            } else {
-                // Oddly, PhantomJS complains about deleting array
-                // properties, unless you assign undefined first.
-                this[offset] = void 0;
-                delete this[offset];
-            }
-        }
-    }
-    for (var index = 0; index < plus.length; index++) {
-        if (index in plus) {
-            this[start + index] = plus[index];
-        } else {
-            this[start + index] = void 0;
-            delete this[start + index];
-        }
-    }
-    if (diff < 0) {
-        // Head Tail Plus Minus
-        // H H H H M M M M T T T T
-        // H H H H P P T T T T
-        //         ^ start
-        //         ^-----^ length
-        //         ^-^ plus.length
-        //             ^ start iteration
-        //                 ^ offset start iteration
-        //                     ^ end
-        //                         ^ offset end
-        //             ^ start + minus.length - plus.length
-        //             ^ start - diff
-        //                 ^------^ tail before
-        //             ^------^ tail after
-        //                     ^ length - diff
-        //                     ^ newLength
-        for (var index = start + plus.length; index < oldLength - diff; index++) {
-            var offset = index - diff;
-            if (offset in this) {
-                this[index] = this[offset];
-            } else {
-                this[index] = void 0;
-                delete this[index];
-            }
-        }
-    }
-    this.length = newLength;
-});
-
-define("peek", function () {
-    return this[0];
-});
-
-define("poke", function (value) {
-    if (this.length > 0) {
-        this[0] = value;
-    }
-});
-
-define("peekBack", function () {
-    if (this.length > 0) {
-        return this[this.length - 1];
-    }
-});
-
-define("pokeBack", function (value) {
-    if (this.length > 0) {
-        this[this.length - 1] = value;
-    }
-});
-
-define("one", function () {
-    for (var i in this) {
-        if (Object.owns(this, i)) {
-            return this[i];
-        }
-    }
-});
-
-define("clear", function () {
-    this.length = 0;
-    return this;
-});
-
-define("compare", function (that, compare) {
-    compare = compare || Object.compare;
-    var i;
-    var length;
-    var lhs;
-    var rhs;
-    var relative;
-
-    if (this === that) {
-        return 0;
-    }
-
-    if (!that || !Array.isArray(that)) {
-        return GenericOrder.prototype.compare.call(this, that, compare);
-    }
-
-    length = Math.min(this.length, that.length);
-
-    for (i = 0; i < length; i++) {
-        if (i in this) {
-            if (!(i in that)) {
-                return -1;
-            } else {
-                lhs = this[i];
-                rhs = that[i];
-                relative = compare(lhs, rhs);
-                if (relative) {
-                    return relative;
-                }
-            }
-        } else if (i in that) {
-            return 1;
-        }
-    }
-
-    return this.length - that.length;
-});
-
-define("equals", function (that, equals, memo) {
-    equals = equals || Object.equals;
-    var i = 0;
-    var length = this.length;
-    var left;
-    var right;
-
-    if (this === that) {
-        return true;
-    }
-    if (!that || !Array.isArray(that)) {
-        return GenericOrder.prototype.equals.call(this, that);
-    }
-
-    if (length !== that.length) {
-        return false;
-    } else {
-        for (; i < length; ++i) {
-            if (i in this) {
-                if (!(i in that)) {
-                    return false;
-                }
-                left = this[i];
-                right = that[i];
-                if (!equals(left, right, equals, memo)) {
-                    return false;
-                }
-            } else {
-                if (i in that) {
-                    return false;
-                }
-            }
-        }
-    }
-    return true;
-});
-
-define("clone", function (depth, memo) {
-    if (depth === undefined) {
-        depth = Infinity;
-    } else if (depth === 0) {
-        return this;
-    }
-    memo = memo || new WeakMap();
-    var clone = [];
-    for (var i in this) {
-        if (Object.owns(this, i)) {
-            clone[i] = Object.clone(this[i], depth - 1, memo);
+// The message channel technique was discovered by Malte Ubl and was the
+// original foundation for this library.
+// http://www.nonblocking.io/2011/06/windownexttick.html
+
+// Safari 6.0.5 (at least) intermittently fails to create message ports on a
+// page's first load. Thankfully, this version of Safari supports
+// MutationObservers, so we don't need to fall back in that case.
+
+// function makeRequestCallFromMessageChannel(callback) {
+//     var channel = new MessageChannel();
+//     channel.port1.onmessage = callback;
+//     return function requestCall() {
+//         channel.port2.postMessage(0);
+//     };
+// }
+
+// For reasons explained above, we are also unable to use `setImmediate`
+// under any circumstances.
+// Even if we were, there is another bug in Internet Explorer 10.
+// It is not sufficient to assign `setImmediate` to `requestFlush` because
+// `setImmediate` must be called *by name* and therefore must be wrapped in a
+// closure.
+// Never forget.
+
+// function makeRequestCallFromSetImmediate(callback) {
+//     return function requestCall() {
+//         setImmediate(callback);
+//     };
+// }
+
+// Safari 6.0 has a problem where timers will get lost while the user is
+// scrolling. This problem does not impact ASAP because Safari 6.0 supports
+// mutation observers, so that implementation is used instead.
+// However, if we ever elect to use timers in Safari, the prevalent work-around
+// is to add a scroll event listener that calls for a flush.
+
+// `setTimeout` does not call the passed callback if the delay is less than
+// approximately 7 in web workers in Firefox 8 through 18, and sometimes not
+// even then.
+
+function makeRequestCallFromTimer(callback) {
+    return function requestCall() {
+        // We dispatch a timeout with a specified delay of 0 for engines that
+        // can reliably accommodate that request. This will usually be snapped
+        // to a 4 milisecond delay, but once we're flushing, there's no delay
+        // between events.
+        var timeoutHandle = setTimeout(handleTimer, 0);
+        // However, since this timer gets frequently dropped in Firefox
+        // workers, we enlist an interval handle that will try to fire
+        // an event 20 times per second until it succeeds.
+        var intervalHandle = setInterval(handleTimer, 50);
+
+        function handleTimer() {
+            // Whichever timer succeeds will cancel both timers and
+            // execute the callback.
+            clearTimeout(timeoutHandle);
+            clearInterval(intervalHandle);
+            callback();
         }
     };
-    return clone;
-});
-
-define("iterate", function (start, stop, step) {
-    return new Iterator(this, start, stop, step);
-});
-
-}],["collections","shim-function",{},function (require, exports, module){
-
-// collections shim-function
-// -------------------------
-
-
-module.exports = Function;
-
-/**
-    A utility to reduce unnecessary allocations of <code>function () {}</code>
-    in its many colorful variations.  It does nothing and returns
-    <code>undefined</code> thus makes a suitable default in some circumstances.
-
-    @function external:Function.noop
-*/
-Function.noop = function () {
-};
-
-/**
-    A utility to reduce unnecessary allocations of <code>function (x) {return
-    x}</code> in its many colorful but ultimately wasteful parameter name
-    variations.
-
-    @function external:Function.identity
-    @param {Any} any value
-    @returns {Any} that value
-*/
-Function.identity = function (value) {
-    return value;
-};
-
-/**
-    A utility for creating a comparator function for a particular aspect of a
-    figurative class of objects.
-
-    @function external:Function.by
-    @param {Function} relation A function that accepts a value and returns a
-    corresponding value to use as a representative when sorting that object.
-    @param {Function} compare an alternate comparator for comparing the
-    represented values.  The default is <code>Object.compare</code>, which
-    does a deep, type-sensitive, polymorphic comparison.
-    @returns {Function} a comparator that has been annotated with
-    <code>by</code> and <code>compare</code> properties so
-    <code>sorted</code> can perform a transform that reduces the need to call
-    <code>by</code> on each sorted object to just once.
- */
-Function.by = function (by , compare) {
-    compare = compare || Object.compare;
-    by = by || Function.identity;
-    var compareBy = function (a, b) {
-        return compare(by(a), by(b));
-    };
-    compareBy.compare = compare;
-    compareBy.by = by;
-    return compareBy;
-};
-
-// TODO document
-Function.get = function (key) {
-    return function (object) {
-        return Object.get(object, key);
-    };
-};
-
-}],["collections","shim-object",{"weak-map":18},function (require, exports, module){
-
-// collections shim-object
-// -----------------------
-
-"use strict";
-
-var WeakMap = require("weak-map");
-
-module.exports = Object;
-
-/*
-    Based in part on extras from Motorola Mobility’s Montage
-    Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
-    3-Clause BSD License
-    https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
-*/
-
-/**
-    Defines extensions to intrinsic <code>Object</code>.
-    @see [Object class]{@link external:Object}
-*/
-
-/**
-    A utility object to avoid unnecessary allocations of an empty object
-    <code>{}</code>.  This object is frozen so it is safe to share.
-
-    @object external:Object.empty
-*/
-Object.empty = Object.freeze(Object.create(null));
-
-/**
-    Returns whether the given value is an object, as opposed to a value.
-    Unboxed numbers, strings, true, false, undefined, and null are not
-    objects.  Arrays are objects.
-
-    @function external:Object.isObject
-    @param {Any} value
-    @returns {Boolean} whether the given value is an object
-*/
-Object.isObject = function (object) {
-    return Object(object) === object;
-};
-
-/**
-    Returns the value of an any value, particularly objects that
-    implement <code>valueOf</code>.
-
-    <p>Note that, unlike the precedent of methods like
-    <code>Object.equals</code> and <code>Object.compare</code> would suggest,
-    this method is named <code>Object.getValueOf</code> instead of
-    <code>valueOf</code>.  This is a delicate issue, but the basis of this
-    decision is that the JavaScript runtime would be far more likely to
-    accidentally call this method with no arguments, assuming that it would
-    return the value of <code>Object</code> itself in various situations,
-    whereas <code>Object.equals(Object, null)</code> protects against this case
-    by noting that <code>Object</code> owns the <code>equals</code> property
-    and therefore does not delegate to it.
-
-    @function external:Object.getValueOf
-    @param {Any} value a value or object wrapping a value
-    @returns {Any} the primitive value of that object, if one exists, or passes
-    the value through
-*/
-Object.getValueOf = function (value) {
-    if (value && typeof value.valueOf === "function") {
-        value = value.valueOf();
-    }
-    return value;
-};
-
-var hashMap = new WeakMap();
-Object.hash = function (object) {
-    if (object && typeof object.hash === "function") {
-        return "" + object.hash();
-    } else if (Object.isObject(object)) {
-        if (!hashMap.has(object)) {
-            hashMap.set(object, Math.random().toString(36).slice(2));
-        }
-        return hashMap.get(object);
-    } else {
-        return "" + object;
-    }
-};
-
-/**
-    A shorthand for <code>Object.prototype.hasOwnProperty.call(object,
-    key)</code>.  Returns whether the object owns a property for the given key.
-    It does not consult the prototype chain and works for any string (including
-    "hasOwnProperty") except "__proto__".
-
-    @function external:Object.owns
-    @param {Object} object
-    @param {String} key
-    @returns {Boolean} whether the object owns a property wfor the given key.
-*/
-var owns = Object.prototype.hasOwnProperty;
-Object.owns = function (object, key) {
-    return owns.call(object, key);
-};
-
-/**
-    A utility that is like Object.owns but is also useful for finding
-    properties on the prototype chain, provided that they do not refer to
-    methods on the Object prototype.  Works for all strings except "__proto__".
-
-    <p>Alternately, you could use the "in" operator as long as the object
-    descends from "null" instead of the Object.prototype, as with
-    <code>Object.create(null)</code>.  However,
-    <code>Object.create(null)</code> only works in fully compliant EcmaScript 5
-    JavaScript engines and cannot be faithfully shimmed.
-
-    <p>If the given object is an instance of a type that implements a method
-    named "has", this function defers to the collection, so this method can be
-    used to generically handle objects, arrays, or other collections.  In that
-    case, the domain of the key depends on the instance.
-
-    @param {Object} object
-    @param {String} key
-    @returns {Boolean} whether the object, or any of its prototypes except
-    <code>Object.prototype</code>
-    @function external:Object.has
-*/
-Object.has = function (object, key) {
-    if (typeof object !== "object") {
-        throw new Error("Object.has can't accept non-object: " + typeof object);
-    }
-    // forward to mapped collections that implement "has"
-    if (object && typeof object.has === "function") {
-        return object.has(key);
-    // otherwise report whether the key is on the prototype chain,
-    // as long as it is not one of the methods on object.prototype
-    } else if (typeof key === "string") {
-        return key in object && object[key] !== Object.prototype[key];
-    } else {
-        throw new Error("Key must be a string for Object.has on plain objects");
-    }
-};
-
-/**
-    Gets the value for a corresponding key from an object.
-
-    <p>Uses Object.has to determine whether there is a corresponding value for
-    the given key.  As such, <code>Object.get</code> is capable of retriving
-    values from the prototype chain as long as they are not from the
-    <code>Object.prototype</code>.
-
-    <p>If there is no corresponding value, returns the given default, which may
-    be <code>undefined</code>.
-
-    <p>If the given object is an instance of a type that implements a method
-    named "get", this function defers to the collection, so this method can be
-    used to generically handle objects, arrays, or other collections.  In that
-    case, the domain of the key depends on the implementation.  For a `Map`,
-    for example, the key might be any object.
-
-    @param {Object} object
-    @param {String} key
-    @param {Any} value a default to return, <code>undefined</code> if omitted
-    @returns {Any} value for key, or default value
-    @function external:Object.get
-*/
-Object.get = function (object, key, value) {
-    if (typeof object !== "object") {
-        throw new Error("Object.get can't accept non-object: " + typeof object);
-    }
-    // forward to mapped collections that implement "get"
-    if (object && typeof object.get === "function") {
-        return object.get(key, value);
-    } else if (Object.has(object, key)) {
-        return object[key];
-    } else {
-        return value;
-    }
-};
-
-/**
-    Sets the value for a given key on an object.
-
-    <p>If the given object is an instance of a type that implements a method
-    named "set", this function defers to the collection, so this method can be
-    used to generically handle objects, arrays, or other collections.  As such,
-    the key domain varies by the object type.
-
-    @param {Object} object
-    @param {String} key
-    @param {Any} value
-    @returns <code>undefined</code>
-    @function external:Object.set
-*/
-Object.set = function (object, key, value) {
-    if (object && typeof object.set === "function") {
-        object.set(key, value);
-    } else {
-        object[key] = value;
-    }
-};
-
-Object.addEach = function (target, source) {
-    if (!source) {
-    } else if (typeof source.forEach === "function" && !source.hasOwnProperty("forEach")) {
-        // copy map-alikes
-        if (typeof source.keys === "function") {
-            source.forEach(function (value, key) {
-                target[key] = value;
-            });
-        // iterate key value pairs of other iterables
-        } else {
-            source.forEach(function (pair) {
-                target[pair[0]] = pair[1];
-            });
-        }
-    } else {
-        // copy other objects as map-alikes
-        Object.keys(source).forEach(function (key) {
-            target[key] = source[key];
-        });
-    }
-    return target;
-};
-
-/**
-    Iterates over the owned properties of an object.
-
-    @function external:Object.forEach
-    @param {Object} object an object to iterate.
-    @param {Function} callback a function to call for every key and value
-    pair in the object.  Receives <code>value</code>, <code>key</code>,
-    and <code>object</code> as arguments.
-    @param {Object} thisp the <code>this</code> to pass through to the
-    callback
-*/
-Object.forEach = function (object, callback, thisp) {
-    Object.keys(object).forEach(function (key) {
-        callback.call(thisp, object[key], key, object);
-    });
-};
-
-/**
-    Iterates over the owned properties of a map, constructing a new array of
-    mapped values.
-
-    @function external:Object.map
-    @param {Object} object an object to iterate.
-    @param {Function} callback a function to call for every key and value
-    pair in the object.  Receives <code>value</code>, <code>key</code>,
-    and <code>object</code> as arguments.
-    @param {Object} thisp the <code>this</code> to pass through to the
-    callback
-    @returns {Array} the respective values returned by the callback for each
-    item in the object.
-*/
-Object.map = function (object, callback, thisp) {
-    return Object.keys(object).map(function (key) {
-        return callback.call(thisp, object[key], key, object);
-    });
-};
-
-/**
-    Returns the values for owned properties of an object.
-
-    @function external:Object.map
-    @param {Object} object
-    @returns {Array} the respective value for each owned property of the
-    object.
-*/
-Object.values = function (object) {
-    return Object.map(object, Function.identity);
-};
-
-// TODO inline document concat
-Object.concat = function () {
-    var object = {};
-    for (var i = 0; i < arguments.length; i++) {
-        Object.addEach(object, arguments[i]);
-    }
-    return object;
-};
-
-Object.from = Object.concat;
-
-/**
-    Returns whether two values are identical.  Any value is identical to itself
-    and only itself.  This is much more restictive than equivalence and subtly
-    different than strict equality, <code>===</code> because of edge cases
-    including negative zero and <code>NaN</code>.  Identity is useful for
-    resolving collisions among keys in a mapping where the domain is any value.
-    This method does not delgate to any method on an object and cannot be
-    overridden.
-    @see http://wiki.ecmascript.org/doku.php?id=harmony:egal
-    @param {Any} this
-    @param {Any} that
-    @returns {Boolean} whether this and that are identical
-    @function external:Object.is
-*/
-Object.is = function (x, y) {
-    if (x === y) {
-        // 0 === -0, but they are not identical
-        return x !== 0 || 1 / x === 1 / y;
-    }
-    // NaN !== NaN, but they are identical.
-    // NaNs are the only non-reflexive value, i.e., if x !== x,
-    // then x is a NaN.
-    // isNaN is broken: it converts its argument to number, so
-    // isNaN("foo") => true
-    return x !== x && y !== y;
-};
-
-/**
-    Performs a polymorphic, type-sensitive deep equivalence comparison of any
-    two values.
-
-    <p>As a basic principle, any value is equivalent to itself (as in
-    identity), any boxed version of itself (as a <code>new Number(10)</code> is
-    to 10), and any deep clone of itself.
-
-    <p>Equivalence has the following properties:
-
-    <ul>
-        <li><strong>polymorphic:</strong>
-            If the given object is an instance of a type that implements a
-            methods named "equals", this function defers to the method.  So,
-            this function can safely compare any values regardless of type,
-            including undefined, null, numbers, strings, any pair of objects
-            where either implements "equals", or object literals that may even
-            contain an "equals" key.
-        <li><strong>type-sensitive:</strong>
-            Incomparable types are not equal.  No object is equivalent to any
-            array.  No string is equal to any other number.
-        <li><strong>deep:</strong>
-            Collections with equivalent content are equivalent, recursively.
-        <li><strong>equivalence:</strong>
-            Identical values and objects are equivalent, but so are collections
-            that contain equivalent content.  Whether order is important varies
-            by type.  For Arrays and lists, order is important.  For Objects,
-            maps, and sets, order is not important.  Boxed objects are mutally
-            equivalent with their unboxed values, by virtue of the standard
-            <code>valueOf</code> method.
-    </ul>
-    @param this
-    @param that
-    @returns {Boolean} whether the values are deeply equivalent
-    @function external:Object.equals
-*/
-Object.equals = function (a, b, equals, memo) {
-    equals = equals || Object.equals;
-    // unbox objects, but do not confuse object literals
-    a = Object.getValueOf(a);
-    b = Object.getValueOf(b);
-    if (a === b)
-        return true;
-    if (Object.isObject(a)) {
-        memo = memo || new WeakMap();
-        if (memo.has(a)) {
-            return true;
-        }
-        memo.set(a, true);
-    }
-    if (Object.isObject(a) && typeof a.equals === "function") {
-        return a.equals(b, equals, memo);
-    }
-    // commutative
-    if (Object.isObject(b) && typeof b.equals === "function") {
-        return b.equals(a, equals, memo);
-    }
-    if (Object.isObject(a) && Object.isObject(b)) {
-        if (Object.getPrototypeOf(a) === Object.prototype && Object.getPrototypeOf(b) === Object.prototype) {
-            for (var name in a) {
-                if (!equals(a[name], b[name], equals, memo)) {
-                    return false;
-                }
-            }
-            for (var name in b) {
-                if (!(name in a) || !equals(b[name], a[name], equals, memo)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    }
-    // NaN !== NaN, but they are equal.
-    // NaNs are the only non-reflexive value, i.e., if x !== x,
-    // then x is a NaN.
-    // isNaN is broken: it converts its argument to number, so
-    // isNaN("foo") => true
-    // We have established that a !== b, but if a !== a && b !== b, they are
-    // both NaN.
-    if (a !== a && b !== b)
-        return true;
-    if (!a || !b)
-        return a === b;
-    return false;
-};
-
-// Because a return value of 0 from a `compare` function  may mean either
-// "equals" or "is incomparable", `equals` cannot be defined in terms of
-// `compare`.  However, `compare` *can* be defined in terms of `equals` and
-// `lessThan`.  Again however, more often it would be desirable to implement
-// all of the comparison functions in terms of compare rather than the other
-// way around.
-
-/**
-    Determines the order in which any two objects should be sorted by returning
-    a number that has an analogous relationship to zero as the left value to
-    the right.  That is, if the left is "less than" the right, the returned
-    value will be "less than" zero, where "less than" may be any other
-    transitive relationship.
-
-    <p>Arrays are compared by the first diverging values, or by length.
-
-    <p>Any two values that are incomparable return zero.  As such,
-    <code>equals</code> should not be implemented with <code>compare</code>
-    since incomparability is indistinguishable from equality.
-
-    <p>Sorts strings lexicographically.  This is not suitable for any
-    particular international setting.  Different locales sort their phone books
-    in very different ways, particularly regarding diacritics and ligatures.
-
-    <p>If the given object is an instance of a type that implements a method
-    named "compare", this function defers to the instance.  The method does not
-    need to be an owned property to distinguish it from an object literal since
-    object literals are incomparable.  Unlike <code>Object</code> however,
-    <code>Array</code> implements <code>compare</code>.
-
-    @param {Any} left
-    @param {Any} right
-    @returns {Number} a value having the same transitive relationship to zero
-    as the left and right values.
-    @function external:Object.compare
-*/
-Object.compare = function (a, b) {
-    // unbox objects, but do not confuse object literals
-    // mercifully handles the Date case
-    a = Object.getValueOf(a);
-    b = Object.getValueOf(b);
-    if (a === b)
-        return 0;
-    var aType = typeof a;
-    var bType = typeof b;
-    if (aType === "number" && bType === "number")
-        return a - b;
-    if (aType === "string" && bType === "string")
-        return a < b ? -Infinity : Infinity;
-        // the possibility of equality elimiated above
-    if (a && typeof a.compare === "function")
-        return a.compare(b);
-    // not commutative, the relationship is reversed
-    if (b && typeof b.compare === "function")
-        return -b.compare(a);
-    return 0;
-};
-
-/**
-    Creates a deep copy of any value.  Values, being immutable, are
-    returned without alternation.  Forwards to <code>clone</code> on
-    objects and arrays.
-
-    @function external:Object.clone
-    @param {Any} value a value to clone
-    @param {Number} depth an optional traversal depth, defaults to infinity.
-    A value of <code>0</code> means to make no clone and return the value
-    directly.
-    @param {Map} memo an optional memo of already visited objects to preserve
-    reference cycles.  The cloned object will have the exact same shape as the
-    original, but no identical objects.  Te map may be later used to associate
-    all objects in the original object graph with their corresponding member of
-    the cloned graph.
-    @returns a copy of the value
-*/
-Object.clone = function (value, depth, memo) {
-    value = Object.getValueOf(value);
-    memo = memo || new WeakMap();
-    if (depth === undefined) {
-        depth = Infinity;
-    } else if (depth === 0) {
-        return value;
-    }
-    if (typeof value === "function") {
-        return value;
-    } else if (Object.isObject(value)) {
-        if (!memo.has(value)) {
-            if (value && typeof value.clone === "function") {
-                memo.set(value, value.clone(depth, memo));
-            } else {
-                var prototype = Object.getPrototypeOf(value);
-                if (prototype === null || prototype === Object.prototype) {
-                    var clone = Object.create(prototype);
-                    memo.set(value, clone);
-                    for (var key in value) {
-                        clone[key] = Object.clone(value[key], depth - 1, memo);
-                    }
-                } else {
-                    throw new Error("Can't clone " + value);
-                }
-            }
-        }
-        return memo.get(value);
-    }
-    return value;
-};
-
-/**
-    Removes all properties owned by this object making the object suitable for
-    reuse.
-
-    @function external:Object.clear
-    @returns this
-*/
-Object.clear = function (object) {
-    if (object && typeof object.clear === "function") {
-        object.clear();
-    } else {
-        var keys = Object.keys(object),
-            i = keys.length;
-        while (i) {
-            i--;
-            delete object[keys[i]];
-        }
-    }
-    return object;
-};
-
-}],["collections","shim-regexp",{},function (require, exports, module){
-
-// collections shim-regexp
-// -----------------------
-
-
-/**
-    accepts a string; returns the string with regex metacharacters escaped.
-    the returned string can safely be used within a regex to match a literal
-    string. escaped characters are [, ], {, }, (, ), -, *, +, ?, ., \, ^, $,
-    |, #, [comma], and whitespace.
-*/
-if (!RegExp.escape) {
-    var special = /[-[\]{}()*+?.\\^$|,#\s]/g;
-    RegExp.escape = function (string) {
-        return string.replace(special, "\\$&");
-    };
 }
 
-}],["mr","boot/script-params",{"url":15},function (require, exports, module){
+// This is for `asap.js` only.
+// Its name will be periodically randomized to break any code that depends on
+// its existence.
+rawAsap.makeRequestCallFromTimer = makeRequestCallFromTimer;
+
+// ASAP was originally a nextTick shim included in Q. This was factored out
+// into this ASAP package. It was later adapted to RSVP which made further
+// amendments. These decisions, particularly to marginalize MessageChannel and
+// to capture the MutationObserver implementation in a closure, were integrated
+// back into ASAP proper.
+// https://github.com/tildeio/rsvp.js/blob/cddf7232546a9cf858524b75cde6f9edf72620a7/lib/rsvp/asap.js
+
+}],["mr","boot/script-params",{"url":8},function (require, exports, module){
 
 // mr boot/script-params
 // ---------------------
@@ -2153,7 +463,7 @@ function getParams(scriptName) {
     return params;
 }
 
-}],["mr","browser",{"./common":12,"url":15,"q":17,"./script":16},function (require, exports, module){
+}],["mr","browser",{"./common":5,"url":8,"q":14,"./script":9},function (require, exports, module){
 
 // mr browser
 // ----------
@@ -2391,7 +701,7 @@ function loadIfNotPreloaded(location, definition, preloaded) {
     }
 }
 
-}],["mr","common",{"q":17,"url":15,"./merge":14,"./identifier":13},function (require, exports, module){
+}],["mr","common",{"q":14,"url":8,"./merge":7,"./identifier":6},function (require, exports, module){
 
 // mr common
 // ---------
@@ -2522,8 +832,8 @@ Require.makeRequire = function (config) {
                 })
                 .invoke("async", translatorId)
                 .then(function (translate) {
-                    module.text = translate(module.text, module);
                     module.type = "js";
+                    return translate(module);
                 });
             }
         })
@@ -2542,7 +852,7 @@ Require.makeRequire = function (config) {
                 return config.loadPreprocessorPackage()
                 .invoke("async", optimizerId)
                 .then(function (optimize) {
-                    optimize(module);
+                    return optimize(module);
                 });
             }
         })
@@ -2584,10 +894,10 @@ Require.makeRequire = function (config) {
         var module = getModuleDescriptor(topId);
         // this is a memo of modules already being loaded so we don’t
         // data-lock on a cycle of dependencies.
-        loading = loading || {};
         // has this all happened before?  will it happen again?
+        loading = loading || {};
         if (has.call(loading, topId)) {
-            return; // break the cycle of violence.
+            return Q(); // break the cycle of violence.
         }
         loading[topId] = true; // this has happened before
         return load(topId, viaId)
@@ -2677,7 +987,8 @@ Require.makeRequire = function (config) {
         if (module.factory === void 0) {
             throw new Error(
                 "Can't require module " + JSON.stringify(topId) +
-                " via " + JSON.stringify(viaId) + " " + JSON.stringify(module)
+                " via " + JSON.stringify(viaId) + " " + JSON.stringify(module) +
+                " because no factory was or exports were created by the module loader configuration"
             );
         }
 
@@ -2763,7 +1074,7 @@ Require.makeRequire = function (config) {
         require.async = function (id) {
             var topId = Identifier.resolve(id, viaId);
             var module = getModuleDescriptor(id);
-            return deepLoad(topId, viaId)
+            return deepLoad(topId, viaId, {})
             .then(function () {
                 return require(topId);
             });
@@ -2777,10 +1088,16 @@ Require.makeRequire = function (config) {
             return Identifier.normalize(Identifier.resolve(id, viaId));
         };
 
+        require.load = function (id) {
+            return load(id, viaId);
+        };
+
+        require.deepLoad = function (id) {
+            return deepLoad(id, viaId, {});
+        };
+
         require.getModule = getModuleDescriptor; // XXX deprecated, use:
         require.getModuleDescriptor = getModuleDescriptor;
-        require.load = load;
-        require.deepLoad = deepLoad;
 
         require.loadPackage = function (dependency, givenConfig) {
             if (givenConfig) { // explicit configuration, fresh environment
@@ -3112,11 +1429,14 @@ function configurePackage(location, description, parent) {
     // Deal with redirects
     var redirects = description.redirects;
     if (redirects !== void 0) {
-        Object.keys(redirects).forEach(function (name) {
-            modules[name] = {
-                id: name,
-                redirect: Identifier.normalize(Identifier.resolve(redirects[name], "")),
-                location: URL.resolve(location, name)
+        Object.keys(redirects).forEach(function (source) {
+            var target = redirects[source];
+            source = Identifier.normalize(Identifier.resolve(source, ""));
+            target = Identifier.normalize(Identifier.resolve(target, ""));
+            modules[source] = {
+                id: source,
+                redirect: target,
+                location: URL.resolve(location, target)
             };
         });
     }
@@ -3552,12 +1872,115 @@ function load(location) {
     head.appendChild(script);
 }
 
-}],["q","q",{"collections/shim":5,"collections/weak-map":18,"collections/iterator":4,"asap":1},function (require, exports, module){
+}],["pop-iterate","array-iterator",{"./iteration":11},function (require, exports, module){
+
+// pop-iterate array-iterator
+// --------------------------
+
+"use strict";
+
+var Iteration = require("./iteration");
+
+module.exports = ArrayIterator;
+function ArrayIterator(iterable, start, stop, step) {
+    this.array = iterable;
+    this.start = start || 0;
+    this.stop = stop || Infinity;
+    this.step = step || 1;
+}
+
+ArrayIterator.prototype.next = function () {
+    var iteration;
+    if (this.start < Math.min(this.array.length, this.stop)) {
+        iteration = new Iteration(this.array[this.start], false, this.start);
+        this.start += this.step;
+    } else {
+        iteration =  new Iteration(undefined, true);
+    }
+    return iteration;
+};
+
+}],["pop-iterate","iteration",{},function (require, exports, module){
+
+// pop-iterate iteration
+// ---------------------
+
+"use strict";
+
+module.exports = Iteration;
+function Iteration(value, done, index) {
+    this.value = value;
+    this.done = done;
+    this.index = index;
+}
+
+Iteration.prototype.equals = function (other) {
+    return (
+        typeof other == 'object' &&
+        other.value === this.value &&
+        other.done === this.done &&
+        other.index === this.index
+    );
+};
+
+}],["pop-iterate","object-iterator",{"./iteration":11,"./array-iterator":10},function (require, exports, module){
+
+// pop-iterate object-iterator
+// ---------------------------
+
+"use strict";
+
+var Iteration = require("./iteration");
+var ArrayIterator = require("./array-iterator");
+
+module.exports = ObjectIterator;
+function ObjectIterator(iterable, start, stop, step) {
+    this.object = iterable;
+    this.keysIterator = new ArrayIterator(Object.keys(iterable), start, stop, step);
+}
+
+ObjectIterator.prototype.next = function () {
+    var iteration = this.keysIterator.next();
+    if (iteration.done) {
+        return iteration;
+    }
+    var key = iteration.value;
+    return new Iteration(this.object[key], false, key);
+};
+
+}],["pop-iterate","pop-iterate",{"./array-iterator":10,"./object-iterator":12},function (require, exports, module){
+
+// pop-iterate pop-iterate
+// -----------------------
+
+"use strict";
+
+var ArrayIterator = require("./array-iterator");
+var ObjectIterator = require("./object-iterator");
+
+module.exports = iterate;
+function iterate(iterable, start, stop, step) {
+    if (!iterable) {
+        return empty;
+    } else if (Array.isArray(iterable)) {
+        return new ArrayIterator(iterable, start, stop, step);
+    } else if (typeof iterable.next === "function") {
+        return iterable;
+    } else if (typeof iterable.iterate === "function") {
+        return iterable.iterate(start, stop, step);
+    } else if (typeof iterable === "object") {
+        return new ObjectIterator(iterable);
+    } else {
+        throw new TypeError("Can't iterate " + iterable);
+    }
+}
+
+}],["q","q",{"weak-map":15,"pop-iterate":13,"asap":1},function (require, exports, module){
 
 // q q
 // ---
 
-// vim:ts=4:sts=4:sw=4:
+/* vim:ts=4:sts=4:sw=4: */
 /*!
  *
  * Copyright 2009-2013 Kris Kowal under the terms of the MIT
@@ -3599,9 +2022,8 @@ try {
 var qStartingLine = captureLine();
 var qFileName;
 
-require("collections/shim");
-var WeakMap = require("collections/weak-map");
-var Iterator = require("collections/iterator");
+var WeakMap = require("weak-map");
+var iterate = require("pop-iterate");
 var asap = require("asap");
 
 function isObject(value) {
@@ -3740,7 +2162,7 @@ function deprecate(callback, name, alternative) {
 
 var handlers = new WeakMap();
 
-function Q_inspect(promise) {
+function Q_getHandler(promise) {
     var handler = handlers.get(promise);
     if (!handler || !handler.became) {
         return handler;
@@ -3761,7 +2183,7 @@ function follow(handler) {
 
 var theViciousCycleError = new Error("Can't resolve a promise with itself");
 var theViciousCycleRejection = Q_reject(theViciousCycleError);
-var theViciousCycle = Q_inspect(theViciousCycleRejection);
+var theViciousCycle = Q_getHandler(theViciousCycleRejection);
 
 var thenables = new WeakMap();
 
@@ -3883,7 +2305,7 @@ function Q_all(questions) {
         var handler;
         if (
             Q_isPromise(promise) &&
-            (handler = Q_inspect(promise)).state === "fulfilled"
+            (handler = Q_getHandler(promise)).state === "fulfilled"
         ) {
             answers[index] = handler.value;
         } else {
@@ -4183,7 +2605,7 @@ function Promise(handler) {
     if (typeof handler === "function") {
         var setup = handler;
         var deferred = defer();
-        handler = Q_inspect(deferred.promise);
+        handler = Q_getHandler(deferred.promise);
         try {
             setup(deferred.resolve, deferred.reject, deferred.setEstimate);
         } catch (error) {
@@ -4264,14 +2686,14 @@ Promise.prototype.inspect = function Promise_inspect() {
     // the second layer captures only the relevant "state" properties of the
     // handler to prevent leaking the capability to access or alter the
     // handler.
-    return Q_inspect(this).inspect();
+    return Q_getHandler(this).inspect();
 };
 
 /**
  * @returns {boolean} whether the promise is waiting for a result.
  */
 Promise.prototype.isPending = function Promise_isPending() {
-    return Q_inspect(this).state === "pending";
+    return Q_getHandler(this).state === "pending";
 };
 
 /**
@@ -4279,7 +2701,7 @@ Promise.prototype.isPending = function Promise_isPending() {
  * fulfillment value.
  */
 Promise.prototype.isFulfilled = function Promise_isFulfilled() {
-    return Q_inspect(this).state === "fulfilled";
+    return Q_getHandler(this).state === "fulfilled";
 };
 
 /**
@@ -4287,7 +2709,14 @@ Promise.prototype.isFulfilled = function Promise_isFulfilled() {
  * its rejection.
  */
 Promise.prototype.isRejected = function Promise_isRejected() {
-    return Q_inspect(this).state === "rejected";
+    return Q_getHandler(this).state === "rejected";
+};
+
+/**
+ * TODO
+ */
+Promise.prototype.toBePassed = function Promise_toBePassed() {
+    return Q_getHandler(this).state === "passed";
 };
 
 /**
@@ -4421,7 +2850,7 @@ Promise.prototype.done = function Promise_done(fulfilled, rejected) {
             _rejected = process.domain.bind(_rejected);
         }
 
-        Q_inspect(self).dispatch(_fulfilled, "then", [_rejected]);
+        Q_getHandler(self).dispatch(_fulfilled, "then", [_rejected]);
     });
 };
 
@@ -4503,7 +2932,7 @@ Promise.prototype.finally = function Promise_finally(callback, ms) {
  * TODO
  */
 Promise.prototype.observeEstimate = function Promise_observeEstimate(emit) {
-    this.dispatch("estimate", [emit]);
+    this.rawDispatch(null, "estimate", [emit]);
     return this;
 };
 
@@ -4511,7 +2940,7 @@ Promise.prototype.observeEstimate = function Promise_observeEstimate(emit) {
  * TODO
  */
 Promise.prototype.getEstimate = function Promise_getEstimate() {
-    return Q_inspect(this).estimate;
+    return Q_getHandler(this).estimate;
 };
 
 /**
@@ -4528,15 +2957,15 @@ Promise.prototype.dispatch = function Promise_dispatch(op, args) {
 Promise.prototype.rawDispatch = function Promise_rawDispatch(resolve, op, args) {
     var self = this;
     asap(function Promise_dispatch_task() {
-        Q_inspect(self).dispatch(resolve, op, args);
+        Q_getHandler(self).dispatch(resolve, op, args);
     });
 };
 
 /**
  * TODO
  */
-Promise.prototype.get = function Promise_get(key) {
-    return this.dispatch("get", [key]);
+Promise.prototype.get = function Promise_get(name) {
+    return this.dispatch("get", [name]);
 };
 
 /**
@@ -4661,6 +3090,17 @@ Promise.prototype.pull = function Promise_pull() {
     return this.dispatch("pull", []);
 };
 
+/**
+ * TODO
+ */
+Promise.prototype.pass = function Promise_pass() {
+    if (!this.toBePassed()) {
+        return new Promise(new Passed(this));
+    } else {
+        return this;
+    }
+};
+
 
 // Thus begins the portion dedicated to the deferred
 
@@ -4688,7 +3128,7 @@ function Deferred(promise) {
  * TODO
  */
 Deferred.prototype.resolve = function Deferred_resolve(value) {
-    var handler = Q_inspect(promises.get(this));
+    var handler = Q_getHandler(promises.get(this));
     if (!handler.messages) {
         return;
     }
@@ -4699,7 +3139,7 @@ Deferred.prototype.resolve = function Deferred_resolve(value) {
  * TODO
  */
 Deferred.prototype.reject = function Deferred_reject(reason) {
-    var handler = Q_inspect(promises.get(this));
+    var handler = Q_getHandler(promises.get(this));
     if (!handler.messages) {
         return;
     }
@@ -4717,7 +3157,7 @@ Deferred.prototype.setEstimate = function Deferred_setEstimate(estimate) {
     if (estimate < 1e12 && estimate !== -Infinity) {
         throw new Error("Estimate values should be a number of miliseconds in the future");
     }
-    var handler = Q_inspect(promises.get(this));
+    var handler = Q_getHandler(promises.get(this));
     // TODO There is a bit of capability leakage going on here. The Deferred
     // should only be able to set the estimate for its original
     // Pending, not for any handler that promise subsequently became.
@@ -4780,14 +3220,36 @@ Fulfilled.prototype.get = function Fulfilled_get(name) {
     return this.value[name];
 };
 
-Fulfilled.prototype.invoke = function Fulfilled_invoke(
-    name, args
-) {
-    return this.value[name].apply(this.value, args);
+Fulfilled.prototype.call = function Fulfilled_call(args, thisp) {
+    return this.callInvoke(this.value, args, thisp);
 };
 
-Fulfilled.prototype.call = function Fulfilled_call(args, thisp) {
-    return this.value.apply(thisp, args);
+Fulfilled.prototype.invoke = function Fulfilled_invoke(name, args) {
+    return this.callInvoke(this.value[name], args, this.value);
+};
+
+Fulfilled.prototype.callInvoke = function Fulfilled_callInvoke(callback, args, thisp) {
+    var waitToBePassed;
+    for (var index = 0; index < args.length; index++) {
+        if (Q_isPromise(args[index]) && args[index].toBePassed()) {
+            waitToBePassed = waitToBePassed || [];
+            waitToBePassed.push(args[index]);
+        }
+    }
+    if (waitToBePassed) {
+        var self = this;
+        return Q_all(waitToBePassed).then(function () {
+            return self.callInvoke(callback, args.map(function (arg) {
+                if (Q_isPromise(arg) && arg.toBePassed()) {
+                    return arg.inspect().value;
+                } else {
+                    return arg;
+                }
+            }), thisp);
+        });
+    } else {
+        return callback.apply(thisp, args);
+    }
 };
 
 Fulfilled.prototype.keys = function Fulfilled_keys() {
@@ -4795,7 +3257,7 @@ Fulfilled.prototype.keys = function Fulfilled_keys() {
 };
 
 Fulfilled.prototype.iterate = function Fulfilled_iterate() {
-    return new Iterator(this.value);
+    return iterate(this.value);
 };
 
 Fulfilled.prototype.pull = function Fulfilled_pull() {
@@ -4875,7 +3337,7 @@ Pending.prototype.dispatch = function Pending_dispatch(resolve, op, operands) {
 
 Pending.prototype.become = function Pending_become(promise) {
     this.became = theViciousCycle;
-    var handler = Q_inspect(promise);
+    var handler = Q_getHandler(promise);
     this.became = handler;
 
     handlers.set(promise, handler);
@@ -4885,7 +3347,7 @@ Pending.prototype.become = function Pending_become(promise) {
         // makeQ does not have this asap call, so it must be queueing events
         // downstream. TODO look at makeQ to ascertain
         asap(function Pending_become_eachMessage_task() {
-            var handler = Q_inspect(promise);
+            var handler = Q_getHandler(promise);
             handler.dispatch.apply(handler, message);
         });
     });
@@ -4929,13 +3391,28 @@ Thenable.prototype.cast = function Thenable_cast() {
                 deferred.reject(exception);
             }
         });
-        this.became = Q_inspect(deferred.promise);
+        this.became = Q_getHandler(deferred.promise);
     }
     return this.became;
 };
 
 Thenable.prototype.dispatch = function Thenable_dispatch(resolve, op, args) {
     this.cast().dispatch(resolve, op, args);
+};
+
+
+function Passed(promise) {
+    this.promise = promise;
+}
+
+Passed.prototype.state = "passed";
+
+Passed.prototype.inspect = function Passed_inspect() {
+    return this.promise.inspect();
+};
+
+Passed.prototype.dispatch = function Passed_dispatch(resolve, op, args) {
+    return this.promise.rawDispatch(resolve, op, args);
 };
 
 
@@ -4957,8 +3434,19 @@ Q.ninvoke = function Q_ninvoke(object, name /*...args*/) {
         args[index - 2] = arguments[index];
     }
     var deferred = Q.defer();
-    args[index - 2] = makeNodebackResolver(deferred.resolve);
+    args[index - 2] = deferred.makeNodeResolver();
     Q(object).dispatch("invoke", [name, args]).catch(deferred.reject);
+    return deferred.promise;
+};
+
+Promise.prototype.ninvoke = function Promise_ninvoke(name /*...args*/) {
+    var args = new Array(arguments.length);
+    for (var index = 1; index < arguments.length; index++) {
+        args[index - 1] = arguments[index];
+    }
+    var deferred = Q.defer();
+    args[index - 1] = deferred.makeNodeResolver();
+    this.dispatch("invoke", [name, args]).catch(deferred.reject);
     return deferred.promise;
 };
 
@@ -4978,7 +3466,7 @@ Q.denodeify = function Q_denodeify(callback, pattern) {
             args[index] = arguments[index];
         }
         var deferred = Q.defer();
-        args[index] = makeNodebackResolver(deferred.resolve, pattern);
+        args[index] = deferred.makeNodeResolver(pattern);
         Q(callback).apply(this, args).catch(deferred.reject);
         return deferred.promise;
     };
@@ -4987,12 +3475,17 @@ Q.denodeify = function Q_denodeify(callback, pattern) {
 /**
  * Creates a Node.js-style callback that will resolve or reject the deferred
  * promise.
- * TODO
+ * @param unpack `true` means that the Node.js-style-callback accepts a
+ * fixed or variable number of arguments and that the deferred should be resolved
+ * with an array of these value arguments, or rejected with the error argument.
+ * An array of names means that the Node.js-style-callback accepts a fixed
+ * number of arguments, and that the resolution should be an object with
+ * properties corresponding to the given names and respective value arguments.
  * @returns a nodeback
- * @private
  */
-function makeNodebackResolver(resolve, names) {
-    if (names === true) {
+Deferred.prototype.makeNodeResolver = function (unpack) {
+    var resolve = this.resolve;
+    if (unpack === true) {
         return function variadicNodebackToResolver(error) {
             if (error) {
                 resolve(Q_reject(error));
@@ -5004,14 +3497,14 @@ function makeNodebackResolver(resolve, names) {
                 resolve(value);
             }
         };
-    } else if (names) {
+    } else if (unpack) {
         return function namedArgumentNodebackToResolver(error) {
             if (error) {
                 resolve(Q_reject(error));
             } else {
                 var value = {};
-                for (var index in names) {
-                    value[names[index]] = arguments[index + 1];
+                for (var index = 0; index < unpack.length; index++) {
+                    value[unpack[index]] = arguments[index + 1];
                 }
                 resolve(value);
             }
@@ -5025,7 +3518,7 @@ function makeNodebackResolver(resolve, names) {
             }
         };
     }
-}
+};
 
 /**
  * TODO
@@ -5212,7 +3705,7 @@ Promise.prototype.passByCopy = deprecate(function (value) {
 Q.nfapply = deprecate(function (callback, args) {
     var deferred = Q.defer();
     var nodeArgs = Array.prototype.slice.call(args);
-    nodeArgs.push(makeNodebackResolver(deferred.resolve));
+    nodeArgs.push(deferred.makeNodeResolver());
     Q(callback).apply(this, nodeArgs).catch(deferred.reject);
     return deferred.promise;
 }, "nfapply");
@@ -5239,7 +3732,7 @@ Q.nfbind = deprecate(function (callback /*...args*/) {
     return function () {
         var nodeArgs = baseArgs.concat(Array.prototype.slice.call(arguments));
         var deferred = Q.defer();
-        nodeArgs.push(makeNodebackResolver(deferred.resolve));
+        nodeArgs.push(deferred.makeNodeResolver());
         Q(callback).apply(this, nodeArgs).catch(deferred.reject);
         return deferred.promise;
     };
@@ -5258,7 +3751,7 @@ Q.nbind = deprecate(function (callback, thisp /*...args*/) {
     return function () {
         var nodeArgs = baseArgs.concat(Array.prototype.slice.call(arguments));
         var deferred = Q.defer();
-        nodeArgs.push(makeNodebackResolver(deferred.resolve));
+        nodeArgs.push(deferred.makeNodeResolver());
         function bound() {
             return callback.apply(thisp, arguments);
         }
@@ -5269,7 +3762,7 @@ Q.nbind = deprecate(function (callback, thisp /*...args*/) {
 
 Q.npost = deprecate(function (object, name, nodeArgs) {
     var deferred = Q.defer();
-    nodeArgs.push(makeNodebackResolver(deferred.resolve));
+    nodeArgs.push(deferred.makeNodeResolver());
     Q(object).dispatch("invoke", [name, nodeArgs]).catch(deferred.reject);
     return deferred.promise;
 }, "npost", "ninvoke (with spread arguments)");
@@ -5277,16 +3770,6 @@ Q.npost = deprecate(function (object, name, nodeArgs) {
 Promise.prototype.npost = deprecate(function (name, args) {
     return Q.npost(this, name, args);
 }, "npost", "Q.ninvoke (with caveats)");
-
-Q.makeNodeResolver = deprecate(makeNodebackResolver, "makeNodeResolver");
-
-Promise.prototype.ninvoke = deprecate(function (name) {
-    var args = new Array(arguments.length - 1);
-    for (var index = 1; index < arguments.length; index++) {
-        args[index - 1] = arguments[index];
-    }
-    return Q.npost(this, name, args);
-}, "ninvoke", "Q.ninvoke");
 
 Q.nmapply = deprecate(Q.nmapply, "nmapply", "q/node nmapply");
 Promise.prototype.nmapply = deprecate(Promise.prototype.npost, "nmapply", "Q.nmapply");

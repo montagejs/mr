@@ -1,3 +1,3 @@
-module.exports = function (text) {
-    return "module.exports = " + JSON.stringify(text) + ";";
+module.exports = function (module) {
+    module.text = "module.exports = " + JSON.stringify(module.text) + ";";
 };
