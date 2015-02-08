@@ -17,7 +17,7 @@ lcov-report/
 /node_modules/optimist
 /node_modules/q-io
 /node_modules/q
-/node_modules/qs
+/node_modules/query-string
 /node_modules/util
 /node_modules/wd
 /node_modules/websocket.io

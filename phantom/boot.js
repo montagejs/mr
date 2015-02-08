@@ -2,7 +2,7 @@
 
 var ChildProcess = require("child_process");
 var Q = require("q");
-var QS = require("qs");
+var QS = require("query-string");
 var Fs = require("q-io/fs");
 var Joey = require("joey");
 var Require = require("../require");

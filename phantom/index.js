@@ -1,7 +1,7 @@
 
 var Q = require("q");
 var URL = require("url");
-var QS = require("qs");
+var QS = require("query-string");
 var Require = require("../require");
 require("./console");
 

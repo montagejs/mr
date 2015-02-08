@@ -1,7 +1,7 @@
 /* global -URL */
 
 var URL = require("url");
-var QS = require("qs");
+var QS = require("query-string");
 
 var a = document.createElement("a");
 
