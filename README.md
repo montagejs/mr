@@ -4,7 +4,7 @@ Montage Require
 ===============
 
 This is a CommonJS module system, highly compatible with NodeJS,
-intended for front-end development of web applications using npme style
+intended for front-end development of web applications using npm style
 packages. It is designed to be automatically replaced by the Montage
 Optimizer with a smaller, faster and bundled production module system.
 
