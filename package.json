@@ -30,8 +30,7 @@
     }
   },
   "dependencies": {
-    "q": "0.9.7",
-    "bluebird":"marchant/bluebird.git#3.0"
+    "bluebird":"2.9.26"
   },
   "devDependencies": {
     "qs": "~0.6.5",
