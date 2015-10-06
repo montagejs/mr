@@ -42,11 +42,67 @@ function xhrSuccess(req) {
 // listeners.  The promise library ascertains that the returned promise
 // is resolved only by the first event.
 // http://dl.dropbox.com/u/131998/yui/misc/get/browser-capabilities.html
-Require.read = function (url) {
+Require.read = function (url, module) {
 
-    var request = new XMLHttpRequest();
-    var response = Promise.defer();
+    //var request = new XMLHttpRequest();
+    //var response = new Promise();
 
+    // var resolve = function resolve() {
+    //
+    // };
+    // var reject = function resolve() {
+    //
+    // };
+    var response = new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest;
+            // xhr.addEventListener("error", reject);
+            // xhr.addEventListener("load", resolve);
+            //try {
+                xhr.open(GET, url, true);
+                if (xhr.overrideMimeType) {
+                    xhr.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
+                }
+
+                //Benoit: Needed for backward compatibility that is now irrelevant?
+                // xhr.onreadystatechange = function () {
+                //     if (xhr.readyState === 4) {
+                //         resolve(xhr.responseText);
+                //     }
+                // };
+
+                function onload() {
+                    if (xhrSuccess(xhr)) {
+                        if(module) {
+                            module.type = "javascript";
+                            module.text = xhr.responseText;
+                            module.location = url;
+                        }
+                        resolve(xhr.responseText);
+
+                    } else {
+                        onerror();
+                    }
+                    xhr.onload = null;
+                    xhr.onerror = null;
+
+                }
+
+                function onerror() {
+                    reject(new Error("Can't XHR " + JSON.stringify(url)));
+                    xhr.onload = null;
+                    xhr.onerror = null;
+                }
+
+
+                xhr.onload = onload;
+                xhr.onerror = onerror;
+            //} catch (exception) {
+            //     reject(exception);
+            //}
+            xhr.send(null);
+        });
+
+/*
     function onload() {
         if (xhrSuccess(request)) {
             response.resolve(request.responseText);
@@ -76,7 +132,8 @@ Require.read = function (url) {
     }
 
     request.send();
-    return response.promise;
+*/
+    return response;
 };
 
 // By using a named "eval" most browsers will execute in the global scope.
@@ -133,20 +190,26 @@ Require.Compiler = function (config) {
 
 Require.XhrLoader = function (config) {
     return function (url, module) {
-        return config.read(url)
+        return config.read(url, module)
         .then(function (text) {
-            module.type = "javascript";
-            module.text = text;
-            module.location = url;
+             module.type = "javascript";
+             module.text = text;
+             module.location = url;
         });
     };
 };
 
 var definitions = {};
 var getDefinition = function (hash, id) {
-    definitions[hash] = definitions[hash] || {};
-    definitions[hash][id] = definitions[hash][id] || Promise.defer();
-    return definitions[hash][id];
+    var defHash = definitions[hash] = definitions[hash] || {};
+    if(!defHash[id]) {
+        var promiseResolve;
+        defHash[id] = new Promise(function(resolve, reject) {
+            promiseResolve = resolve;
+        });
+        defHash[id].resolve = promiseResolve;
+    }
+    return defHash[id];
 };
 
 var loadIfNotPreloaded = function (location, definition, preloaded) {
@@ -190,11 +253,11 @@ Require.loadScript = function (location) {
 Require.ScriptLoader = function (config) {
     var hash = config.packageDescription.hash;
     return function (location, module) {
-        return Promise.fcall(function () {
+        return Promise.try(function () {
 
             // short-cut by predefinition
             if (definitions[hash] && definitions[hash][module.id]) {
-                return definitions[hash][module.id].promise;
+                return definitions[hash][module.id];
             }
 
             if (/\.js$/.test(location)) {
@@ -203,7 +266,7 @@ Require.ScriptLoader = function (config) {
                 location += ".load.js";
             }
 
-            var definition = getDefinition(hash, module.id).promise;
+            var definition = getDefinition(hash, module.id);
             loadIfNotPreloaded(location, definition, config.preloaded);
 
             return definition;
@@ -225,7 +288,7 @@ Require.ScriptLoader = function (config) {
 var loadPackageDescription = Require.loadPackageDescription;
 Require.loadPackageDescription = function (dependency, config) {
     if (dependency.hash) { // use script injection
-        var definition = getDefinition(dependency.hash, "package.json").promise;
+        var definition = getDefinition(dependency.hash, "package.json");
         var location = URL.resolve(dependency.location, "package.json.load.js");
 
         loadIfNotPreloaded(location, definition, config.preloaded);

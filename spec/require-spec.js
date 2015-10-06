@@ -111,7 +111,7 @@ describe("Require", function () {
             }, function (reason, error) {
                 spec.fail(error || reason);
             })
-            .fin(function () {
+            .then(function () {
                 expect(message).toBe("DONE");
             });
 

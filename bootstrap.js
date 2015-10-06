@@ -200,12 +200,12 @@
             var getDefinition = function (name) {
                 return bundleDefinitions[name] =
                     bundleDefinitions[name] ||
-                        Promise.defer();
+                        Promise.resolve();
             };
             global.bundleLoaded = function (name) {
                 getDefinition(name).resolve();
             };
-            var preloading = Promise.defer();
+            var preloading = Promise.resolve();
             config.preloaded = preloading.promise;
             // preload bundles sequentially
             var preloaded = Promise.resolve();
