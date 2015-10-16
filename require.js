@@ -98,8 +98,9 @@
         // produces an entry in the module state table, which gets built
         // up through loading and execution, ultimately serving as the
         // ``module`` free variable inside the corresponding module.
+        var isLowercasePattern = /^[a-z]+$/;
         function getModuleDescriptor(id) {
-            var lookupId = id.toLowerCase();
+            var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
             if (!(lookupId in modules)) {
 				//var aModule = Object.create(_Module);
 				//var aModule = {};
@@ -171,23 +172,23 @@
                 return; // break the cycle of violence.
             }
             loading[topId] = true; // this has happened before
-            return load(topId, viaId)
+            return load(topId, loading[viaId])
             .then(function () {
                 // load the transitive dependencies using the magic of
                 // recursion.
-				var dependencies =  module.dependencies
-					, promises = []
-					, iModule
-					, depId
-					,dependees;
-				for(var i=0, countI = dependencies.length;(depId = dependencies[i]);i++) {
+        				var dependencies =  module.dependencies
+        					, promises = []
+        					, iModule
+        					, depId
+        					,dependees;
+        				for(var i=0;(depId = dependencies[i]);i++) {
                     depId = resolve(depId, topId);
                     // create dependees set, purely for debug purposes
                     iModule = getModuleDescriptor(depId);
                     dependees = iModule.dependees = iModule.dependees || {};
                     dependees[topId] = true;
                     promises.push(deepLoad(depId, topId, loading));
-				}
+        				}
                 return Promise.all(promises);
             }, function (error) {
                 module.error = error;
@@ -318,17 +319,18 @@
         function makeRequire(viaId) {
 
             // Main synchronously executing "require()" function
-            var require = function(id) {
-                var topId = resolve(id, viaId);
-                return getExports(topId, viaId);
+            var require = function require(id) {
+                //var topId = resolve(id, require.viaId);
+                return getExports(resolve(id, require.viaId), require.viaId);
             };
+            require.viaId = viaId;
 
             // Asynchronous "require.async()" which ensures async executation
             // (even with synchronous loaders)
             require.async = function(id) {
-                var topId = resolve(id, viaId);
+                var topId = resolve(id, this.viaId);
                 //var module = getModuleDescriptor(id);
-                return deepLoad(topId, viaId)
+                return deepLoad(topId, this.viaId)
                 .then(function () {
                     return require(topId);
                 });
@@ -337,7 +339,7 @@
 			require._resolved = Object.create(null);
 
             require.resolve = function (id) {
-                return this._resolved[id] || (this._resolved[id] = normalizeId(resolve(id, viaId)));
+                return this._resolved[id] || (this._resolved[id] = normalizeId(resolve(id, this.viaId)));
             };
 
             require.getModule = getModuleDescriptor; // XXX deprecated, use:
@@ -607,6 +609,23 @@
         return dependency;
     }
 
+    function processMappingDependencies(dependencies, mappings) {
+        if (!dependencies) {
+            return;
+        }
+        Object.keys(dependencies).forEach(function (name) {
+            if (!mappings[name]) {
+                // dependencies are equivalent to name and version mappings,
+                // though the version predicate string is presently ignored
+                // (TODO)
+                mappings[name] = {
+                    name: name,
+                    version: dependencies[name]
+                };
+            }
+        });
+    }
+
     function configurePackage(location, description, parent) {
 
         if (!/\/$/.test(location)) {
@@ -692,23 +711,10 @@
         // mappings, link this package to other packages.
         var mappings = description.mappings || {};
         // dependencies, devDependencies if not in production
-        [description.dependencies, !config.production ? description.devDependencies : null]
-        .forEach(function (dependencies) {
-            if (!dependencies) {
-                return;
-            }
-            Object.keys(dependencies).forEach(function (name) {
-                if (!mappings[name]) {
-                    // dependencies are equivalent to name and version mappings,
-                    // though the version predicate string is presently ignored
-                    // (TODO)
-                    mappings[name] = {
-                        name: name,
-                        version: dependencies[name]
-                    };
-                }
-            });
-        });
+        processMappingDependencies(description.dependencies,mappings);
+        if(!config.production) {
+          processMappingDependencies(description.devDependencies,mappings);
+        }
         // mappings
         Object.keys(mappings).forEach(function (name) {
             var mapping = mappings[name] = normalizeDependency(
@@ -990,13 +996,14 @@
     };
 
     var normalizePattern = /^(.*)\.js$/;
-    var normalizeId = function (id) {
-        var match = normalizePattern.exec(id);
+    var normalizeId = function normalizeId(id) {
+        var match = normalizeId.normalizePattern.exec(id);
         if (match) {
             return match[1];
         }
         return id;
     };
+    normalizeId.normalizePattern = normalizePattern;
 
     var memoize = function (callback, cache) {
         cache = cache || Object.create(null);
