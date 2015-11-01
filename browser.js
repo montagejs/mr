@@ -53,15 +53,17 @@ Require.read = function (url, module) {
     // var reject = function resolve() {
     //
     // };
+
+    var xhr = new XMLHttpRequest;
+    xhr.url = url;
+    xhr.module = module;
+
+    xhr.open(GET, url, true);
+    if (xhr.overrideMimeType) {
+        xhr.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
+    }
+
     var response = new Promise(function (resolve, reject) {
-            var xhr = new XMLHttpRequest;
-            // xhr.addEventListener("error", reject);
-            // xhr.addEventListener("load", resolve);
-            //try {
-                xhr.open(GET, url, true);
-                if (xhr.overrideMimeType) {
-                    xhr.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
-                }
 
                 //Benoit: Needed for backward compatibility that is now irrelevant?
                 // xhr.onreadystatechange = function () {
@@ -70,7 +72,9 @@ Require.read = function (url, module) {
                 //     }
                 // };
 
-                function onload() {
+                function onload(event) {
+                    var xhr = event.target,
+                        module = xhr.module;
                     if (xhrSuccess(xhr)) {
                         if(module) {
                             module.type = "javascript";
@@ -80,14 +84,16 @@ Require.read = function (url, module) {
                         resolve(xhr.responseText);
 
                     } else {
-                        onerror();
+                        xhr.onerror(event);
                     }
                     xhr.onload = null;
                     xhr.onerror = null;
 
                 }
 
-                function onerror() {
+                function onerror(event) {
+                  var xhr = event.target,
+                      url = xhr.url;
                     reject(new Error("Can't XHR " + JSON.stringify(url)));
                     xhr.onload = null;
                     xhr.onerror = null;
@@ -96,43 +102,9 @@ Require.read = function (url, module) {
 
                 xhr.onload = onload;
                 xhr.onerror = onerror;
-            //} catch (exception) {
-            //     reject(exception);
-            //}
-            xhr.send(null);
         });
+        xhr.send(null);
 
-/*
-    function onload() {
-        if (xhrSuccess(request)) {
-            response.resolve(request.responseText);
-        } else {
-            onerror();
-        }
-    }
-
-    function onerror() {
-        response.reject(new Error("Can't XHR " + JSON.stringify(url)));
-    }
-
-    try {
-        request.open(GET, url, true);
-        if (request.overrideMimeType) {
-            request.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
-        }
-        request.onreadystatechange = function () {
-            if (request.readyState === 4) {
-                onload();
-            }
-        };
-        request.onload = request.load = onload;
-        request.onerror = request.error = onerror;
-    } catch (exception) {
-        response.reject(exception);
-    }
-
-    request.send();
-*/
     return response;
 };
 
@@ -151,7 +123,8 @@ var DoubleUnderscore = "__",
     Underscore = "_",
     globalEvalConstantA = "(function ",
     globalEvalConstantB = "(require, exports, module) {",
-    globalEvalConstantC = "//*/\n})\n//# sourceURL=";
+    globalEvalConstantC = "//*/\n})\n//# sourceURL=",
+    globalConcatenator = [globalEvalConstantA,undefined,globalEvalConstantB,undefined,globalEvalConstantC,undefined];
 
 Require.Compiler = function (config) {
     return function(module) {
@@ -171,10 +144,12 @@ Require.Compiler = function (config) {
         //      TODO: investigate why this isn't working in Firebug.
         // 3. set displayName property on the factory function (Safari, Chrome)
 
-        var displayName = (module.require.config.name + DoubleUnderscore + module.id).replace(/[^\w\d]|^\d/g, Underscore);
-
+        var displayName = [module.require.config.name,DoubleUnderscore,module.id].join('').replace(/[^\w\d]|^\d/g, Underscore);
+        globalConcatenator[1] = displayName;
+        globalConcatenator[3] = module.text;
+        globalConcatenator[5] = module.location;
         try {
-            module.factory = globalEval(globalEvalConstantA+displayName+globalEvalConstantB+module.text+globalEvalConstantC+module.location);
+            module.factory = globalEval(globalConcatenator.join(''));
         } catch (exception) {
             exception.message = exception.message + " in " + module.location;
             throw exception;
@@ -223,8 +198,7 @@ var loadIfNotPreloaded = function (location, definition, preloaded) {
             if (definition.isPending()) {
                 Require.loadScript(location);
             }
-        })
-        .done();
+        });
     } else if (definition.isPending()) {
         // otherwise preloading has already completed and we don't have the
         // module, so load it

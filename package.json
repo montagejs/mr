@@ -23,15 +23,8 @@
     "mr": "bin/mr"
   },
   "production": true,
-  "mappings": {
-    "q": {
-      "name": "q",
-      "location": "packages/q"
-    }
-  },
   "dependencies": {
-    "q": "0.9.7",
-    "bluebird":"2.9.26"
+    "bluebird":"~3.0.2"
   },
   "devDependencies": {
     "qs": "~0.6.5",

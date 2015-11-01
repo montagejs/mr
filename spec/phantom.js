@@ -4,7 +4,7 @@ var PATH = require("path");
 var spawn = require("child_process").spawn;
 var util = require("util");
 
-var Q = require("q");
+var Promise = require("bluebird");
 var phantom = require("phantom-wd");
 var joey = require("joey");
 var Apps = require("q-io/http-apps");
@@ -23,7 +23,7 @@ if (COVERAGE) {
                 if (path.match(/.js$/) && !path.match(IGNORE_RE)) {
                     // instrument JS files
                     return FS.read(path, "r", "utf8").then(function (original) {
-                        var response = Q.defer();
+                        var response = Promise.defer();
                         instrumenter.instrument(original, path, function (err, instrumented) {
                             if (err) {
                                 response.reject(err);
@@ -72,7 +72,7 @@ phantom()
 .then(function (browser) {
     return browser.get(testPageUrl)
     .then(function () {
-        var done = Q.defer();
+        var done = Promise.defer();
 
         var poll = function() {
             browser.execute("return typeof jsApiReporter !== 'undefined' ? jsApiReporter.finished : false").then(function (isFinished) {
@@ -138,8 +138,7 @@ phantom()
         process.exit(1);
     }
     throw err;
-})
-.done();
+});
 
 function log(suites, results, name, info) {
     name = name || "";
@@ -174,4 +173,3 @@ function log(suites, results, name, info) {
 
     return info;
 }
-

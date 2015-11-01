@@ -10,6 +10,6 @@ describe("Mr on node", function () {
         .then(function (mr) {
             return mr.async("spec/require-spec");
         })
-        .thenResolve();
+        .thenReturn();
     });
 });

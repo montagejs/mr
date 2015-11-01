@@ -34,7 +34,7 @@
     } else if (typeof process !== "undefined") {
         // the parens trick the heuristic scanner for static dependencies, so
         // they are not pre-loaded by the asynchronous browser loader
-        var Promise = (require)("q");
+        var Promise = (require)("bluebird");
         var URL = (require)("url");
         definition(exports, Promise, URL);
         (require)("./node");
@@ -88,8 +88,6 @@
         config.compile = config.compile || config.makeCompiler(config);
         config.parseDependencies = config.parseDependencies || Require.parseDependencies;
         config.read = config.read || Require.read;
-        config.registry = Object.create(null);
-        config.packages = {};
 
         // Modules: { exports, id, location, directory, factory, dependencies,
         // dependees, text, type }
@@ -98,8 +96,9 @@
         // produces an entry in the module state table, which gets built
         // up through loading and execution, ultimately serving as the
         // ``module`` free variable inside the corresponding module.
+        var isLowercasePattern = /^[a-z]+$/;
         function getModuleDescriptor(id) {
-            var lookupId = id.toLowerCase();
+            var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
             if (!(lookupId in modules)) {
 				//var aModule = Object.create(_Module);
 				//var aModule = {};
@@ -180,14 +179,16 @@
 					, iModule
 					, depId
 					,dependees;
-				for(var i=0, countI = dependencies.length;(depId = dependencies[i]);i++) {
-                    depId = resolve(depId, topId);
+				for(var i=0;(depId = dependencies[i]);i++) {
+                    depId = normalizeId(resolve(depId, topId));
                     // create dependees set, purely for debug purposes
-                    iModule = getModuleDescriptor(depId);
-                    dependees = iModule.dependees = iModule.dependees || {};
-                    dependees[topId] = true;
+                    // if(true) {
+                    //     iModule = getModuleDescriptor(depId);
+                    //     dependees = iModule.dependees = iModule.dependees || {};
+                    //     dependees[topId] = true;
+                    // }
                     promises.push(deepLoad(depId, topId, loading));
-				}
+    			}
                 return Promise.all(promises);
             }, function (error) {
                 module.error = error;
@@ -318,26 +319,24 @@
         function makeRequire(viaId) {
 
             // Main synchronously executing "require()" function
-            var require = function(id) {
-                var topId = resolve(id, viaId);
-                return getExports(topId, viaId);
+            var require = function require(id) {
+                //var topId = resolve(id, require.viaId);
+                return getExports(/*topId*/normalizeId(resolve(id, require.viaId)), require.viaId);
             };
+            require.viaId = viaId;
 
             // Asynchronous "require.async()" which ensures async executation
             // (even with synchronous loaders)
             require.async = function(id) {
-                var topId = resolve(id, viaId);
-                //var module = getModuleDescriptor(id);
-                return deepLoad(topId, viaId)
+                var topId = resolve(id, this.viaId);
+                return deepLoad(topId, this.viaId)
                 .then(function () {
                     return require(topId);
                 });
             };
 
-			require._resolved = Object.create(null);
-
             require.resolve = function (id) {
-                return this._resolved[id] || (this._resolved[id] = normalizeId(resolve(id, viaId)));
+                return normalizeId(resolve(id, this.viaId));
             };
 
             require.getModule = getModuleDescriptor; // XXX deprecated, use:
@@ -607,6 +606,23 @@
         return dependency;
     }
 
+    function processMappingDependencies(dependencies, mappings) {
+        if (!dependencies) {
+            return;
+        }
+        Object.keys(dependencies).forEach(function (name) {
+            if (!mappings[name]) {
+                // dependencies are equivalent to name and version mappings,
+                // though the version predicate string is presently ignored
+                // (TODO)
+                mappings[name] = {
+                    name: name,
+                    version: dependencies[name]
+                };
+            }
+        });
+    }
+
     function configurePackage(location, description, parent) {
 
         if (!/\/$/.test(location)) {
@@ -692,23 +708,10 @@
         // mappings, link this package to other packages.
         var mappings = description.mappings || {};
         // dependencies, devDependencies if not in production
-        [description.dependencies, !config.production ? description.devDependencies : null]
-        .forEach(function (dependencies) {
-            if (!dependencies) {
-                return;
-            }
-            Object.keys(dependencies).forEach(function (name) {
-                if (!mappings[name]) {
-                    // dependencies are equivalent to name and version mappings,
-                    // though the version predicate string is presently ignored
-                    // (TODO)
-                    mappings[name] = {
-                        name: name,
-                        version: dependencies[name]
-                    };
-                }
-            });
-        });
+        processMappingDependencies(description.dependencies,mappings);
+        if(!config.production) {
+          processMappingDependencies(description.devDependencies,mappings);
+        }
         // mappings
         Object.keys(mappings).forEach(function (name) {
             var mapping = mappings[name] = normalizeDependency(
@@ -744,7 +747,7 @@
     function resolve(id, baseId) {
 		var resolved = _resolved[id] || (_resolved[id] = Object.create(null));
 		var i, ii;
-		if(!(baseId in resolved)) {
+		if(!(baseId in resolved) || !(id in resolved[baseId])) {
 	        id = String(id);
 	        var source = _resolveStringtoArray[id] || (_resolveStringtoArray[id] = id.split("/"));
 	        var parts = _resolveStringtoArray[baseId] || (_resolveStringtoArray[baseId] = baseId.split("/"));
@@ -757,10 +760,13 @@
 	        for (i = 0, ii = source.length; i < ii; i++) {
 	            _resolveItem(source, source[i], _target);
 	        }
-	        resolved[baseId] = _target.join("/");
+            if(!resolved[baseId]) {
+                resolved[baseId] = {};
+            }
+	        resolved[baseId][id] = _target.join("/");
 	        _target.length = 0;
 		}
-		return resolved[baseId];
+		return resolved[baseId][id];
     }
 
     var extensionPattern = /\.([^\/\.]+)$/;
@@ -974,7 +980,7 @@
             )) {
                 path += ".js";
             }
-            var location = URL.resolve(config.location, path);
+            var location = module.location = URL.resolve(config.location, path);
             var result;
             if(config.delegate && config.delegate.packageWillLoadModuleAtLocation) {
                 result = config.delegate.packageWillLoadModuleAtLocation(module,location);
@@ -990,13 +996,17 @@
     };
 
     var normalizePattern = /^(.*)\.js$/;
-    var normalizeId = function (id) {
-        var match = normalizePattern.exec(id);
-        if (match) {
-            return match[1];
+    var normalizeId = function normalizeId(id) {
+        if(!(id in normalizeId.cache)) {
+            var match = normalizeId.normalizePattern.exec(id);
+            normalizeId.cache[id] = ( match
+                                        ? match[1]
+                                        : id);
         }
-        return id;
+        return normalizeId.cache[id];
     };
+    normalizeId.cache = Object.create(null);
+    normalizeId.normalizePattern = normalizePattern;
 
     var memoize = function (callback, cache) {
         cache = cache || Object.create(null);

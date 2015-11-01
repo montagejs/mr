@@ -27,12 +27,24 @@
         var pending = {
             "require": "require.js",
             "require/browser": "browser.js",
-            "promise": "packages/q/q.js"
+            "promise": "node_modules/bluebird/js/browser/bluebird.js"
         };
 
         /*jshint -W089 */
         if (!global.preload) {
             var mrLocation = resolve(window.location, params.mrLocation);
+
+            //Special Case bluebird for now:
+            load(resolve(mrLocation, "node_modules/bluebird/js/browser/bluebird.js"),function() {
+                //global.bootstrap cleans itself from window once all known are loaded. "bluebird" is not known, so needs to do it first
+                global.bootstrap("bluebird", function (require, exports) {
+                    return window.Promise;
+                });
+                global.bootstrap("promise", function (require, exports) {
+                    return window.Promise;
+                });
+            });
+
             for (var id in pending) {
                 load(resolve(mrLocation, pending[id]));
             }
@@ -176,10 +188,11 @@
 
     var resolve = makeResolve();
 
-    var load = function (location) {
+    var load = function (location, loadCallback) {
         var script = document.createElement("script");
         script.src = location;
         script.onload = function () {
+            if(loadCallback) loadCallback(script);
             // remove clutter
             script.parentNode.removeChild(script);
         };
@@ -234,28 +247,18 @@
             mrRequire.inject("promise", Promise);
             mrRequire.inject("require", Require);
 
+            if ("autoPackage" in params) {
+                mrRequire.injectPackageDescription(applicationLocation, {});
+            }
+
             return mrRequire.loadPackage({
-                name: "q",
-                location: params.qLocation,
-                hash: params.qHash
-            })
-            .then(function (qRequire) {
-
-                qRequire.inject("q", Promise);
-
-                if ("autoPackage" in params) {
-                    mrRequire.injectPackageDescription(applicationLocation, {});
-                }
-
-                return mrRequire.loadPackage({
-                    location: applicationLocation,
-                    hash: params.applicationHash
-                })
-                .invoke('async', moduleId);
+                location: applicationLocation,
+                hash: params.applicationHash
+            }).then(function (aPackage) {
+                aPackage.async(moduleId);
             });
 
-        })
-        .done();
+        });
 
     });
 
