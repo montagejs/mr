@@ -1,13 +1,13 @@
 var test = require("test");
-var Q = require("q");
+var Promise = require("bluebird");
 
 function read(location) {
     if (location === "http://test/package.json") {
-        return Q(JSON.stringify({name: "pass"}));
+        return Promise.resolve(JSON.stringify({name: "pass"}));
     } else if (location === "http://test/module.js") {
-        return Q("module.exports = 5");
+        return Promise.resolve("module.exports = 5");
     } else {
-        return Q.reject(new Error(location + " not here"));
+        return Promise.reject(new Error(location + " not here"));
     }
 }
 

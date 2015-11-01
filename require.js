@@ -34,7 +34,7 @@
     } else if (typeof process !== "undefined") {
         // the parens trick the heuristic scanner for static dependencies, so
         // they are not pre-loaded by the asynchronous browser loader
-        var Promise = (require)("q");
+        var Promise = (require)("bluebird");
         var URL = (require)("url");
         definition(exports, Promise, URL);
         (require)("./node");
@@ -88,8 +88,6 @@
         config.compile = config.compile || config.makeCompiler(config);
         config.parseDependencies = config.parseDependencies || Require.parseDependencies;
         config.read = config.read || Require.read;
-        config.registry = Object.create(null);
-        config.packages = {};
 
         // Modules: { exports, id, location, directory, factory, dependencies,
         // dependees, text, type }
@@ -172,23 +170,25 @@
                 return; // break the cycle of violence.
             }
             loading[topId] = true; // this has happened before
-            return load(topId, loading[viaId])
+            return load(topId, viaId)
             .then(function () {
                 // load the transitive dependencies using the magic of
                 // recursion.
-        				var dependencies =  module.dependencies
-        					, promises = []
-        					, iModule
-        					, depId
-        					,dependees;
-        				for(var i=0;(depId = dependencies[i]);i++) {
-                    depId = resolve(depId, topId);
+				var dependencies =  module.dependencies
+					, promises = []
+					, iModule
+					, depId
+					,dependees;
+				for(var i=0;(depId = dependencies[i]);i++) {
+                    depId = normalizeId(resolve(depId, topId));
                     // create dependees set, purely for debug purposes
-                    iModule = getModuleDescriptor(depId);
-                    dependees = iModule.dependees = iModule.dependees || {};
-                    dependees[topId] = true;
+                    // if(true) {
+                    //     iModule = getModuleDescriptor(depId);
+                    //     dependees = iModule.dependees = iModule.dependees || {};
+                    //     dependees[topId] = true;
+                    // }
                     promises.push(deepLoad(depId, topId, loading));
-        				}
+    			}
                 return Promise.all(promises);
             }, function (error) {
                 module.error = error;
@@ -321,7 +321,7 @@
             // Main synchronously executing "require()" function
             var require = function require(id) {
                 //var topId = resolve(id, require.viaId);
-                return getExports(resolve(id, require.viaId), require.viaId);
+                return getExports(/*topId*/normalizeId(resolve(id, require.viaId)), require.viaId);
             };
             require.viaId = viaId;
 
@@ -329,17 +329,14 @@
             // (even with synchronous loaders)
             require.async = function(id) {
                 var topId = resolve(id, this.viaId);
-                //var module = getModuleDescriptor(id);
                 return deepLoad(topId, this.viaId)
                 .then(function () {
                     return require(topId);
                 });
             };
 
-			require._resolved = Object.create(null);
-
             require.resolve = function (id) {
-                return this._resolved[id] || (this._resolved[id] = normalizeId(resolve(id, this.viaId)));
+                return normalizeId(resolve(id, this.viaId));
             };
 
             require.getModule = getModuleDescriptor; // XXX deprecated, use:
@@ -750,7 +747,7 @@
     function resolve(id, baseId) {
 		var resolved = _resolved[id] || (_resolved[id] = Object.create(null));
 		var i, ii;
-		if(!(baseId in resolved)) {
+		if(!(baseId in resolved) || !(id in resolved[baseId])) {
 	        id = String(id);
 	        var source = _resolveStringtoArray[id] || (_resolveStringtoArray[id] = id.split("/"));
 	        var parts = _resolveStringtoArray[baseId] || (_resolveStringtoArray[baseId] = baseId.split("/"));
@@ -763,10 +760,13 @@
 	        for (i = 0, ii = source.length; i < ii; i++) {
 	            _resolveItem(source, source[i], _target);
 	        }
-	        resolved[baseId] = _target.join("/");
+            if(!resolved[baseId]) {
+                resolved[baseId] = {};
+            }
+	        resolved[baseId][id] = _target.join("/");
 	        _target.length = 0;
 		}
-		return resolved[baseId];
+		return resolved[baseId][id];
     }
 
     var extensionPattern = /\.([^\/\.]+)$/;
@@ -980,7 +980,7 @@
             )) {
                 path += ".js";
             }
-            var location = URL.resolve(config.location, path);
+            var location = module.location = URL.resolve(config.location, path);
             var result;
             if(config.delegate && config.delegate.packageWillLoadModuleAtLocation) {
                 result = config.delegate.packageWillLoadModuleAtLocation(module,location);
@@ -997,12 +997,15 @@
 
     var normalizePattern = /^(.*)\.js$/;
     var normalizeId = function normalizeId(id) {
-        var match = normalizeId.normalizePattern.exec(id);
-        if (match) {
-            return match[1];
+        if(!(id in normalizeId.cache)) {
+            var match = normalizeId.normalizePattern.exec(id);
+            normalizeId.cache[id] = ( match
+                                        ? match[1]
+                                        : id);
         }
-        return id;
+        return normalizeId.cache[id];
     };
+    normalizeId.cache = Object.create(null);
     normalizeId.normalizePattern = normalizePattern;
 
     var memoize = function (callback, cache) {

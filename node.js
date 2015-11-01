@@ -7,7 +7,7 @@
 */
 /*jshint node:true */
 var Require = require("./require");
-var Promise = require("q");
+var Promise = require("bluebird");
 var FS = require("fs");
 var URL = require("url");
 var PATH = require("path");
@@ -96,11 +96,11 @@ Require.Loader = function Loader(config, load) {
 Require.NodeLoader = function NodeLoader(config) {
     return function nodeLoad(location, module) {
         var id = location.slice(config.location.length);
-        return {
-            type: "native",
-            exports: require(id),
-            location: location
-        };
+        id = id.substr(0,id.lastIndexOf('.'));
+        module.type = "native";
+        module.exports = require(id);
+        module.location = location;
+        return module;
     };
 };
 
@@ -154,4 +154,3 @@ Require.findPackageLocationAndModuleId = function findPackageLocationAndModuleId
         throw new Error("Can't find package: " + path);
     });
 };
-

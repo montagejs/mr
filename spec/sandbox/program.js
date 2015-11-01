@@ -1,12 +1,12 @@
 var test = require("test");
-var Q = require("q");
+var Promise = require("bluebird");
 
 var sandbox = require("mr/sandbox");
 
 var a = require("./a");
 var dep = require("dependency/main");
 
-return Q.all([
+return Promise.all([
     sandbox(require, "./a", {
         "./b": "mocked"
     }),

@@ -9,7 +9,7 @@
 var Require = require("./require");
 require("./node"); // patches Require
 var URL = require("url");
-var Promise = require("q");
+var Promise = require("bluebird");
 var FS = require("fs");
 var PATH = require("path");
 
@@ -54,8 +54,7 @@ var loadPackagedModule = function (directory, program, command, args) {
     .then(function (require) {
         var id = program.slice(directory.length + 1);
         return require.async(id);
-    })
-    .done();
+    });
 };
 
 exports.loadPackage = loadPackage;
@@ -79,11 +78,9 @@ var loadFreeModule = function (program, command, args) {
     .then(function (require) {
         var id = program.slice(directory.length);
         return require.async(id);
-    })
-    .done();
+    });
 };
 
 if (require.main === module) {
     bootstrap();
 }
-

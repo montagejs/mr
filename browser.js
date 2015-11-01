@@ -198,8 +198,7 @@ var loadIfNotPreloaded = function (location, definition, preloaded) {
             if (definition.isPending()) {
                 Require.loadScript(location);
             }
-        })
-        .done();
+        });
     } else if (definition.isPending()) {
         // otherwise preloading has already completed and we don't have the
         // module, so load it
