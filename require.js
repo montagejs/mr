@@ -175,21 +175,32 @@
                 // load the transitive dependencies using the magic of
                 // recursion.
 				var dependencies =  module.dependencies
-					, promises = []
+					, promises
 					, iModule
 					, depId
-					,dependees;
-				for(var i=0;(depId = dependencies[i]);i++) {
-                    depId = normalizeId(resolve(depId, topId));
-                    // create dependees set, purely for debug purposes
-                    // if(true) {
-                    //     iModule = getModuleDescriptor(depId);
-                    //     dependees = iModule.dependees = iModule.dependees || {};
-                    //     dependees[topId] = true;
-                    // }
-                    promises.push(deepLoad(depId, topId, loading));
-    			}
-                return Promise.all(promises);
+					,dependees
+                    ,iPromise;
+                if(dependencies && dependencies.length > 0) {
+    				for(var i=0;(depId = dependencies[i]);i++) {
+                        depId = normalizeId(resolve(depId, topId));
+                        // create dependees set, purely for debug purposes
+                        // if(true) {
+                        //     iModule = getModuleDescriptor(depId);
+                        //     dependees = iModule.dependees = iModule.dependees || {};
+                        //     dependees[topId] = true;
+                        // }
+                        iPromise = deepLoad(depId, topId, loading);
+                        if(iPromise) {
+                            promises
+                                ? promises.push(iPromise)
+                                : (promises = [iPromise]);
+                        }
+        			}
+                }
+
+                return promises && promises.length > 0
+                        ? (promises.length === 1 ? promises[0] : Promise.all(promises))
+                        : null;
             }, function (error) {
                 module.error = error;
             });
