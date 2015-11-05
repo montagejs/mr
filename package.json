@@ -24,7 +24,7 @@
   },
   "production": true,
   "dependencies": {
-    "bluebird":"~3.0.2"
+    "bluebird":"~2.10.2"
   },
   "devDependencies": {
     "qs": "~0.6.5",
