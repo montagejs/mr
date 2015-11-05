@@ -27,7 +27,7 @@
         var pending = {
             "require": "require.js",
             "require/browser": "browser.js",
-            "promise": "node_modules/bluebird/js/browser/bluebird.js"
+            "promise": "node_modules/bluebird/js/browser/bluebird.min.js"
         };
 
         /*jshint -W089 */
@@ -35,7 +35,7 @@
             var mrLocation = resolve(window.location, params.mrLocation);
 
             //Special Case bluebird for now:
-            load(resolve(mrLocation, "node_modules/bluebird/js/browser/bluebird.js"),function() {
+            load(resolve(mrLocation, "node_modules/bluebird/js/browser/bluebird.min.js"),function() {
                 //global.bootstrap cleans itself from window once all known are loaded. "bluebird" is not known, so needs to do it first
                 global.bootstrap("bluebird", function (require, exports) {
                     return window.Promise;
