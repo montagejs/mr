@@ -339,7 +339,7 @@
             // Asynchronous "require.async()" which ensures async executation
             // (even with synchronous loaders)
             require.async = function(id) {
-                var topId = resolve(id, this.viaId);
+                var topId = normalizeId(resolve(id, this.viaId));
                 return deepLoad(topId, this.viaId)
                 .then(function () {
                     return require(topId);
