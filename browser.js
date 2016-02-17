@@ -13,6 +13,7 @@ var URL = require("mini-url");
 var GET = "GET";
 var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";
 var FILE_PROTOCOL = "file:";
+var JAVASCRIPT = "javascript";
 var global = typeof global !== "undefined" ? global : window;
 
 var location;
@@ -42,68 +43,59 @@ function xhrSuccess(req) {
 // listeners.  The promise library ascertains that the returned promise
 // is resolved only by the first event.
 // http://dl.dropbox.com/u/131998/yui/misc/get/browser-capabilities.html
+var xhrPool = [];
+function onload(event) {
+    var xhr = event.target,
+        module = xhr.module;
+    if (xhrSuccess(xhr)) {
+        if(module) {
+            module.type = JAVASCRIPT;
+            module.text = xhr.responseText;
+            module.location = xhr.url;
+        }
+        xhr.resolve(xhr.responseText);
+        xhrPool.push(xhr);
+
+    } else {
+        xhr.onerror(event);
+    }
+}
+
+function onerror(event) {
+  var xhr = event.target,
+      url = xhr.url;
+    xhr.reject(new Error("Can't XHR " + JSON.stringify(url)));
+    xhrPool.push(xhr);
+}
+
 Require.read = function (url, module) {
+    var xhr = xhrPool.pop();
 
-    //var request = new XMLHttpRequest();
-    //var response = new Promise();
-
-    // var resolve = function resolve() {
-    //
-    // };
-    // var reject = function resolve() {
-    //
-    // };
-
-    var xhr = new XMLHttpRequest;
+    if(!xhr) {
+        xhr = new XMLHttpRequest;
+        if (xhr.overrideMimeType) {
+            xhr.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
+        }
+        xhr.onload = onload;
+        xhr.onerror = onerror;
+    }
     xhr.url = url;
     xhr.module = module;
 
     xhr.open(GET, url, true);
-    if (xhr.overrideMimeType) {
-        xhr.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
-    }
 
     var response = new Promise(function (resolve, reject) {
+        xhr.resolve = resolve;
+        xhr.reject = reject;
+        //Benoit: Needed for backward compatibility that is now irrelevant?
+        // xhr.onreadystatechange = function () {
+        //     if (xhr.readyState === 4) {
+        //         resolve(xhr.responseText);
+        //     }
+        // };
 
-                //Benoit: Needed for backward compatibility that is now irrelevant?
-                // xhr.onreadystatechange = function () {
-                //     if (xhr.readyState === 4) {
-                //         resolve(xhr.responseText);
-                //     }
-                // };
-
-                function onload(event) {
-                    var xhr = event.target,
-                        module = xhr.module;
-                    if (xhrSuccess(xhr)) {
-                        if(module) {
-                            module.type = "javascript";
-                            module.text = xhr.responseText;
-                            module.location = url;
-                        }
-                        resolve(xhr.responseText);
-
-                    } else {
-                        xhr.onerror(event);
-                    }
-                    xhr.onload = null;
-                    xhr.onerror = null;
-
-                }
-
-                function onerror(event) {
-                  var xhr = event.target,
-                      url = xhr.url;
-                    reject(new Error("Can't XHR " + JSON.stringify(url)));
-                    xhr.onload = null;
-                    xhr.onerror = null;
-                }
-
-
-                xhr.onload = onload;
-                xhr.onerror = onerror;
-        });
-        xhr.send(null);
+    });
+    xhr.send(null);
 
     return response;
 };
@@ -148,12 +140,8 @@ Require.Compiler = function (config) {
         globalConcatenator[1] = displayName;
         globalConcatenator[3] = module.text;
         globalConcatenator[5] = module.location;
-        try {
-            module.factory = globalEval(globalConcatenator.join(''));
-        } catch (exception) {
-            exception.message = exception.message + " in " + module.location;
-            throw exception;
-        }
+
+        module.factory = globalEval(globalConcatenator.join(''));
 
         // This should work and would be simpler, but Firebug does not show scripts executed via "new Function()" constructor.
         // TODO: sniff browser?
@@ -167,7 +155,7 @@ Require.XhrLoader = function (config) {
     return function (url, module) {
         return config.read(url, module)
         .then(function (text) {
-             module.type = "javascript";
+             module.type = JAVASCRIPT;
              module.text = text;
              module.location = url;
         });

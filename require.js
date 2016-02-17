@@ -100,8 +100,6 @@
         function getModuleDescriptor(id) {
             var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
             if (!(lookupId in modules)) {
-				//var aModule = Object.create(_Module);
-				//var aModule = {};
 				var aModule = new _Module;
                 modules[lookupId] = aModule;
                     aModule.id = id;
@@ -161,20 +159,20 @@
         // Load a module definition, and the definitions of its transitive
         // dependencies
         function deepLoad(topId, viaId, loading) {
-            var module = getModuleDescriptor(topId);
             // this is a memo of modules already being loaded so we don’t
             // data-lock on a cycle of dependencies.
             loading = loading || Object.create(null);
             // has this all happened before?  will it happen again?
             if (topId in loading) {
-                return; // break the cycle of violence.
+                return null; // break the cycle of violence.
             }
             loading[topId] = true; // this has happened before
             return load(topId, viaId)
             .then(function () {
                 // load the transitive dependencies using the magic of
                 // recursion.
-				var dependencies =  module.dependencies
+                var module = getModuleDescriptor(topId),
+    				dependencies =  module.dependencies
 					, promises
 					, iModule
 					, depId
@@ -182,27 +180,25 @@
                     ,iPromise;
                 if(dependencies && dependencies.length > 0) {
     				for(var i=0;(depId = dependencies[i]);i++) {
-                        depId = normalizeId(resolve(depId, topId));
                         // create dependees set, purely for debug purposes
                         // if(true) {
                         //     iModule = getModuleDescriptor(depId);
                         //     dependees = iModule.dependees = iModule.dependees || {};
                         //     dependees[topId] = true;
                         // }
-                        iPromise = deepLoad(depId, topId, loading);
-                        if(iPromise) {
+                        if((iPromise = deepLoad(normalizeId(resolve(depId, topId)), topId, loading))) {
                             promises
-                                ? promises.push(iPromise)
-                                : (promises = [iPromise]);
+                                ? (promises.push ? promises.push(iPromise) : (promises = [promises,iPromise]))
+                                : (promises = iPromise);
                         }
         			}
                 }
 
-                return promises && promises.length > 0
-                        ? (promises.length === 1 ? promises[0] : Promise.all(promises))
+                return promises
+                        ? (promises.push === void 0 ? promises : Promise.all(promises))
                         : null;
             }, function (error) {
-                module.error = error;
+                getModuleDescriptor(topId).error = error;
             });
         }
 
@@ -760,16 +756,17 @@
 		var i, ii;
 		if(!(baseId in resolved) || !(id in resolved[baseId])) {
 	        id = String(id);
-	        var source = _resolveStringtoArray[id] || (_resolveStringtoArray[id] = id.split("/"));
-	        var parts = _resolveStringtoArray[baseId] || (_resolveStringtoArray[baseId] = baseId.split("/"));
-	        //var target = [];
+	        var source = _resolveStringtoArray[id] || (_resolveStringtoArray[id] = id.split("/")),
+                parts = _resolveStringtoArray[baseId] || (_resolveStringtoArray[baseId] = baseId.split("/")),
+                resolveItem = _resolveItem;
+
 	        if (source.length && source[0] === "." || source[0] === "..") {
 	            for (i = 0, ii = parts.length-1; i < ii; i++) {
-    	            _resolveItem(parts, parts[i], _target);
+    	            resolveItem(parts, parts[i], _target);
     	        }
 	        }
 	        for (i = 0, ii = source.length; i < ii; i++) {
-	            _resolveItem(source, source[i], _target);
+	            resolveItem(source, source[i], _target);
 	        }
             if(!resolved[baseId]) {
                 resolved[baseId] = {};
@@ -862,6 +859,8 @@
             try {
                 compile(module);
             } catch (error) {
+                error.message = error.message + " in " + module.location;
+                console.log(error);
                 if (config.lint) {
                     Promise.resolve().then(function () {
                         config.lint(module);
