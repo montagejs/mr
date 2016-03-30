@@ -53,6 +53,26 @@
 
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
     // comment.
+    var Map
+    if(!global.Map) {
+        Map = function _Map() {
+            this._content = Object.create(null);
+        };
+        Map.prototype.constructor = Map;
+        Map.prototype.set = function(key,value) {
+            this._content[key] = value;
+            return this;
+        };
+        Map.prototype.get = function(key) {
+            return this.hasOwnProperty.call(this._content,key) ? this._content[key] : null;
+        };
+        Map.prototype.has = function(key) {
+            return  key in this._content;
+        }
+    }
+    else {
+        Map = global.Map;
+    }
 
 
 	var _Module = function _Module() {};
@@ -103,7 +123,9 @@
 				var aModule = new _Module;
                 modules[lookupId] = aModule;
                     aModule.id = id;
-                    aModule.display = (config.name || config.location) + "#" + id; // EXTENSION
+                    aModule.display = (config.name || config.location); // EXTENSION
+                    aModule.display += "#"; // EXTENSION
+                    aModule.display += id; // EXTENSION
                     aModule.require = require;
             }
             return modules[lookupId];
@@ -289,11 +311,11 @@
             }
 
             var internal = !!seen;
-            seen = seen || Object.create(null);
-            if (location in seen) {
+            seen = seen || new Map;
+            if (seen.has(location)) {
                 return null; // break the cycle of violence.
             }
-            seen[location] = true;
+            seen.set(location,true);
             /*jshint -W089 */
             for (var name in config.mappings) {
                 var mapping = config.mappings[name];
@@ -308,7 +330,9 @@
                 } else if (id1 === "") {
                     return name;
                 } else {
-                    return name + "/" + id1;
+                    name += "/";
+                    name += id1;
+                    return name;
                 }
             }
             if (internal) {
@@ -494,7 +518,7 @@
         config = Object.create(config || null);
         var loadingPackages = config.loadingPackages = config.loadingPackages || {};
         var loadedPackages = config.packages = {};
-        var registry = config.registry = config.registry || Object.create(null);
+        var registry = config.registry = config.registry || new Map;
         config.mainPackageLocation = location;
 
         config.hasPackage = function (dependency) {
@@ -574,9 +598,9 @@
         if (
             dependency.name &&
             config.registry &&
-            config.registry[dependency.name]
+            config.registry.has(dependency.name)
         ) {
-            dependency.location = config.registry[dependency.name];
+            dependency.location = config.registry.get(dependency.name);
         }
         // default location
         if (!dependency.location && config.packagesDirectory && dependency.name) {
@@ -608,7 +632,7 @@
         }
         // register the package name so the location can be reused
         if (dependency.name) {
-            config.registry[dependency.name] = dependency.location;
+            config.registry.set(dependency.name,dependency.location);
         }
         return dependency;
     }
@@ -651,8 +675,8 @@
         var modules = config.modules = config.modules || {};
 
         var registry = config.registry;
-        if (config.name !== void 0 && !registry[config.name]) {
-            registry[config.name] = config.location;
+        if (config.name !== void 0 && !registry.has(config.name)) {
+            registry.set(config.name,config.location);
         }
 
         // overlay
@@ -734,8 +758,8 @@
 
     // Resolves CommonJS module IDs (not paths)
     Require.resolve = resolve;
-	var _resolved = Object.create(null);
-	var _resolveStringtoArray = Object.create(null);
+	var _resolved = new Map;
+	var _resolveStringtoArray = new Map;
 	var _target = [];
 
 	function _resolveItem(source, part, target) {
@@ -752,12 +776,12 @@
 	}
 
     function resolve(id, baseId) {
-		var resolved = _resolved[id] || (_resolved[id] = Object.create(null));
+		var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map)) && resolved);
 		var i, ii;
-		if(!(baseId in resolved) || !(id in resolved[baseId])) {
+		if(!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
 	        id = String(id);
-	        var source = _resolveStringtoArray[id] || (_resolveStringtoArray[id] = id.split("/")),
-                parts = _resolveStringtoArray[baseId] || (_resolveStringtoArray[baseId] = baseId.split("/")),
+	        var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source),
+                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split("/"))) && parts),
                 resolveItem = _resolveItem;
 
 	        if (source.length && source[0] === "." || source[0] === "..") {
@@ -768,13 +792,13 @@
 	        for (i = 0, ii = source.length; i < ii; i++) {
 	            resolveItem(source, source[i], _target);
 	        }
-            if(!resolved[baseId]) {
-                resolved[baseId] = {};
+            if(!resolved.get(baseId)) {
+                resolved.set(baseId, new Map);
             }
-	        resolved[baseId][id] = _target.join("/");
+	        resolved.get(baseId).set(id, _target.join("/"));
 	        _target.length = 0;
 		}
-		return resolved[baseId][id];
+		return resolved.get(baseId).get(id);
     }
 
     var extensionPattern = /\.([^\/\.]+)$/;
@@ -964,10 +988,9 @@
                     id.charAt(prefix.length) === "/"
                 ) {
                     /*jshint -W083 */
-                    var mapping = mappings[prefix];
-                    var rest = id.slice(prefix.length + 1);
-                    return config.loadPackage(mapping, config)
+                    return config.loadPackage(/*mapping*/ mappings[prefix], config)
                     .then(function (mappingRequire) {
+                        var rest = id.slice(prefix.length + 1);
                         /*jshint +W083 */
                         module.mappingRedirect = rest;
                         module.mappingRequire = mappingRequire;
@@ -1001,28 +1024,28 @@
     };
 
     Require.MemoizedLoader = function (config, load) {
-        var cache = config.cache = config.cache || Object.create(null);
+        var cache = config.cache = config.cache || new Map;
         return memoize(load, cache);
     };
 
     var normalizePattern = /^(.*)\.js$/;
     var normalizeId = function normalizeId(id) {
-        if(!(id in normalizeId.cache)) {
+        if(!normalizeId.cache.has(id)) {
             var match = normalizeId.normalizePattern.exec(id);
-            normalizeId.cache[id] = ( match
+            normalizeId.cache.set(id,( match
                                         ? match[1]
-                                        : id);
+                                        : id));
         }
-        return normalizeId.cache[id];
+        return normalizeId.cache.get(id);
     };
-    normalizeId.cache = Object.create(null);
+    normalizeId.cache = new Map;
     normalizeId.normalizePattern = normalizePattern;
 
     var memoize = function (callback, cache) {
-        cache = cache || Object.create(null);
+        cache = cache || new Map;
         return function (key, arg) {
             //return cache[key] || (cache[key] = Promise.try(callback, [key, arg]));
-            return cache[key] || (cache[key] = callback(key, arg));
+            return cache.get(key) || (cache.set(key, callback(key, arg)).get(key));
         };
     };
 
