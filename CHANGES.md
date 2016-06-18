@@ -1,3 +1,11 @@
+### 16.0.1
+
+ - Addresses an issue caused by IE11 non-standard Map.prototype.set that returns undefined instead of Map itself
+
+### 16.0.0
+
+ - Performance Improvements
+
 ### 0.15.7
 
  - Don't load Mr's `devDependencies` into the mappings
