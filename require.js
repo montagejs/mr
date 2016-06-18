@@ -776,12 +776,12 @@
 	}
 
     function resolve(id, baseId) {
-		var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map)) && resolved);
+		var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map)) && resolved) || resolved;
 		var i, ii;
 		if(!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
 	        id = String(id);
-	        var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source),
-                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split("/"))) && parts),
+	        var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source) || source,
+                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split("/"))) && parts || parts),
                 resolveItem = _resolveItem;
 
 	        if (source.length && source[0] === "." || source[0] === "..") {
@@ -1045,7 +1045,7 @@
         cache = cache || new Map;
         return function (key, arg) {
             //return cache[key] || (cache[key] = Promise.try(callback, [key, arg]));
-            return cache.get(key) || (cache.set(key, callback(key, arg)).get(key));
+            return cache.get(key) || (cache.set(key, callback(key, arg))) && cache.get(key) || cache.get(key);
         };
     };
 
