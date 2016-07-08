@@ -1,3 +1,7 @@
+### 16.0.2
+
+ - Fixes a bug where a JSON module would fail to load because it would try to re-parse the content while it was already done
+
 ### 16.0.1
 
  - Addresses an issue caused by IE11 non-standard Map.prototype.set that returns undefined instead of Map itself
