@@ -942,7 +942,9 @@
         return function (module) {
             var json = (module.location || "").match(jsonPattern);
             if (json) {
-                module.exports = JSON.parse(module.text);
+                if(typeof module.exports !== "object" && typeof module.text === "string") {
+                    module.exports = JSON.parse(module.text);
+                }
 				//module.text = null;
                 return module;
             } else {
