@@ -32,12 +32,6 @@ Require.getLocation = function() {
 
 Require.overlays = ["window", "browser", "montage"];
 
-// Determine if an XMLHttpRequest was successful
-// Some versions of WebKit return 0 for successful file:// URLs
-function xhrSuccess(req) {
-    return (req.status === 200 || (req.status === 0 && req.responseText));
-}
-
 // Due to crazy variabile availability of new and old XHR APIs across
 // platforms, this implementation registers every known name for the event
 // listeners.  The promise library ascertains that the returned promise
@@ -47,40 +41,49 @@ var xhrPool = [];
 function onload(event) {
     var xhr = event.target,
         module = xhr.module;
-    if (xhrSuccess(xhr)) {
+    // Determine if an XMLHttpRequest was successful
+    // Some versions of WebKit return 0 for successful file:// URLs
+    if (xhr.status === 200 || (xhr.status === 0 && xhr.responseText)) {
         if(module) {
             module.type = JAVASCRIPT;
             module.text = xhr.responseText;
             module.location = xhr.url;
         }
         xhr.resolve(xhr.responseText);
-        xhrPool.push(xhr);
+        onload.xhrPool.push(xhr);
     } else {
         xhr.onerror(event);
     }
     //This clears the response from memory
     xhr.abort();
+    xhr.url = null;
+    xhr.module = null;
 }
+onload.xhrPool = xhrPool;
 
 function onerror(event) {
   var xhr = event.target,
       url = xhr.url;
     xhr.reject(new Error("Can't XHR " + JSON.stringify(url)));
-    xhrPool.push(xhr);
+    onerror.xhrPool.push(xhr);
     //This clears the response from memory
     xhr.abort();
-}
+    xhr.url = null;
+    xhr.module = null;
 
-Require.read = function (url, module) {
-    var xhr = xhrPool.pop();
+}
+onerror.xhrPool = xhrPool;
+
+function RequireRead(url, module) {
+    var xhr = RequireRead.xhrPool.pop();
 
     if(!xhr) {
-        xhr = new XMLHttpRequest;
+        xhr = new RequireRead.XMLHttpRequest;
         if (xhr.overrideMimeType) {
             xhr.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
         }
-        xhr.onload = onload;
-        xhr.onerror = onerror;
+        xhr.onload = RequireRead.onload;
+        xhr.onerror = RequireRead.onerror;
     }
     xhr.url = url;
     xhr.module = module;
@@ -102,6 +105,11 @@ Require.read = function (url, module) {
 
     return response;
 };
+Require.read = RequireRead;
+RequireRead.xhrPool = xhrPool;
+RequireRead.XMLHttpRequest = XMLHttpRequest;
+RequireRead.onload = onload;
+RequireRead.onerror = onerror;
 
 // By using a named "eval" most browsers will execute in the global scope.
 // http://www.davidflanagan.com/2010/12/global-eval-in.html
