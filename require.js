@@ -166,14 +166,13 @@
             .then(function () {
                 // compile and analyze dependencies
                 config.compile(module);
-                var dependencies =
-                    module.dependencies =
-                        module.dependencies || [];
                 if (module.redirect !== void 0) {
-                    dependencies.push(module.redirect);
+                    module.dependencies = module.dependencies || [];
+                    module.dependencies.push(module.redirect);
                 }
                 if (module.extraDependencies !== void 0) {
-                    ArrayPush.apply(module.dependencies, module.extraDependencies);
+                    module.dependencies = module.dependencies || [];
+                   ArrayPush.apply(module.dependencies, module.extraDependencies);
                 }
             });
         });
@@ -758,6 +757,8 @@
 
     // Resolves CommonJS module IDs (not paths)
     Require.resolve = resolve;
+
+    //We need to find the best time to flush _resolveStringtoArray and _resolved once their content isn't needed anymore
 	var _resolved = new Map;
 	var _resolveStringtoArray = new Map;
 	var _target = [];
@@ -776,6 +777,7 @@
 	}
 
     function resolve(id, baseId) {
+        if(id === "" && baseId === "") return "";
 		var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map)) && resolved) || resolved;
 		var i, ii;
 		if(!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
@@ -1005,9 +1007,11 @@
     };
 
     Require.LocationLoader = function (config, load) {
-        return function (id, module) {
-            var path = id;
-            var extension = Require.extension(id);
+        function locationLoader(id, module) {
+            var path = id,
+                config = locationLoader.config,
+                extension = Require.extension(id),
+                location, result;
             if (!extension || (
                 extension !== "js" &&
                 extension !== "json" &&
@@ -1015,19 +1019,19 @@
             )) {
                 path += ".js";
             }
-            var location = module.location = URL.resolve(config.location, path);
-            var result;
+            location = module.location = URL.resolve(config.location, path);
+            result;
             if(config.delegate && config.delegate.packageWillLoadModuleAtLocation) {
                 result = config.delegate.packageWillLoadModuleAtLocation(module,location);
             }
-            if(result) return result;
-            return load(location, module);
-        };
+            return result ? result : load(location, module);
+        }
+        locationLoader.config = config;
+        return locationLoader;
     };
 
     Require.MemoizedLoader = function (config, load) {
-        var cache = config.cache = config.cache || new Map;
-        return memoize(load, cache);
+        return memoize(load, config.cache);
     };
 
     var normalizePattern = /^(.*)\.js$/;
@@ -1045,10 +1049,12 @@
 
     var memoize = function (callback, cache) {
         cache = cache || new Map;
-        return function (key, arg) {
+        function _memoize(key, arg) {
             //return cache[key] || (cache[key] = Promise.try(callback, [key, arg]));
-            return cache.get(key) || (cache.set(key, callback(key, arg))) && cache.get(key) || cache.get(key);
-        };
+            return _memoize.cache.get(key) || (_memoize.cache.set(key, callback(key, arg))) && _memoize.cache.get(key) || _memoize.cache.get(key);
+        }
+        _memoize.cache = cache;
+        return _memoize;
     };
 
 });
