@@ -166,14 +166,13 @@
             .then(function () {
                 // compile and analyze dependencies
                 config.compile(module);
-                var dependencies =
-                    module.dependencies =
-                        module.dependencies || [];
                 if (module.redirect !== void 0) {
-                    dependencies.push(module.redirect);
+                    module.dependencies = module.dependencies || [];
+                    module.dependencies.push(module.redirect);
                 }
                 if (module.extraDependencies !== void 0) {
-                    ArrayPush.apply(module.dependencies, module.extraDependencies);
+                    module.dependencies = module.dependencies || [];
+                   ArrayPush.apply(module.dependencies, module.extraDependencies);
                 }
             });
         });
@@ -758,6 +757,8 @@
 
     // Resolves CommonJS module IDs (not paths)
     Require.resolve = resolve;
+
+    //We need to find the best time to flush _resolveStringtoArray and _resolved once their content isn't needed anymore
 	var _resolved = new Map;
 	var _resolveStringtoArray = new Map;
 	var _target = [];
@@ -776,6 +777,7 @@
 	}
 
     function resolve(id, baseId) {
+        if(id === "" && baseId === "") return "";
 		var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map)) && resolved) || resolved;
 		var i, ii;
 		if(!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
