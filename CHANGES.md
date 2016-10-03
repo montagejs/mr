@@ -1,3 +1,13 @@
+### 16.0.4
+   - Memory optimization by caching a regex and making sure XHRs that are re-used don’t hold on their responses by calling abort() after the request succeeded or failed
+    - Minimize object creation and closure scope
+    - speed optimization
+        - reducing scope lookup
+        - reducing scope lookup in closure
+   
+### 16.0.3
+   - updates bluebird dependency to ~3.4.6
+   
 ### 16.0.2
 
  - Fixes a bug where a JSON module would fail to load because it would try to re-parse the content while it was already done
