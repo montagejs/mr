@@ -1,6 +1,6 @@
 {
   "name": "mr",
-  "version": "16.0.2",
+  "version": "16.0.3",
   "description": "A refresh-only CommonJS module system for browsers, used in Montage",
   "keywords": [
     "montage",
@@ -24,7 +24,7 @@
   },
   "production": true,
   "dependencies": {
-    "bluebird":"~3.4.0"
+    "bluebird":"~3.4.6"
   },
   "devDependencies": {
     "qs": "~0.6.5",
