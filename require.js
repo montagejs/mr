@@ -1007,9 +1007,11 @@
     };
 
     Require.LocationLoader = function (config, load) {
-        return function (id, module) {
-            var path = id;
-            var extension = Require.extension(id);
+        function locationLoader(id, module) {
+            var path = id,
+                config = locationLoader.config,
+                extension = Require.extension(id),
+                location, result;
             if (!extension || (
                 extension !== "js" &&
                 extension !== "json" &&
@@ -1017,19 +1019,19 @@
             )) {
                 path += ".js";
             }
-            var location = module.location = URL.resolve(config.location, path);
-            var result;
+            location = module.location = URL.resolve(config.location, path);
+            result;
             if(config.delegate && config.delegate.packageWillLoadModuleAtLocation) {
                 result = config.delegate.packageWillLoadModuleAtLocation(module,location);
             }
-            if(result) return result;
-            return load(location, module);
-        };
+            return result ? result : load(location, module);
+        }
+        locationLoader.config = config;
+        return locationLoader;
     };
 
     Require.MemoizedLoader = function (config, load) {
-        var cache = config.cache = config.cache || new Map;
-        return memoize(load, cache);
+        return memoize(load, config.cache);
     };
 
     var normalizePattern = /^(.*)\.js$/;
@@ -1047,10 +1049,12 @@
 
     var memoize = function (callback, cache) {
         cache = cache || new Map;
-        return function (key, arg) {
+        function _memoize(key, arg) {
             //return cache[key] || (cache[key] = Promise.try(callback, [key, arg]));
-            return cache.get(key) || (cache.set(key, callback(key, arg))) && cache.get(key) || cache.get(key);
-        };
+            return _memoize.cache.get(key) || (_memoize.cache.set(key, callback(key, arg))) && _memoize.cache.get(key) || _memoize.cache.get(key);
+        }
+        _memoize.cache = cache;
+        return _memoize;
     };
 
 });
