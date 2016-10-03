@@ -55,10 +55,11 @@ function onload(event) {
         }
         xhr.resolve(xhr.responseText);
         xhrPool.push(xhr);
-
     } else {
         xhr.onerror(event);
     }
+    //This clears the response from memory
+    xhr.abort();
 }
 
 function onerror(event) {
@@ -66,6 +67,8 @@ function onerror(event) {
       url = xhr.url;
     xhr.reject(new Error("Can't XHR " + JSON.stringify(url)));
     xhrPool.push(xhr);
+    //This clears the response from memory
+    xhr.abort();
 }
 
 Require.read = function (url, module) {
@@ -116,7 +119,8 @@ var DoubleUnderscore = "__",
     globalEvalConstantA = "(function ",
     globalEvalConstantB = "(require, exports, module) {",
     globalEvalConstantC = "//*/\n})\n//# sourceURL=",
-    globalConcatenator = [globalEvalConstantA,undefined,globalEvalConstantB,undefined,globalEvalConstantC,undefined];
+    globalConcatenator = [globalEvalConstantA,undefined,globalEvalConstantB,undefined,globalEvalConstantC,undefined],
+    nameRegex = new RegExp('[^\w\d]|^\d', 'g');
 
 Require.Compiler = function (config) {
     return function(module) {
@@ -136,12 +140,16 @@ Require.Compiler = function (config) {
         //      TODO: investigate why this isn't working in Firebug.
         // 3. set displayName property on the factory function (Safari, Chrome)
 
-        var displayName = [module.require.config.name,DoubleUnderscore,module.id].join('').replace(/[^\w\d]|^\d/g, Underscore);
+        // var displayName = [module.require.config.name,DoubleUnderscore,module.id].join('').replace(nameRegex, Underscore),
+        var displayName = [module.require.config.name,DoubleUnderscore,module.id].join('').replace(nameRegex, Underscore)
+
         globalConcatenator[1] = displayName;
         globalConcatenator[3] = module.text;
         globalConcatenator[5] = module.location;
 
         module.factory = globalEval(globalConcatenator.join(''));
+        module.text = null;
+        globalConcatenator[1] = globalConcatenator[3] = globalConcatenator[5] = null;
 
         // This should work and would be simpler, but Firebug does not show scripts executed via "new Function()" constructor.
         // TODO: sniff browser?
