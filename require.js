@@ -571,7 +571,7 @@
         else {
             pkg = config.loadPackage(dependency);
         }
-
+        pkg.registry = registry;
         pkg.location = location;
         pkg.async = function (id, callback) {
             return pkg.then(function (require) {
