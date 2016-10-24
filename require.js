@@ -571,7 +571,14 @@
         else {
             pkg = config.loadPackage(dependency);
         }
-
+        if (typeof pkg.then === "function") {
+            pkg = pkg.then(function (package) {
+                package.registry = registry;
+                return package;
+            });
+        } else {
+            pkg.registry = registry;
+        }
         pkg.location = location;
         pkg.async = function (id, callback) {
             return pkg.then(function (require) {
