@@ -92,6 +92,7 @@
 	_Module.prototype.extraDependencies = void 0;
 	_Module.prototype.uuid = null;
 
+    var isLowercasePattern = /^[a-z]+$/;
     Require.makeRequire = function (config) {
         var require;
 
@@ -116,7 +117,6 @@
         // produces an entry in the module state table, which gets built
         // up through loading and execution, ultimately serving as the
         // ``module`` free variable inside the corresponding module.
-        var isLowercasePattern = /^[a-z]+$/;
         function getModuleDescriptor(id) {
             var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
             if (!(lookupId in modules)) {
@@ -594,6 +594,7 @@
         }
         // if the named dependency has already been found at another
         // location, refer to the same eventual instance
+        // TODO this has to add a test on version
         if (
             dependency.name &&
             config.registry &&
