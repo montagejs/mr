@@ -84,23 +84,20 @@ function RequireRead(url, module) {
         }
         xhr.onload = RequireRead.onload;
         xhr.onerror = RequireRead.onerror;
+
+        function promiseHandler(resolve, reject) {
+            xhr.resolve = resolve;
+            xhr.reject = reject;
+        }
+        xhr.promiseHandler = promiseHandler;
     }
     xhr.url = url;
     xhr.module = module;
 
     xhr.open(GET, url, true);
 
-    var response = new Promise(function (resolve, reject) {
-        xhr.resolve = resolve;
-        xhr.reject = reject;
-        //Benoit: Needed for backward compatibility that is now irrelevant?
-        // xhr.onreadystatechange = function () {
-        //     if (xhr.readyState === 4) {
-        //         resolve(xhr.responseText);
-        //     }
-        // };
 
-    });
+    var response = new Promise(xhr.promiseHandler);
     xhr.send(null);
 
     return response;
@@ -128,7 +125,8 @@ var DoubleUnderscore = "__",
     globalEvalConstantB = "(require, exports, module) {",
     globalEvalConstantC = "//*/\n})\n//# sourceURL=",
     globalConcatenator = [globalEvalConstantA,undefined,globalEvalConstantB,undefined,globalEvalConstantC,undefined],
-    nameRegex = new RegExp('[^\w\d]|^\d', 'g');
+    nameRegex = /[^\w\d]/g,
+    wrapperArguments = "require,exports,module";
 
 Require.Compiler = function (config) {
     return function(module) {
@@ -148,20 +146,16 @@ Require.Compiler = function (config) {
         //      TODO: investigate why this isn't working in Firebug.
         // 3. set displayName property on the factory function (Safari, Chrome)
 
-        // var displayName = [module.require.config.name,DoubleUnderscore,module.id].join('').replace(nameRegex, Underscore),
-        var displayName = [module.require.config.name,DoubleUnderscore,module.id].join('').replace(nameRegex, Underscore)
+        var displayName = module.require.config.name;
 
-        globalConcatenator[1] = displayName;
-        globalConcatenator[3] = module.text;
-        globalConcatenator[5] = module.location;
+            displayName += DoubleUnderscore;
+            displayName += module.id;
+            displayName = displayName.replace(nameRegex, Underscore);
 
-        module.factory = globalEval(globalConcatenator.join(''));
-        module.text = null;
-        globalConcatenator[1] = globalConcatenator[3] = globalConcatenator[5] = null;
+        module.text += '\n//# sourceURL=';
+        module.text += module.location;
 
-        // This should work and would be simpler, but Firebug does not show scripts executed via "new Function()" constructor.
-        // TODO: sniff browser?
-        // module.factory = new Function("require", "exports", "module", module.text + "\n//*/"+sourceURLComment);
+        module.factory = Function(wrapperArguments,"eval(module.text); module.text = null;");
 
         module.factory.displayName = displayName;
     };
