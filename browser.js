@@ -126,7 +126,8 @@ var DoubleUnderscore = "__",
     globalEvalConstantC = "//*/\n})\n//# sourceURL=",
     globalConcatenator = [globalEvalConstantA,undefined,globalEvalConstantB,undefined,globalEvalConstantC,undefined],
     nameRegex = /[^\w\d]/g,
-    wrapperArguments = "require,exports,module";
+    wrapperArguments = "require,exports,module",
+    wrapperCode = "eval(module.text); module.text = null;";
 
 Require.Compiler = function (config) {
     return function(module) {
@@ -155,8 +156,7 @@ Require.Compiler = function (config) {
         module.text += '\n//# sourceURL=';
         module.text += module.location;
 
-        module.factory = Function(wrapperArguments,"eval(module.text); module.text = null;");
-
+        module.factory = Function(wrapperArguments,wrapperCode);
         module.factory.displayName = displayName;
     };
 };
