@@ -15,7 +15,7 @@ bootstrap("require/browser", function (require) {
     var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";
     var FILE_PROTOCOL = "file:";
     var JAVASCRIPT = "javascript";
-    
+
     // By using a named "eval" most browsers will execute in the global scope.
     // http://www.davidflanagan.com/2010/12/global-eval-in.html
     // Unfortunately execScript doesn't always return the value of the evaluated expression (at least in Chrome)
@@ -148,13 +148,13 @@ bootstrap("require/browser", function (require) {
             //      TODO: investigate why this isn't working in Firebug.
             // 3. set displayName property on the factory function (Safari, Chrome)
 
-            // Prevent method to start with number to avoid Unexpected number 
+            // Prevent method to start with number to avoid Unexpected number
             var displayName = [DoubleUnderscore, module.require.config.name, Underscore, module.id].join('').replace(nameRegex, Underscore);
-            
+
             globalConcatenator[1] = displayName;
             globalConcatenator[3] = module.text;
             globalConcatenator[5] = module.location;
-           
+
             module.factory = globalEval(globalConcatenator.join(''));
             module.factory.displayName = displayName;
 
@@ -273,7 +273,7 @@ bootstrap("require/browser", function (require) {
             return loadPackageDescription(dependency, config);
         }
     };
-    
+
     Require.makeLoader = function (config) {
         var Loader;
         if (config.useScriptInjection) {
