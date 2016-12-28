@@ -648,7 +648,7 @@
         if (!dependencies) {
             return;
         }
-        Object.keys(dependencies).forEach(function (name) {
+        for(var i=0, keys = Object.keys(dependencies), name;(name = keys[i]);i++) {
             if (!mappings[name]) {
                 // dependencies are equivalent to name and version mappings,
                 // though the version predicate string is presently ignored
@@ -658,7 +658,7 @@
                     version: dependencies[name]
                 };
             }
-        });
+        }
     }
 
     function configurePackage(location, description, parent) {
@@ -696,9 +696,20 @@
                 redirects: {"": description.browser}
             };
         } else if (typeof description.browser === "object") {
-            overlay.browser = {
-                redirects: description.browser
-            };
+            var browser = description.browser,
+                browserKeys = Object.keys(browser),
+                bk, iBk, countBk, redirects;
+
+            overlay.browser = {redirects:{}};
+            redirects = overlay.browser.redirects;
+            for(iBk=0;(bk = browserKeys[iBk]);iBk++) {
+                if(browser[bk] !== false) {
+                    redirects[bk] = browser[bk];
+                }
+            }
+            // overlay.browser = {
+            //     redirects: description.browser
+            // };
         }
 
         // overlay continued...
@@ -734,13 +745,13 @@
         //Deal with redirects
         var redirects = description.redirects;
         if (redirects !== void 0) {
-            Object.keys(redirects).forEach(function (name) {
+            for(var r=0, rKeys = Object.keys(redirects), name;(name = rKeys[r]);r++) {
                 modules[name] = {
                     id: name,
                     redirect: normalizeId(resolve(redirects[name], name)),
                     location: URL.resolve(location, name)
                 };
-            });
+            }
         }
 
         // mappings, link this package to other packages.
@@ -748,16 +759,16 @@
         // dependencies, devDependencies if not in production
         processMappingDependencies(description.dependencies,mappings);
         if(!config.production) {
-          processMappingDependencies(description.devDependencies,mappings);
+            processMappingDependencies(description.devDependencies,mappings);
         }
         // mappings
-        Object.keys(mappings).forEach(function (name) {
-            var mapping = mappings[name] = normalizeDependency(
+        for(var m=0, mKeys = Object.keys(mappings), name;(name = mKeys[m]);m++) {
+            mappings[name] = normalizeDependency(
                 mappings[name],
                 config,
                 name
             );
-        });
+        }
         config.mappings = mappings;
 
         return config;
