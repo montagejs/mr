@@ -1052,8 +1052,8 @@
         "packages",
         "modules"
     ];
-            
-    var syncCompilerChain;    
+
+    var syncCompilerChain;
 
     //The ShebangCompiler doesn't make sense on the client side
     if (typeof window !== "undefined") {
@@ -1098,8 +1098,8 @@
                 )
             );
         };
-    }    
-    
+    }
+
     Require.makeCompiler = function (config) {
         return function (module) {
             return new Promise(function (resolve, reject) {
@@ -1112,7 +1112,7 @@
                 });
             });
         }
-    }    
+    }
 
     Require.JsonCompiler = function (config, compile) {
         var jsonPattern = /\.json$/;
