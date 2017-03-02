@@ -25,17 +25,18 @@
 
         // determine which scripts to load
         var pending = {
-            "require": "require.js",
-            "require/browser": "browser.js",
+            "require": "node_modules/mr/require.js",
+            "require/browser": "node_modules/mr/browser.js",
             "promise": "node_modules/bluebird/js/browser/bluebird.min.js"
         };
 
         /*jshint -W089 */
         if (!global.preload) {
-            var mrLocation = resolve(window.location, params.mrLocation);
+            var mrLocation = resolve(window.location, params.mrLocation),
+                rootLocation = resolve(window.location, '/');
 
             //Special Case bluebird for now:
-            load(resolve(mrLocation, "node_modules/bluebird/js/browser/bluebird.min.js"),function() {
+            load(resolve(rootLocation, pending.promise),function() {
                 //global.bootstrap cleans itself from window once all known are loaded. "bluebird" is not known, so needs to do it first
                 global.bootstrap("bluebird", function (require, exports) {
                     return window.Promise;
@@ -46,7 +47,9 @@
             });
 
             for (var id in pending) {
-                load(resolve(mrLocation, pending[id]));
+                if (pending.hasOwnProperty(id)) {
+                    load(resolve(rootLocation, pending[id]));
+                }
             }
         }
 
@@ -192,7 +195,9 @@
         var script = document.createElement("script");
         script.src = location;
         script.onload = function () {
-            if(loadCallback) loadCallback(script);
+            if (loadCallback) {
+                loadCallback(script);
+            }
             // remove clutter
             script.parentNode.removeChild(script);
         };
