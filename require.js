@@ -724,7 +724,8 @@
 		}
         delete description.overlay;
 
-        config.packagesDirectory = URL.resolve(location, "node_modules/");
+        // Since npm 3+ depencencies are not nested unless explicit shrinkwrap 
+        config.packagesDirectory = URL.resolve(location, "/node_modules/");
 
         // The default "main" module of a package has the same name as the
         // package.
