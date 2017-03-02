@@ -77,18 +77,20 @@ onerror.xhrPool = xhrPool;
 function RequireRead(url, module) {
     var xhr = RequireRead.xhrPool.pop();
 
+    function promiseHandler(resolve, reject) {
+        xhr.resolve = resolve;
+        xhr.reject = reject;
+    }
+
     if(!xhr) {
-        xhr = new RequireRead.XMLHttpRequest;
+        xhr = new RequireRead.XMLHttpRequest();
         if (xhr.overrideMimeType) {
             xhr.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
         }
         xhr.onload = RequireRead.onload;
         xhr.onerror = RequireRead.onerror;
 
-        function promiseHandler(resolve, reject) {
-            xhr.resolve = resolve;
-            xhr.reject = reject;
-        }
+        
         xhr.promiseHandler = promiseHandler;
     }
     xhr.url = url;
@@ -101,7 +103,8 @@ function RequireRead(url, module) {
     xhr.send(null);
 
     return response;
-};
+}
+
 Require.read = RequireRead;
 RequireRead.xhrPool = xhrPool;
 RequireRead.XMLHttpRequest = XMLHttpRequest;
