@@ -1,4 +1,3 @@
-
 /*
     Based in part on Motorola Mobility’s Montage
     Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
@@ -48,12 +47,15 @@
         throw new Error("Require does not work in strict mode.");
     }
 
+    // The global context object
+    var global = this;
+
     var globalEval = eval; // reassigning causes eval to not use lexical scope.
     var ArrayPush = Array.prototype.push;
 
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
     // comment.
-    var Map
+    var Map;
     if(!global.Map) {
         Map = function _Map() {
             this._content = Object.create(null);
@@ -68,7 +70,7 @@
         };
         Map.prototype.has = function(key) {
             return  key in this._content;
-        }
+        };
     }
     else {
         Map = global.Map;
@@ -120,7 +122,7 @@
         function getModuleDescriptor(id) {
             var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
             if (!(lookupId in modules)) {
-				var aModule = new _Module;
+				var aModule = new _Module();
                 modules[lookupId] = aModule;
                     aModule.id = id;
                     aModule.display = (config.name || config.location); // EXTENSION
@@ -192,13 +194,10 @@
             .then(function () {
                 // load the transitive dependencies using the magic of
                 // recursion.
-                var module = getModuleDescriptor(topId),
-    				dependencies =  module.dependencies
-					, promises
-					, iModule
-					, depId
-					,dependees
-                    ,iPromise;
+                var promises, iModule, depId, dependees, iPromise,
+                    module = getModuleDescriptor(topId),
+    				dependencies =  module.dependencies;
+
                 if(dependencies && dependencies.length > 0) {
     				for(var i=0;(depId = dependencies[i]);i++) {
                         // create dependees set, purely for debug purposes
@@ -208,16 +207,15 @@
                         //     dependees[topId] = true;
                         // }
                         if((iPromise = deepLoad(normalizeId(resolve(depId, topId)), topId, loading))) {
-                            promises
-                                ? (promises.push ? promises.push(iPromise) : (promises = [promises,iPromise]))
-                                : (promises = iPromise);
+                            promises ? (promises.push ? promises.push(iPromise) : 
+                                    (promises = [promises,iPromise])) : (promises = iPromise);
                         }
         			}
                 }
 
-                return promises
-                        ? (promises.push === void 0 ? promises : Promise.all(promises))
-                        : null;
+                return promises ? (promises.push === void 0 ? promises : 
+                        Promise.all(promises)) : null;
+
             }, function (error) {
                 getModuleDescriptor(topId).error = error;
             });
@@ -310,7 +308,7 @@
             }
 
             var internal = !!seen;
-            seen = seen || new Map;
+            seen = seen || new Map();
             if (seen.has(location)) {
                 return null; // break the cycle of violence.
             }
@@ -517,7 +515,7 @@
         config = Object.create(config || null);
         var loadingPackages = config.loadingPackages = config.loadingPackages || {};
         var loadedPackages = config.packages = {};
-        var registry = config.registry = config.registry || new Map;
+        var registry = config.registry = config.registry || new Map();
         config.mainPackageLocation = location;
 
         config.hasPackage = function (dependency) {
@@ -558,7 +556,7 @@
             if (!loadingPackages[location]) {
                 loadingPackages[location] = Require.loadPackageDescription(dependency, config)
                 .then(function (packageDescription) {
-                    return Require.injectLoadedPackageDescription(location, packageDescription, config)
+                    return Require.injectLoadedPackageDescription(location, packageDescription, config);
                 });
             }
             return loadingPackages[location];
@@ -566,7 +564,7 @@
 
         var pkg;
         if(typeof packageDescription === "object") {
-            pkg = Require.injectLoadedPackageDescription(location, packageDescription, config)
+            pkg = Require.injectLoadedPackageDescription(location, packageDescription, config);
         }
         else {
             pkg = config.loadPackage(dependency);
@@ -687,7 +685,8 @@
         }
 
         // overlay
-        var overlay = description.overlay || {};
+        var redirects,
+            overlay = description.overlay || {};
 
         // but first, convert "browser" field, as pioneered by Browserify, to
         // an overlay
@@ -698,7 +697,7 @@
         } else if (typeof description.browser === "object") {
             var browser = description.browser,
                 browserKeys = Object.keys(browser),
-                bk, iBk, countBk, redirects;
+                bk, iBk, countBk;
 
             overlay.browser = {redirects:{}};
             redirects = overlay.browser.redirects;
@@ -713,11 +712,11 @@
         }
 
         // overlay continued...
-        var layer, overlays, engine;
+        var layer, overlays, engine, name;
         overlays = config.overlays = config.overlays || Require.overlays;
 		for(var i=0, countI=overlays.length;i<countI;i++) {
 			if (layer = overlay[(engine = overlays[i])]) {
-                for (var name in layer) {
+                for (name in layer) {
                     description[name] = layer[name];
                 }
             }
@@ -744,9 +743,9 @@
         }
 
         //Deal with redirects
-        var redirects = description.redirects;
+        redirects = description.redirects;
         if (redirects !== void 0) {
-            for(var r=0, rKeys = Object.keys(redirects), name;(name = rKeys[r]);r++) {
+            for(var r = 0, rKeys = Object.keys(redirects);(name = rKeys[r]);r++) {
                 modules[name] = {
                     id: name,
                     redirect: normalizeId(resolve(redirects[name], name)),
@@ -763,7 +762,7 @@
             processMappingDependencies(description.devDependencies,mappings);
         }
         // mappings
-        for(var m=0, mKeys = Object.keys(mappings), name;(name = mKeys[m]);m++) {
+        for(var m=0, mKeys = Object.keys(mappings);(name = mKeys[m]);m++) {
             mappings[name] = normalizeDependency(
                 mappings[name],
                 config,
@@ -779,8 +778,8 @@
     Require.resolve = resolve;
 
     //We need to find the best time to flush _resolveStringtoArray and _resolved once their content isn't needed anymore
-	var _resolved = new Map;
-	var _resolveStringtoArray = new Map;
+	var _resolved = new Map();
+	var _resolveStringtoArray = new Map();
 	var _target = [];
 
 	function _resolveItem(source, part, target) {
@@ -797,8 +796,10 @@
 	}
 
     function resolve(id, baseId) {
-        if(id === "" && baseId === "") return "";
-		var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map)) && resolved) || resolved;
+        if(id === "" && baseId === "") {
+            return "";
+        }
+		var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map())) && resolved) || resolved;
 		var i, ii;
 		if(!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
 	        id = String(id);
@@ -815,7 +816,7 @@
 	            resolveItem(source, source[i], _target);
 	        }
             if(!resolved.get(baseId)) {
-                resolved.set(baseId, new Map);
+                resolved.set(baseId, new Map());
             }
 	        resolved.get(baseId).set(id, _target.join("/"));
 	        _target.length = 0;
@@ -1058,17 +1059,15 @@
     var normalizeId = function normalizeId(id) {
         if(!normalizeId.cache.has(id)) {
             var match = normalizeId.normalizePattern.exec(id);
-            normalizeId.cache.set(id,( match
-                                        ? match[1]
-                                        : id));
+            normalizeId.cache.set(id,( match ? match[1] : id));
         }
         return normalizeId.cache.get(id);
     };
-    normalizeId.cache = new Map;
+    normalizeId.cache = new Map();
     normalizeId.normalizePattern = normalizePattern;
 
     var memoize = function (callback, cache) {
-        cache = cache || new Map;
+        cache = cache || new Map();
         function _memoize(key, arg) {
             //return cache[key] || (cache[key] = Promise.try(callback, [key, arg]));
             return _memoize.cache.get(key) || (_memoize.cache.set(key, callback(key, arg))) && _memoize.cache.get(key) || _memoize.cache.get(key);
