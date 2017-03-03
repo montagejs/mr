@@ -1,3 +1,4 @@
+/* global URL:true */
 
 var URL = require("mini-url");
 var QS = require("qs");

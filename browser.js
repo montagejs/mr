@@ -78,7 +78,7 @@ function RequireRead(url, module) {
     var xhr = RequireRead.xhrPool.pop();
 
     if(!xhr) {
-        xhr = new RequireRead.XMLHttpRequest;
+        xhr = new RequireRead.XMLHttpRequest();
         if (xhr.overrideMimeType) {
             xhr.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
         }
@@ -101,7 +101,8 @@ function RequireRead(url, module) {
     xhr.send(null);
 
     return response;
-};
+}
+
 Require.read = RequireRead;
 RequireRead.xhrPool = xhrPool;
 RequireRead.XMLHttpRequest = XMLHttpRequest;

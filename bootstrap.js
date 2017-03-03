@@ -192,7 +192,9 @@
         var script = document.createElement("script");
         script.src = location;
         script.onload = function () {
-            if(loadCallback) loadCallback(script);
+            if(loadCallback) {
+                loadCallback(script);
+            }
             // remove clutter
             script.parentNode.removeChild(script);
         };
