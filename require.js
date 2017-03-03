@@ -49,6 +49,7 @@
     }
 
     var globalEval = eval; // reassigning causes eval to not use lexical scope.
+    var global = globalEval('this');
     var ArrayPush = Array.prototype.push;
 
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
