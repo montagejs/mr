@@ -514,9 +514,9 @@
             throw new Error("Can't find dependency: " + JSON.stringify(dependency));
         }
         var location = dependency.location;
-        config = Object.create(config || null);
+        config = config || Object.create(null);
         var loadingPackages = config.loadingPackages = config.loadingPackages || {};
-        var loadedPackages = config.packages = {};
+        var loadedPackages = config.packages = config.packages || {};
         var registry = config.registry = config.registry || new Map;
         config.mainPackageLocation = location;
 
