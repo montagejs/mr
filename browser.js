@@ -44,7 +44,7 @@ function onload(event) {
     // Determine if an XMLHttpRequest was successful
     // Some versions of WebKit return 0 for successful file:// URLs
     if (xhr.status === 200 || (xhr.status === 0 && xhr.responseText)) {
-        if(module) {
+        if (module) {
             module.type = JAVASCRIPT;
             module.text = xhr.responseText;
             module.location = xhr.url;
@@ -77,7 +77,7 @@ onerror.xhrPool = xhrPool;
 function RequireRead(url, module) {
     var xhr = RequireRead.xhrPool.pop();
 
-    if(!xhr) {
+    if (!xhr) {
         xhr = new RequireRead.XMLHttpRequest();
         if (xhr.overrideMimeType) {
             xhr.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
@@ -175,7 +175,7 @@ Require.XhrLoader = function (config) {
 var definitions = {};
 var getDefinition = function (hash, id) {
     var defHash = definitions[hash] = definitions[hash] || {};
-    if(!defHash[id]) {
+    if (!defHash[id]) {
         var promiseResolve;
         defHash[id] = new Promise(function(resolve, reject) {
             promiseResolve = resolve;
