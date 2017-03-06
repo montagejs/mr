@@ -149,7 +149,7 @@ Require.Compiler = function (config) {
         // Prevent method to start with number to avoid Unexpected number 
         var displayName = [DoubleUnderscore, module.require.config.name, Underscore, module.id].join('').replace(nameRegex, Underscore);
         
-        globalConcatenator[1] = displayName; 
+        globalConcatenator[1] = displayName;
         globalConcatenator[3] = module.text;
         globalConcatenator[5] = module.location;
         
