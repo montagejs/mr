@@ -84,12 +84,10 @@ function RequireRead(url, module) {
         }
         xhr.onload = RequireRead.onload;
         xhr.onerror = RequireRead.onerror;
-
-        function promiseHandler(resolve, reject) {
+        xhr.promiseHandler = function promiseHandler(resolve, reject) {
             xhr.resolve = resolve;
             xhr.reject = reject;
-        }
-        xhr.promiseHandler = promiseHandler;
+        };
     }
     xhr.url = url;
     xhr.module = module;
@@ -148,17 +146,18 @@ Require.Compiler = function (config) {
         //      TODO: investigate why this isn't working in Firebug.
         // 3. set displayName property on the factory function (Safari, Chrome)
 
-        var displayName = module.require.config.name;
-
-            displayName += DoubleUnderscore;
-            displayName += module.id;
-            displayName = displayName.replace(nameRegex, Underscore);
-
-        module.text += '\n//# sourceURL=';
-        module.text += module.location;
-
-        module.factory = Function(wrapperArguments,wrapperCode);
+        // Prevent method to start with number to avoid Unexpected number 
+        var displayName = [DoubleUnderscore, module.require.config.name, Underscore, module.id].join('').replace(nameRegex, Underscore);
+        
+        globalConcatenator[1] = displayName; 
+        globalConcatenator[3] = module.text;
+        globalConcatenator[5] = module.location;
+        
+        module.factory = globalEval(globalConcatenator.join(''));
         module.factory.displayName = displayName;
+
+        module.text = null;
+        globalConcatenator[1] = globalConcatenator[3] = globalConcatenator[5] = null;
     };
 };
 
