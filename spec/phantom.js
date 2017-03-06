@@ -2,7 +2,6 @@ var COVERAGE = !!process.env["npm_config_coverage"];
 
 var PATH = require("path");
 var spawn = require("child_process").spawn;
-var util = require("util");
 
 var Promise = require("bluebird");
 var phantom = require("phantom-wd");
@@ -152,9 +151,9 @@ function log(suites, results, name, info) {
             info.specsCount++;
             info.totalCount += result.messages.length;
             if (result.result === "passed") {
-                util.print(".");
+                process.stdout.write(".");
             } else {
-                util.print("F");
+                process.stdout.write("F");
                 var msg = suite.name + "\n";
                 for (var j = 0; j < result.messages.length; j++) {
                     var message = result.messages[j];
