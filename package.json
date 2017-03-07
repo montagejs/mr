@@ -16,7 +16,7 @@
   },
   "main": "require",
   "scripts": {
-    "test": "jasmine-node spec/node-spec.js && node spec/phantom.js && jshint .",
+    "test": "jasmine-node spec/node-spec.js && node spec/node-phantom.js && jshint .",
     "integration": "mop-integration"
   },
   "bin": {
