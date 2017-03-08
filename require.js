@@ -49,6 +49,7 @@
     }
 
     var globalEval = eval; // reassigning causes eval to not use lexical scope.
+    var global = eval('this');
     var ArrayPush = Array.prototype.push;
 
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
@@ -98,7 +99,8 @@
 
         // Configuration defaults:
         config = config || {};
-        config.location = URL.resolve(config.location || Require.getLocation(), "./");
+        config.rootLocation = URL.resolve(config.rootLocation || Require.getLocation(), "./");
+        config.location = URL.resolve(config.location || config.rootLocation);
         config.paths = config.paths || [config.location];
         config.mappings = config.mappings || {}; // EXTENSION
         config.exposedConfigs = config.exposedConfigs || Require.exposedConfigs;
@@ -736,7 +738,7 @@
         delete description.overlay;
 
         if (config.strategy === 'flat') {
-            config.packagesDirectory = URL.resolve(location, "/node_modules/");
+            config.packagesDirectory = URL.resolve(config.mainPackageLocation, "node_modules/");
         } else {
             config.packagesDirectory = URL.resolve(location, "node_modules/");   
         }

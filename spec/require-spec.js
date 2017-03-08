@@ -72,6 +72,8 @@ describe("Require", function () {
         "overlay",
         "moduleTypes",
         "module-error",
+        "flat-module-tree",
+        "nested-module-tree",
         {name: "dot-js-module", node: false},
     ].forEach(function (test) {
         if (typeof test === "object") {
