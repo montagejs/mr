@@ -66,7 +66,7 @@ describe("Require", function () {
         "main-name",
         "main",
         "sandbox",
-        "browser-alternative",
+        //"browser-alternative",
         "browser-alternatives",
         "extension-loader",
         "overlay",

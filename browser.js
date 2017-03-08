@@ -44,7 +44,7 @@ function onload(event) {
     // Determine if an XMLHttpRequest was successful
     // Some versions of WebKit return 0 for successful file:// URLs
     if (xhr.status === 200 || (xhr.status === 0 && xhr.responseText)) {
-        if(module) {
+        if (module) {
             module.type = JAVASCRIPT;
             module.text = xhr.responseText;
             module.location = xhr.url;
@@ -77,19 +77,17 @@ onerror.xhrPool = xhrPool;
 function RequireRead(url, module) {
     var xhr = RequireRead.xhrPool.pop();
 
-    if(!xhr) {
-        xhr = new RequireRead.XMLHttpRequest;
+    if (!xhr) {
+        xhr = new RequireRead.XMLHttpRequest();
         if (xhr.overrideMimeType) {
             xhr.overrideMimeType(APPLICATION_JAVASCRIPT_MIMETYPE);
         }
         xhr.onload = RequireRead.onload;
         xhr.onerror = RequireRead.onerror;
-
-        function promiseHandler(resolve, reject) {
+        xhr.promiseHandler = function promiseHandler(resolve, reject) {
             xhr.resolve = resolve;
             xhr.reject = reject;
-        }
-        xhr.promiseHandler = promiseHandler;
+        };
     }
     xhr.url = url;
     xhr.module = module;
@@ -101,7 +99,8 @@ function RequireRead(url, module) {
     xhr.send(null);
 
     return response;
-};
+}
+
 Require.read = RequireRead;
 RequireRead.xhrPool = xhrPool;
 RequireRead.XMLHttpRequest = XMLHttpRequest;
@@ -125,9 +124,7 @@ var DoubleUnderscore = "__",
     globalEvalConstantB = "(require, exports, module) {",
     globalEvalConstantC = "//*/\n})\n//# sourceURL=",
     globalConcatenator = [globalEvalConstantA,undefined,globalEvalConstantB,undefined,globalEvalConstantC,undefined],
-    nameRegex = /[^\w\d]/g,
-    wrapperArguments = "require,exports,module",
-    wrapperCode = "eval(module.text); module.text = null;";
+    nameRegex = /[^\w\d]/g;
 
 Require.Compiler = function (config) {
     return function(module) {
@@ -147,17 +144,18 @@ Require.Compiler = function (config) {
         //      TODO: investigate why this isn't working in Firebug.
         // 3. set displayName property on the factory function (Safari, Chrome)
 
-        var displayName = module.require.config.name;
-
-            displayName += DoubleUnderscore;
-            displayName += module.id;
-            displayName = displayName.replace(nameRegex, Underscore);
-
-        module.text += '\n//# sourceURL=';
-        module.text += module.location;
-
-        module.factory = Function(wrapperArguments,wrapperCode);
+        // Prevent method to start with number to avoid Unexpected number 
+        var displayName = [DoubleUnderscore, module.require.config.name, Underscore, module.id].join('').replace(nameRegex, Underscore);
+        
+        globalConcatenator[1] = displayName;
+        globalConcatenator[3] = module.text;
+        globalConcatenator[5] = module.location;
+       
+        module.factory = globalEval(globalConcatenator.join(''));
         module.factory.displayName = displayName;
+
+        module.text = null;
+        globalConcatenator[1] = globalConcatenator[3] = globalConcatenator[5] = null;
     };
 };
 
@@ -175,7 +173,7 @@ Require.XhrLoader = function (config) {
 var definitions = {};
 var getDefinition = function (hash, id) {
     var defHash = definitions[hash] = definitions[hash] || {};
-    if(!defHash[id]) {
+    if (!defHash[id]) {
         var promiseResolve;
         defHash[id] = new Promise(function(resolve, reject) {
             promiseResolve = resolve;

@@ -49,13 +49,13 @@
     }
 
     var globalEval = eval; // reassigning causes eval to not use lexical scope.
-    var global = eval('this');
+    var global = globalEval('this');
     var ArrayPush = Array.prototype.push;
 
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
     // comment.
-    var Map
-    if(!global.Map) {
+    var Map;
+    if (!global.Map) {
         Map = function _Map() {
             this._content = Object.create(null);
         };
@@ -69,29 +69,28 @@
         };
         Map.prototype.has = function(key) {
             return  key in this._content;
-        }
+        };
     }
     else {
         Map = global.Map;
     }
 
-
-	var _Module = function _Module() {};
-	_Module.prototype.id = null;
-	_Module.prototype.display = null;
-	_Module.prototype.require = null;
-	_Module.prototype.factory = void 0;
-	_Module.prototype.exports = void 0;
-	_Module.prototype.redirect = void 0;
-	_Module.prototype.location = null;
-	_Module.prototype.directory = null;
-	_Module.prototype.injected = false;
-	_Module.prototype.mappingRedirect = void 0;
-	_Module.prototype.type = null;
-	_Module.prototype.text = void 0;
-	_Module.prototype.dependees = null;
-	_Module.prototype.extraDependencies = void 0;
-	_Module.prototype.uuid = null;
+    var _Module = function _Module() {};
+    _Module.prototype.id = null;
+    _Module.prototype.display = null;
+    _Module.prototype.require = null;
+    _Module.prototype.factory = void 0;
+    _Module.prototype.exports = void 0;
+    _Module.prototype.redirect = void 0;
+    _Module.prototype.location = null;
+    _Module.prototype.directory = null;
+    _Module.prototype.injected = false;
+    _Module.prototype.mappingRedirect = void 0;
+    _Module.prototype.type = null;
+    _Module.prototype.text = void 0;
+    _Module.prototype.dependees = null;
+    _Module.prototype.extraDependencies = void 0;
+    _Module.prototype.uuid = null;
 
     var isLowercasePattern = /^[a-z]+$/;
     Require.makeRequire = function (config) {
@@ -123,13 +122,13 @@
         function getModuleDescriptor(id) {
             var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
             if (!(lookupId in modules)) {
-				var aModule = new _Module;
+                var aModule = new _Module();
                 modules[lookupId] = aModule;
-                    aModule.id = id;
-                    aModule.display = (config.name || config.location); // EXTENSION
-                    aModule.display += "#"; // EXTENSION
-                    aModule.display += id; // EXTENSION
-                    aModule.require = require;
+                aModule.id = id;
+                aModule.display = (config.name || config.location); // EXTENSION
+                aModule.display += "#"; // EXTENSION
+                aModule.display += id; // EXTENSION
+                aModule.require = require;
             }
             return modules[lookupId];
         }
@@ -144,8 +143,8 @@
             module.location = URL.resolve(config.location, id);
             module.directory = URL.resolve(module.location, "./");
             module.injected = true;
-			module.redirect = void 0;
-			module.mappingRedirect = void 0;
+            module.redirect = void 0;
+            module.mappingRedirect = void 0;
             // delete module.redirect;
             // delete module.mappingRedirect;
 
@@ -175,7 +174,7 @@
                 }
                 if (module.extraDependencies !== void 0) {
                     module.dependencies = module.dependencies || [];
-                   ArrayPush.apply(module.dependencies, module.extraDependencies);
+                    ArrayPush.apply(module.dependencies, module.extraDependencies);
                 }
             });
         });
@@ -195,32 +194,29 @@
             .then(function () {
                 // load the transitive dependencies using the magic of
                 // recursion.
-                var module = getModuleDescriptor(topId),
-    				dependencies =  module.dependencies
-					, promises
-					, iModule
-					, depId
-					,dependees
-                    ,iPromise;
-                if(dependencies && dependencies.length > 0) {
-    				for(var i=0;(depId = dependencies[i]);i++) {
+                var promises, iModule , depId, dependees, iPromise,
+                    module = getModuleDescriptor(topId),
+                    dependencies =  module.dependencies;
+
+                if (dependencies && dependencies.length > 0) {
+                    for(var i=0;(depId = dependencies[i]);i++) {
                         // create dependees set, purely for debug purposes
-                        // if(true) {
+                        // if (true) {
                         //     iModule = getModuleDescriptor(depId);
                         //     dependees = iModule.dependees = iModule.dependees || {};
                         //     dependees[topId] = true;
                         // }
-                        if((iPromise = deepLoad(normalizeId(resolve(depId, topId)), topId, loading))) {
-                            promises
-                                ? (promises.push ? promises.push(iPromise) : (promises = [promises,iPromise]))
-                                : (promises = iPromise);
+                        if ((iPromise = deepLoad(normalizeId(resolve(depId, topId)), topId, loading))) {
+                            /* jshint expr: true */
+                            promises ? (promises.push ? promises.push(iPromise) :
+                                (promises = [promises, iPromise])) : (promises = iPromise);
+                            /* jshint expr: false */
                         }
-        			}
+                    }
                 }
 
-                return promises
-                        ? (promises.push === void 0 ? promises : Promise.all(promises))
-                        : null;
+                return promises ? (promises.push === void 0 ? promises :
+                            Promise.all(promises)) : null;
             }, function (error) {
                 getModuleDescriptor(topId).error = error;
             });
@@ -313,7 +309,7 @@
             }
 
             var internal = !!seen;
-            seen = seen || new Map;
+            seen = seen || new Map();
             if (seen.has(location)) {
                 return null; // break the cycle of violence.
             }
@@ -418,10 +414,10 @@
             require.identify = identify;
             require.inject = inject;
 
-			var exposedConfigs = config.exposedConfigs;
-			for(var i=0, countI=exposedConfigs.length;i<countI;i++) {
+            var exposedConfigs = config.exposedConfigs;
+            for(var i=0, countI=exposedConfigs.length;i<countI;i++) {
                 require[exposedConfigs[i]] = config[exposedConfigs[i]];
-			}
+            }
 
             require.config = config;
 
@@ -448,20 +444,19 @@
             config
         );
         var pkg;
-        if(typeof require === "function") {
+        if (typeof require === "function") {
             pkg = require;
-        }
-        else {
-            if(Require.delegate && Require.delegate.willCreatePackage) {
-            	pkg = Require.delegate.willCreatePackage(location, packageDescription, subconfig);
+        } else {
+            if (Require.delegate && Require.delegate.willCreatePackage) {
+                pkg = Require.delegate.willCreatePackage(location, packageDescription, subconfig);
             }
-        	if(!pkg) {
+            if (!pkg) {
                 pkg = Require.makeRequire(subconfig);
-                if(Require.delegate && Require.delegate.didCreatePackage) {
-                	Require.delegate.didCreatePackage(subconfig);
+                if (Require.delegate && Require.delegate.didCreatePackage) {
+                    Require.delegate.didCreatePackage(subconfig);
                 }
 
-        	}
+            }
         }
         config.packages[location] = pkg;
         return pkg;
@@ -492,10 +487,10 @@
 
             var promise;
 
-            if(Require.delegate) {
+            if (Require.delegate) {
                 promise = Require.delegate.requireWillLoadPackageDescriptionAtLocation(descriptionLocation,dependency, config);
             }
-            if(!promise) {
+            if (!promise) {
                 promise = (config.read || Require.read)(descriptionLocation);
             }
 
@@ -520,7 +515,7 @@
         config = Object.create(config || null);
         var loadingPackages = config.loadingPackages = config.loadingPackages || {};
         var loadedPackages = config.packages = {};
-        var registry = config.registry = config.registry || new Map;
+        var registry = config.registry = config.registry || new Map();
         config.mainPackageLocation = location;
 
         config.hasPackage = function (dependency) {
@@ -561,15 +556,15 @@
             if (!loadingPackages[location]) {
                 loadingPackages[location] = Require.loadPackageDescription(dependency, config)
                 .then(function (packageDescription) {
-                    return Require.injectLoadedPackageDescription(location, packageDescription, config)
+                    return Require.injectLoadedPackageDescription(location, packageDescription, config);
                 });
             }
             return loadingPackages[location];
         };
 
         var pkg;
-        if(typeof packageDescription === "object") {
-            pkg = Require.injectLoadedPackageDescription(location, packageDescription, config)
+        if (typeof packageDescription === "object") {
+            pkg = Require.injectLoadedPackageDescription(location, packageDescription, config);
         }
         else {
             pkg = config.loadPackage(dependency);
@@ -700,7 +695,8 @@
         }
 
         // overlay
-        var overlay = description.overlay || {};
+        var redirects,
+            overlay = description.overlay || {};
 
         // but first, convert "browser" field, as pioneered by Browserify, to
         // an overlay
@@ -709,14 +705,14 @@
                 redirects: {"": description.browser}
             };
         } else if (typeof description.browser === "object") {
-            var browser = description.browser,
-                browserKeys = Object.keys(browser),
-                bk, iBk, countBk, redirects;
+            var bk, iBk, countBk,
+                browser = description.browser,
+                browserKeys = Object.keys(browser);
 
             overlay.browser = {redirects:{}};
             redirects = overlay.browser.redirects;
             for(iBk=0;(bk = browserKeys[iBk]);iBk++) {
-                if(browser[bk] !== false) {
+                if (browser[bk] !== false) {
                     redirects[bk] = browser[bk];
                 }
             }
@@ -726,15 +722,17 @@
         }
 
         // overlay continued...
-        var layer, overlays, engine;
+        var layer, overlays, engine, name;
         overlays = config.overlays = config.overlays || Require.overlays;
-		for(var i=0, countI=overlays.length;i<countI;i++) {
-			if (layer = overlay[(engine = overlays[i])]) {
-                for (var name in layer) {
-                    description[name] = layer[name];
+        for(var i=0, countI=overlays.length;i<countI;i++) {
+            if (layer = overlay[(engine = overlays[i])]) {
+                for (name in layer) {
+                    if (layer.hasOwnProperty(name)) {
+                        description[name] = layer[name];
+                    }
                 }
             }
-		}
+        }
         delete description.overlay;
 
         if (config.strategy === 'flat') {
@@ -760,9 +758,9 @@
         }
 
         //Deal with redirects
-        var redirects = description.redirects;
+        redirects = description.redirects;
         if (redirects !== void 0) {
-            for(var r=0, rKeys = Object.keys(redirects), name;(name = rKeys[r]);r++) {
+            for(var r=0, rKeys = Object.keys(redirects);(name = rKeys[r]);r++) {
                 modules[name] = {
                     id: name,
                     redirect: normalizeId(resolve(redirects[name], name)),
@@ -775,11 +773,11 @@
         var mappings = description.mappings || {};
         // dependencies, devDependencies if not in production
         processMappingDependencies(description.dependencies,mappings);
-        if(!config.production) {
+        if (!config.production) {
             processMappingDependencies(description.devDependencies,mappings);
         }
         // mappings
-        for(var m=0, mKeys = Object.keys(mappings), name;(name = mKeys[m]);m++) {
+        for(var m=0, mKeys = Object.keys(mappings);(name = mKeys[m]);m++) {
             mappings[name] = normalizeDependency(
                 mappings[name],
                 config,
@@ -795,12 +793,12 @@
     Require.resolve = resolve;
 
     //We need to find the best time to flush _resolveStringtoArray and _resolved once their content isn't needed anymore
-	var _resolved = new Map;
-	var _resolveStringtoArray = new Map;
-	var _target = [];
+    var _resolved = new Map();
+    var _resolveStringtoArray = new Map();
+    var _target = [];
 
-	function _resolveItem(source, part, target) {
-	    /*jshint -W035 */
+    function _resolveItem(source, part, target) {
+        /*jshint -W035 */
         if (part === "" || part === ".") {
         } else if (part === "..") {
             if (target.length) {
@@ -810,33 +808,35 @@
             target.push(part);
         }
         /*jshint +W035 */
-	}
+    }
 
     function resolve(id, baseId) {
-        if(id === "" && baseId === "") return "";
-		var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map)) && resolved) || resolved;
-		var i, ii;
-		if(!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
-	        id = String(id);
-	        var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source) || source,
+        if (id === "" && baseId === "") {
+            return "";
+        }
+        var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map())) && resolved) || resolved;
+        var i, ii;
+        if (!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
+            id = String(id);
+            var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source) || source,
                 parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split("/"))) && parts || parts),
                 resolveItem = _resolveItem;
 
-	        if (source.length && source[0] === "." || source[0] === "..") {
-	            for (i = 0, ii = parts.length-1; i < ii; i++) {
-    	            resolveItem(parts, parts[i], _target);
-    	        }
-	        }
-	        for (i = 0, ii = source.length; i < ii; i++) {
-	            resolveItem(source, source[i], _target);
-	        }
-            if(!resolved.get(baseId)) {
-                resolved.set(baseId, new Map);
+            if (source.length && source[0] === "." || source[0] === "..") {
+                for (i = 0, ii = parts.length-1; i < ii; i++) {
+                    resolveItem(parts, parts[i], _target);
+                }
             }
-	        resolved.get(baseId).set(id, _target.join("/"));
-	        _target.length = 0;
-		}
-		return resolved.get(baseId).get(id);
+            for (i = 0, ii = source.length; i < ii; i++) {
+                resolveItem(source, source[i], _target);
+            }
+            if (!resolved.get(baseId)) {
+                resolved.set(baseId, new Map());
+            }
+            resolved.get(baseId).set(id, _target.join("/"));
+            _target.length = 0;
+        }
+        return resolved.get(baseId).get(id);
     }
 
     var extensionPattern = /\.([^\/\.]+)$/;
@@ -866,7 +866,7 @@
     // Require.parseDependencies = function parseDependencies(factory) {
     //     var o = [];
     //     String(factory).replace(requirePattern, function(_, id) {
-    //         if(o.indexOf(id) === -1) {
+    //         if (o.indexOf(id) === -1) {
     //             o.push(id);
     //         }
     //     });
@@ -897,7 +897,7 @@
                     module.dependencies = [];
                 }
             }
-			//module.text = null;
+            //module.text = null;
             return module;
         };
     };
@@ -912,7 +912,7 @@
                 module.text = module.text.replace(shebangPattern, shebangCommented);
             }
             compile(module);
-			//module.text = null;
+            //module.text = null;
         };
     };
 
@@ -980,14 +980,14 @@
         return function (module) {
             var json = (module.location || "").match(jsonPattern);
             if (json) {
-                if(typeof module.exports !== "object" && typeof module.text === "string") {
+                if (typeof module.exports !== "object" && typeof module.text === "string") {
                     module.exports = JSON.parse(module.text);
                 }
-				//module.text = null;
+                //module.text = null;
                 return module;
             } else {
-				var result = compile(module);
-				//module.text = null;
+                var result = compile(module);
+                //module.text = null;
                 return result;
             }
         };
@@ -1044,20 +1044,22 @@
 
     Require.LocationLoader = function (config, load) {
         function locationLoader(id, module) {
-            var path = id,
+            var location, result,
+                path = id,
                 config = locationLoader.config,
-                extension = Require.extension(id),
-                location, result;
-            if (!extension || (
-                extension !== "js" &&
-                extension !== "json" &&
-                config.moduleTypes.indexOf(extension) === -1
-            )) {
+                extension = Require.extension(id);
+            if (
+                !extension || (
+                    extension !== "js" &&
+                    extension !== "json" &&
+                    config.moduleTypes.indexOf(extension) === -1
+                )
+            ) {
                 path += ".js";
             }
+            
             location = module.location = URL.resolve(config.location, path);
-            result;
-            if(config.delegate && config.delegate.packageWillLoadModuleAtLocation) {
+            if (config.delegate && config.delegate.packageWillLoadModuleAtLocation) {
                 result = config.delegate.packageWillLoadModuleAtLocation(module,location);
             }
             return result ? result : load(location, module);
@@ -1072,19 +1074,17 @@
 
     var normalizePattern = /^(.*)\.js$/;
     var normalizeId = function normalizeId(id) {
-        if(!normalizeId.cache.has(id)) {
+        if (!normalizeId.cache.has(id)) {
             var match = normalizeId.normalizePattern.exec(id);
-            normalizeId.cache.set(id,( match
-                                        ? match[1]
-                                        : id));
+            normalizeId.cache.set(id,( match ? match[1] : id));
         }
         return normalizeId.cache.get(id);
     };
-    normalizeId.cache = new Map;
+    normalizeId.cache = new Map();
     normalizeId.normalizePattern = normalizePattern;
 
     var memoize = function (callback, cache) {
-        cache = cache || new Map;
+        cache = cache || new Map();
         function _memoize(key, arg) {
             //return cache[key] || (cache[key] = Promise.try(callback, [key, arg]));
             return _memoize.cache.get(key) || (_memoize.cache.set(key, callback(key, arg))) && _memoize.cache.get(key) || _memoize.cache.get(key);

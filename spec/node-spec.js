@@ -1,7 +1,7 @@
-require("./lib/jasmine-promise");
 var PATH = require("path");
-
 var Require = require("../bootstrap-node");
+
+require("./lib/jasmine-promise");
 
 // Use async spec to cause Jasmine to wait until the real specs have been loaded
 describe("Mr on node", function () {
