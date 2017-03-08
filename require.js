@@ -55,7 +55,7 @@
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
     // comment.
     var Map;
-    if(!global.Map) {
+    if (!global.Map) {
         Map = function _Map() {
             this._content = Object.create(null);
         };
@@ -196,15 +196,15 @@
                     module = getModuleDescriptor(topId),
                     dependencies =  module.dependencies;
 
-                if(dependencies && dependencies.length > 0) {
+                if (dependencies && dependencies.length > 0) {
                     for(var i=0;(depId = dependencies[i]);i++) {
                         // create dependees set, purely for debug purposes
-                        // if(true) {
+                        // if (true) {
                         //     iModule = getModuleDescriptor(depId);
                         //     dependees = iModule.dependees = iModule.dependees || {};
                         //     dependees[topId] = true;
                         // }
-                        if((iPromise = deepLoad(normalizeId(resolve(depId, topId)), topId, loading))) {
+                        if ((iPromise = deepLoad(normalizeId(resolve(depId, topId)), topId, loading))) {
                             /* jshint expr: true */
                             promises ? (promises.push ? promises.push(iPromise) :
                                 (promises = [promises, iPromise])) : (promises = iPromise);
@@ -442,16 +442,15 @@
             config
         );
         var pkg;
-        if(typeof require === "function") {
+        if (typeof require === "function") {
             pkg = require;
-        }
-        else {
-            if(Require.delegate && Require.delegate.willCreatePackage) {
+        } else {
+            if (Require.delegate && Require.delegate.willCreatePackage) {
                 pkg = Require.delegate.willCreatePackage(location, packageDescription, subconfig);
             }
-            if(!pkg) {
+            if (!pkg) {
                 pkg = Require.makeRequire(subconfig);
-                if(Require.delegate && Require.delegate.didCreatePackage) {
+                if (Require.delegate && Require.delegate.didCreatePackage) {
                     Require.delegate.didCreatePackage(subconfig);
                 }
 
@@ -486,10 +485,10 @@
 
             var promise;
 
-            if(Require.delegate) {
+            if (Require.delegate) {
                 promise = Require.delegate.requireWillLoadPackageDescriptionAtLocation(descriptionLocation,dependency, config);
             }
-            if(!promise) {
+            if (!promise) {
                 promise = (config.read || Require.read)(descriptionLocation);
             }
 
@@ -562,7 +561,7 @@
         };
 
         var pkg;
-        if(typeof packageDescription === "object") {
+        if (typeof packageDescription === "object") {
             pkg = Require.injectLoadedPackageDescription(location, packageDescription, config);
         }
         else {
@@ -701,7 +700,7 @@
             overlay.browser = {redirects:{}};
             redirects = overlay.browser.redirects;
             for(iBk=0;(bk = browserKeys[iBk]);iBk++) {
-                if(browser[bk] !== false) {
+                if (browser[bk] !== false) {
                     redirects[bk] = browser[bk];
                 }
             }
@@ -758,7 +757,7 @@
         var mappings = description.mappings || {};
         // dependencies, devDependencies if not in production
         processMappingDependencies(description.dependencies,mappings);
-        if(!config.production) {
+        if (!config.production) {
             processMappingDependencies(description.devDependencies,mappings);
         }
         // mappings
@@ -796,12 +795,12 @@
     }
 
     function resolve(id, baseId) {
-        if(id === "" && baseId === "") {
+        if (id === "" && baseId === "") {
             return "";
         }
         var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map())) && resolved) || resolved;
         var i, ii;
-        if(!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
+        if (!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
             id = String(id);
             var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source) || source,
                 parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split("/"))) && parts || parts),
@@ -815,7 +814,7 @@
             for (i = 0, ii = source.length; i < ii; i++) {
                 resolveItem(source, source[i], _target);
             }
-            if(!resolved.get(baseId)) {
+            if (!resolved.get(baseId)) {
                 resolved.set(baseId, new Map());
             }
             resolved.get(baseId).set(id, _target.join("/"));
@@ -851,7 +850,7 @@
     // Require.parseDependencies = function parseDependencies(factory) {
     //     var o = [];
     //     String(factory).replace(requirePattern, function(_, id) {
-    //         if(o.indexOf(id) === -1) {
+    //         if (o.indexOf(id) === -1) {
     //             o.push(id);
     //         }
     //     });
@@ -965,7 +964,7 @@
         return function (module) {
             var json = (module.location || "").match(jsonPattern);
             if (json) {
-                if(typeof module.exports !== "object" && typeof module.text === "string") {
+                if (typeof module.exports !== "object" && typeof module.text === "string") {
                     module.exports = JSON.parse(module.text);
                 }
                 //module.text = null;
@@ -1036,9 +1035,9 @@
             if (
                 !extension || (
                     extension !== "js" &&
-                        extension !== "json" &&
-                            config.moduleTypes.indexOf(extension) === -1
-                    )
+                    extension !== "json" &&
+                    config.moduleTypes.indexOf(extension) === -1
+                )
             ) {
                 path += ".js";
             }
@@ -1059,7 +1058,7 @@
 
     var normalizePattern = /^(.*)\.js$/;
     var normalizeId = function normalizeId(id) {
-        if(!normalizeId.cache.has(id)) {
+        if (!normalizeId.cache.has(id)) {
             var match = normalizeId.normalizePattern.exec(id);
             normalizeId.cache.set(id,( match ? match[1] : id));
         }

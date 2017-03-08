@@ -192,7 +192,7 @@
         var script = document.createElement("script");
         script.src = location;
         script.onload = function () {
-            if(loadCallback) {
+            if (loadCallback) {
                 loadCallback(script);
             }
             // remove clutter
