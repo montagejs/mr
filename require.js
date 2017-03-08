@@ -100,7 +100,7 @@
         // Configuration defaults:
         config = config || {};
         config.rootLocation = URL.resolve(config.rootLocation || Require.getLocation(), "./");
-        config.location = URL.resolve(config.location || config.rootLocation);
+        config.location = URL.resolve(config.location || config.rootLocation, "./");
         config.paths = config.paths || [config.location];
         config.mappings = config.mappings || {}; // EXTENSION
         config.exposedConfigs = config.exposedConfigs || Require.exposedConfigs;
