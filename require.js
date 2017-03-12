@@ -738,7 +738,6 @@
                 redirect: normalizeId(resolve(description.main, "")),
                 location: config.location
             };
-
         }
 
         //Deal with redirects
