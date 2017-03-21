@@ -29,5 +29,6 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 </copyright> */
 var test = require('test');
-require('submodule/a');
+var a = require('submodule/a');
+test.assert(a, "a is defined");
 test.print('DONE', 'info');

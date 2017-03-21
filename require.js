@@ -136,16 +136,17 @@
         // in the bootstrapping process and can be trivially injected into
         // the system.
         function inject(id, exports) {
-            var module = getModuleDescriptor(id);
-            module.exports = exports;
-            module.location = URL.resolve(config.location, id);
-            module.directory = URL.resolve(module.location, "./");
-            module.injected = true;
-            module.redirect = void 0;
-            module.mappingRedirect = void 0;
-            // delete module.redirect;
-            // delete module.mappingRedirect;
-
+            return Promise.try(function () {
+                var module = getModuleDescriptor(id);
+                module.exports = exports;
+                module.location = URL.resolve(config.location, id);
+                module.directory = URL.resolve(module.location, "./");
+                module.injected = true;
+                module.redirect = void 0;
+                module.mappingRedirect = void 0;
+                // delete module.redirect;
+                // delete module.mappingRedirect;
+            });
         }
 
         // Ensures a module definition is loaded, compiled, analyzed
