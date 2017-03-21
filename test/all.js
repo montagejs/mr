@@ -97,6 +97,8 @@ run(require, [
 	"spec/overlay",
 	"spec/moduleTypes",
 	"spec/module-error",
+    "spec/flat-module-tree",
+    "spec/nested-module-tree",
 	{name: "spec/dot-js-module", node: false},
 ]).then(function() {
     if (global.__karma__) {

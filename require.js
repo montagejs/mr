@@ -98,7 +98,8 @@
 
         // Configuration defaults:
         config = config || {};
-        config.location = URL.resolve(config.location || Require.getLocation(), "./");
+        config.rootLocation = URL.resolve(config.rootLocation || Require.getLocation(), "./");
+        config.location = URL.resolve(config.location || config.rootLocation, "./");
         config.paths = config.paths || [config.location];
         config.mappings = config.mappings || {}; // EXTENSION
         config.exposedConfigs = config.exposedConfigs || Require.exposedConfigs;
@@ -109,6 +110,7 @@
         config.compile = config.compile || config.makeCompiler(config);
         config.parseDependencies = config.parseDependencies || Require.parseDependencies;
         config.read = config.read || Require.read;
+        config.strategy = config.strategy || 'nested';
 
         // Modules: { exports, id, location, directory, factory, dependencies,
         // dependees, text, type }
@@ -658,6 +660,15 @@
         }
     }
 
+    function inferStrategy(description) {
+        // The existence of an _args property in package.json distinguishes
+        // packages that were installed with npm version 3 or higher.
+        if (description._args) {
+            return 'flat';
+        }
+        return 'nested';
+    }
+
     function configurePackage(location, description, parent) {
 
         if (!/\/$/.test(location)) {
@@ -669,6 +680,7 @@
         config.location = location || Require.getLocation();
         config.packageDescription = description;
         config.useScriptInjection = description.useScriptInjection;
+        config.strategy = inferStrategy(description);
 
         if (description.production !== void 0) {
             config.production = description.production;
@@ -724,7 +736,11 @@
         }
         delete description.overlay;
 
-        config.packagesDirectory = URL.resolve(location, "node_modules/");
+        if (config.strategy === 'flat') {
+            config.packagesDirectory = URL.resolve(config.mainPackageLocation, "node_modules/");
+        } else {
+            config.packagesDirectory = URL.resolve(location, "node_modules/");   
+        }
 
         // The default "main" module of a package has the same name as the
         // package.
