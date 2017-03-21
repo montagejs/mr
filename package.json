@@ -16,7 +16,7 @@
   },
   "main": "require",
   "scripts": {
-    "test": "node spec/run-node.js",
+    "test": "node test/run-node.js",
     "integration": "mop-integration"
   },
   "bin": {
