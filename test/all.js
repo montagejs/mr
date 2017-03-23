@@ -99,6 +99,7 @@ run(require, [
     "spec/module-error",
     "spec/flat-module-tree",
     "spec/nested-module-tree",
+    "spec/serialization-compiler",
     {name: "spec/dot-js-module", node: false},
 ]).then(function() {
     if (global.__karma__) {

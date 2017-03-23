@@ -44,13 +44,11 @@
 
 })(function (Require, Promise, URL) {
 
-    if (!this) {
-        throw new Error("Require does not work in strict mode.");
-    }
+    "use strict";
 
-    var globalEval = eval; // reassigning causes eval to not use lexical scope.
-    var global = globalEval('this');
-    var ArrayPush = Array.prototype.push;
+    // reassigning causes eval to not use lexical scope.
+    var globalEval = eval,
+        global = globalEval('this');
 
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
     // comment.
@@ -75,22 +73,297 @@
         Map = global.Map;
     }
 
-    var _Module = function _Module() {};
-    _Module.prototype.id = null;
-    _Module.prototype.display = null;
-    _Module.prototype.require = null;
-    _Module.prototype.factory = void 0;
-    _Module.prototype.exports = void 0;
-    _Module.prototype.redirect = void 0;
-    _Module.prototype.location = null;
-    _Module.prototype.directory = null;
-    _Module.prototype.injected = false;
-    _Module.prototype.mappingRedirect = void 0;
-    _Module.prototype.type = null;
-    _Module.prototype.text = void 0;
-    _Module.prototype.dependees = null;
-    _Module.prototype.extraDependencies = void 0;
-    _Module.prototype.uuid = null;
+    var Module = function Module() {};
+    Module.prototype.id = null;
+    Module.prototype.display = null;
+    Module.prototype.require = null;
+    Module.prototype.factory = void 0;
+    Module.prototype.exports = void 0;
+    Module.prototype.redirect = void 0;
+    Module.prototype.location = null;
+    Module.prototype.directory = null;
+    Module.prototype.injected = false;
+    Module.prototype.mappingRedirect = void 0;
+    Module.prototype.type = null;
+    Module.prototype.text = void 0;
+    Module.prototype.dependees = null;
+    Module.prototype.extraDependencies = void 0;
+    Module.prototype.uuid = null;
+
+    var normalizePattern = /^(.*)\.js$/;
+    var normalizeId = function normalizeId(id) {
+        if (!normalizeId.cache.has(id)) {
+            var match = normalizeId.normalizePattern.exec(id);
+            normalizeId.cache.set(id,( match ? match[1] : id));
+        }
+        return normalizeId.cache.get(id);
+    };
+    normalizeId.cache = new Map();
+    normalizeId.normalizePattern = normalizePattern;
+
+    var memoize = function (callback, cache) {
+        cache = cache || new Map();
+        function _memoize(key, arg) {
+            //return cache[key] || (cache[key] = Promise.try(callback, [key, arg]));
+            return _memoize.cache.get(key) || (_memoize.cache.set(key, callback(key, arg))) && _memoize.cache.get(key) || _memoize.cache.get(key);
+        }
+        _memoize.cache = cache;
+        return _memoize;
+    };
+
+    // We need to find the best time to flush _resolveStringtoArray and _resolved once their content isn't needed anymore
+    var _resolved = new Map();
+    var _resolveStringtoArray = new Map();
+    var _target = [];
+
+    function _resolveItem(source, part, target) {
+        /*jshint -W035 */
+        if (part === "" || part === ".") {
+        } else if (part === "..") {
+            if (target.length) {
+                target.pop();
+            }
+        } else {
+            target.push(part);
+        }
+        /*jshint +W035 */
+    }
+
+    function resolve(id, baseId) {
+        if (id === "" && baseId === "") {
+            return "";
+        }
+        var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map())) && resolved) || resolved;
+        var i, ii;
+        if (!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
+            id = String(id);
+            var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source) || source,
+                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split("/"))) && parts || parts),
+                resolveItem = _resolveItem;
+
+            if (source.length && source[0] === "." || source[0] === "..") {
+                for (i = 0, ii = parts.length-1; i < ii; i++) {
+                    resolveItem(parts, parts[i], _target);
+                }
+            }
+            for (i = 0, ii = source.length; i < ii; i++) {
+                resolveItem(source, source[i], _target);
+            }
+            if (!resolved.get(baseId)) {
+                resolved.set(baseId, new Map());
+            }
+            resolved.get(baseId).set(id, _target.join("/"));
+            _target.length = 0;
+        }
+        return resolved.get(baseId).get(id);
+    }
+
+    var isRelativePattern = /\/$/;
+    function normalizeDependency(dependency, config, name) {
+        config = config || {};
+        if (typeof dependency === "string") {
+            dependency = {
+                location: dependency
+            };
+        }
+        if (dependency.main) {
+            dependency.location = config.mainPackageLocation;
+        }
+        // if the named dependency has already been found at another
+        // location, refer to the same eventual instance
+        // TODO this has to add a test on version
+        if (
+            dependency.name &&
+                config.registry &&
+                    config.registry.has(dependency.name)
+        ) {
+            dependency.location = config.registry.get(dependency.name);
+        }
+
+        // default location
+        if (!dependency.location && config.packagesDirectory && dependency.name) {
+            dependency.location = URL.resolve(
+                config.packagesDirectory,
+                dependency.name + "/"
+            );
+        } else if (!dependency.location) {
+            return dependency; // partially completed
+        }
+
+        // make sure the dependency location has a trailing slash so that
+        // relative urls will resolve properly
+        if (!isRelativePattern.test(dependency.location)) {
+            dependency.location += "/";
+        }
+
+        // resolve the location relative to the current package
+        if (!Require.isAbsolute(dependency.location)) {
+            if (!config.location) {
+                throw new Error(
+                    "Dependency locations must be fully qualified: " +
+                    JSON.stringify(dependency)
+                );
+            }
+            dependency.location = URL.resolve(
+                config.location,
+                dependency.location
+            );
+        }
+
+        // register the package name so the location can be reused
+        if (dependency.name) {
+            config.registry.set(dependency.name,dependency.location);
+        }
+        
+        return dependency;
+    }
+
+    function processMappingDependencies(dependencies, mappings) {
+        if (dependencies) {
+            for(var i=0, keys = Object.keys(dependencies), name;(name = keys[i]);i++) {
+                if (!mappings[name]) {
+                    // dependencies are equivalent to name and version mappings,
+                    // though the version predicate string is presently ignored
+                    // (TODO)
+                    mappings[name] = {
+                        name: name,
+                        version: dependencies[name]
+                    };
+                }
+            }   
+        }
+    }
+
+    function inferStrategy(description) {
+        // The existence of an _args property in package.json distinguishes
+        // packages that were installed with npm version 3 or higher.
+        return description._args ? 'flat' : 'nested';
+    }
+
+    function configurePackage(location, description, parent) {
+
+        if (!isRelativePattern.test(location)) {
+            location += "/";
+        }
+
+        var config = Object.create(parent);
+        config.name = description.name;
+        config.location = location || Require.getLocation();
+        config.packageDescription = description;
+        config.useScriptInjection = description.useScriptInjection;
+        config.strategy = inferStrategy(description);
+
+        if (description.production !== void 0) {
+            config.production = description.production;
+        }
+
+        // explicitly mask definitions and modules, which must
+        // not apply to child packages
+        var modules = config.modules = config.modules || {};
+
+        var registry = config.registry;
+        if (config.name !== void 0 && !registry.has(config.name)) {
+            registry.set(config.name,config.location);
+        }
+
+        // overlay
+        var redirects,
+            overlay = description.overlay || {};
+
+        // but first, convert "browser" field, as pioneered by Browserify, to
+        // an overlay
+        if (typeof description.browser === "string") {
+            overlay.browser = {
+                redirects: {"": description.browser}
+            };
+        } else if (typeof description.browser === "object") {
+            var bk, iBk, countBk,
+                browser = description.browser,
+                browserKeys = Object.keys(browser);
+
+            overlay.browser = {redirects:{}};
+            redirects = overlay.browser.redirects;
+            for(iBk=0;(bk = browserKeys[iBk]);iBk++) {
+                if (browser[bk] !== false) {
+                    redirects[bk] = browser[bk];
+                }
+            }
+            // overlay.browser = {
+            //     redirects: description.browser
+            // };
+        }
+
+        // overlay continued...
+        var layer, overlays, engine, name;
+        overlays = config.overlays = config.overlays || Require.overlays;
+        for(var i=0, countI=overlays.length;i<countI;i++) {
+            if (layer = overlay[(engine = overlays[i])]) {
+                for (name in layer) {
+                    if (layer.hasOwnProperty(name)) {
+                        description[name] = layer[name];
+                    }
+                }
+            }
+        }
+        delete description.overlay;
+
+        if (config.strategy === 'flat') {
+            config.packagesDirectory = URL.resolve(config.mainPackageLocation, "node_modules/");
+        } else {
+            config.packagesDirectory = URL.resolve(location, "node_modules/");   
+        }
+
+        // The default "main" module of a package has the same name as the
+        // package.
+        if (description.main !== void 0) {
+
+            // main, injects a definition for the main module, with
+            // only its path. makeRequire goes through special effort
+            // in deepLoad to re-initialize this definition with the
+            // loaded definition from the given path.
+            modules[""] = {
+                id: "",
+                redirect: normalizeId(resolve(description.main, "")),
+                location: config.location
+            };
+        }
+
+        //Deal with redirects
+        redirects = description.redirects;
+        if (redirects !== void 0) {
+            for(var r=0, rKeys = Object.keys(redirects);(name = rKeys[r]);r++) {
+                modules[name] = {
+                    id: name,
+                    redirect: normalizeId(resolve(redirects[name], name)),
+                    location: URL.resolve(location, name)
+                };
+            }
+        }
+
+        // mappings, link this package to other packages.
+        var mappings = description.mappings || {};
+        // dependencies, devDependencies if not in production
+        processMappingDependencies(description.dependencies,mappings);
+        if (!config.production) {
+            processMappingDependencies(description.devDependencies,mappings);
+        }
+
+        // mappings
+        for(var m=0, mKeys = Object.keys(mappings);(name = mKeys[m]);m++) {
+            mappings[name] = normalizeDependency(
+                mappings[name],
+                config,
+                name
+            );
+        }
+        config.mappings = mappings;
+
+        return config;
+    }
+
+    //
+    //
+    //
 
     var isLowercasePattern = /^[a-z]+$/;
     Require.makeRequire = function (config) {
@@ -122,7 +395,7 @@
         function getModuleDescriptor(id) {
             var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
             if (!(lookupId in modules)) {
-                var aModule = new _Module();
+                var aModule = new Module();
                 modules[lookupId] = aModule;
                 aModule.id = id;
                 aModule.display = (config.name || config.location); // EXTENSION
@@ -133,6 +406,7 @@
             return modules[lookupId];
         }
 
+        
         // for preloading modules by their id and exports, useful to
         // prevent wasteful multiple instantiation if a module was loaded
         // in the bootstrapping process and can be trivially injected into
@@ -175,7 +449,7 @@
                 }
                 if (module.extraDependencies !== void 0) {
                     module.dependencies = module.dependencies || [];
-                    ArrayPush.apply(module.dependencies, module.extraDependencies);
+                    Array.prototype.push.apply(module.dependencies, module.extraDependencies);
                 }
             });
         });
@@ -571,9 +845,9 @@
             pkg = config.loadPackage(dependency);
         }
         if (typeof pkg.then === "function") {
-            pkg = pkg.then(function (package) {
-                package.registry = registry;
-                return package;
+            pkg = pkg.then(function (pkg) {
+                pkg.registry = registry;
+                return pkg;
             });
         } else {
             pkg.registry = registry;
@@ -588,256 +862,8 @@
         return pkg;
     };
 
-    function normalizeDependency(dependency, config, name) {
-        config = config || {};
-        if (typeof dependency === "string") {
-            dependency = {
-                location: dependency
-            };
-        }
-        if (dependency.main) {
-            dependency.location = config.mainPackageLocation;
-        }
-        // if the named dependency has already been found at another
-        // location, refer to the same eventual instance
-        // TODO this has to add a test on version
-        if (
-            dependency.name &&
-            config.registry &&
-            config.registry.has(dependency.name)
-        ) {
-            dependency.location = config.registry.get(dependency.name);
-        }
-        // default location
-        if (!dependency.location && config.packagesDirectory && dependency.name) {
-            dependency.location = URL.resolve(
-                config.packagesDirectory,
-                dependency.name + "/"
-            );
-        }
-        if (!dependency.location) {
-            return dependency; // partially completed
-        }
-        // make sure the dependency location has a trailing slash so that
-        // relative urls will resolve properly
-        if (!/\/$/.test(dependency.location)) {
-            dependency.location += "/";
-        }
-        // resolve the location relative to the current package
-        if (!Require.isAbsolute(dependency.location)) {
-            if (!config.location) {
-                throw new Error(
-                    "Dependency locations must be fully qualified: " +
-                    JSON.stringify(dependency)
-                );
-            }
-            dependency.location = URL.resolve(
-                config.location,
-                dependency.location
-            );
-        }
-        // register the package name so the location can be reused
-        if (dependency.name) {
-            config.registry.set(dependency.name,dependency.location);
-        }
-        return dependency;
-    }
-
-    function processMappingDependencies(dependencies, mappings) {
-        if (!dependencies) {
-            return;
-        }
-        for(var i=0, keys = Object.keys(dependencies), name;(name = keys[i]);i++) {
-            if (!mappings[name]) {
-                // dependencies are equivalent to name and version mappings,
-                // though the version predicate string is presently ignored
-                // (TODO)
-                mappings[name] = {
-                    name: name,
-                    version: dependencies[name]
-                };
-            }
-        }
-    }
-
-    function inferStrategy(description) {
-        // The existence of an _args property in package.json distinguishes
-        // packages that were installed with npm version 3 or higher.
-        if (description._args) {
-            return 'flat';
-        }
-        return 'nested';
-    }
-
-    function configurePackage(location, description, parent) {
-
-        if (!/\/$/.test(location)) {
-            location += "/";
-        }
-
-        var config = Object.create(parent);
-        config.name = description.name;
-        config.location = location || Require.getLocation();
-        config.packageDescription = description;
-        config.useScriptInjection = description.useScriptInjection;
-        config.strategy = inferStrategy(description);
-
-        if (description.production !== void 0) {
-            config.production = description.production;
-        }
-
-        // explicitly mask definitions and modules, which must
-        // not apply to child packages
-        var modules = config.modules = config.modules || {};
-
-        var registry = config.registry;
-        if (config.name !== void 0 && !registry.has(config.name)) {
-            registry.set(config.name,config.location);
-        }
-
-        // overlay
-        var redirects,
-            overlay = description.overlay || {};
-
-        // but first, convert "browser" field, as pioneered by Browserify, to
-        // an overlay
-        if (typeof description.browser === "string") {
-            overlay.browser = {
-                redirects: {"": description.browser}
-            };
-        } else if (typeof description.browser === "object") {
-            var bk, iBk, countBk,
-                browser = description.browser,
-                browserKeys = Object.keys(browser);
-
-            overlay.browser = {redirects:{}};
-            redirects = overlay.browser.redirects;
-            for(iBk=0;(bk = browserKeys[iBk]);iBk++) {
-                if (browser[bk] !== false) {
-                    redirects[bk] = browser[bk];
-                }
-            }
-            // overlay.browser = {
-            //     redirects: description.browser
-            // };
-        }
-
-        // overlay continued...
-        var layer, overlays, engine, name;
-        overlays = config.overlays = config.overlays || Require.overlays;
-        for(var i=0, countI=overlays.length;i<countI;i++) {
-            if (layer = overlay[(engine = overlays[i])]) {
-                for (name in layer) {
-                    if (layer.hasOwnProperty(name)) {
-                        description[name] = layer[name];
-                    }
-                }
-            }
-        }
-        delete description.overlay;
-
-        if (config.strategy === 'flat') {
-            config.packagesDirectory = URL.resolve(config.mainPackageLocation, "node_modules/");
-        } else {
-            config.packagesDirectory = URL.resolve(location, "node_modules/");   
-        }
-
-        // The default "main" module of a package has the same name as the
-        // package.
-        if (description.main !== void 0) {
-
-            // main, injects a definition for the main module, with
-            // only its path. makeRequire goes through special effort
-            // in deepLoad to re-initialize this definition with the
-            // loaded definition from the given path.
-            modules[""] = {
-                id: "",
-                redirect: normalizeId(resolve(description.main, "")),
-                location: config.location
-            };
-        }
-
-        //Deal with redirects
-        redirects = description.redirects;
-        if (redirects !== void 0) {
-            for(var r=0, rKeys = Object.keys(redirects);(name = rKeys[r]);r++) {
-                modules[name] = {
-                    id: name,
-                    redirect: normalizeId(resolve(redirects[name], name)),
-                    location: URL.resolve(location, name)
-                };
-            }
-        }
-
-        // mappings, link this package to other packages.
-        var mappings = description.mappings || {};
-        // dependencies, devDependencies if not in production
-        processMappingDependencies(description.dependencies,mappings);
-        if (!config.production) {
-            processMappingDependencies(description.devDependencies,mappings);
-        }
-        // mappings
-        for(var m=0, mKeys = Object.keys(mappings);(name = mKeys[m]);m++) {
-            mappings[name] = normalizeDependency(
-                mappings[name],
-                config,
-                name
-            );
-        }
-        config.mappings = mappings;
-
-        return config;
-    }
-
     // Resolves CommonJS module IDs (not paths)
     Require.resolve = resolve;
-
-    //We need to find the best time to flush _resolveStringtoArray and _resolved once their content isn't needed anymore
-    var _resolved = new Map();
-    var _resolveStringtoArray = new Map();
-    var _target = [];
-
-    function _resolveItem(source, part, target) {
-        /*jshint -W035 */
-        if (part === "" || part === ".") {
-        } else if (part === "..") {
-            if (target.length) {
-                target.pop();
-            }
-        } else {
-            target.push(part);
-        }
-        /*jshint +W035 */
-    }
-
-    function resolve(id, baseId) {
-        if (id === "" && baseId === "") {
-            return "";
-        }
-        var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map())) && resolved) || resolved;
-        var i, ii;
-        if (!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
-            id = String(id);
-            var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source) || source,
-                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split("/"))) && parts || parts),
-                resolveItem = _resolveItem;
-
-            if (source.length && source[0] === "." || source[0] === "..") {
-                for (i = 0, ii = parts.length-1; i < ii; i++) {
-                    resolveItem(parts, parts[i], _target);
-                }
-            }
-            for (i = 0, ii = source.length; i < ii; i++) {
-                resolveItem(source, source[i], _target);
-            }
-            if (!resolved.get(baseId)) {
-                resolved.set(baseId, new Map());
-            }
-            resolved.get(baseId).set(id, _target.join("/"));
-            _target.length = 0;
-        }
-        return resolved.get(baseId).get(id);
-    }
 
     var extensionPattern = /\.([^\/\.]+)$/;
     Require.extension = function (path) {
@@ -855,6 +881,7 @@
 
     // Extracts dependencies by parsing code and looking for "require" (currently using a simple regexp)
     var requirePattern = /(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g;
+
     // Require.parseDependencies = function parseDependencies(factory) {
     //     var o = {};
     //     String(factory).replace(requirePattern, function(_, id) {
@@ -945,13 +972,22 @@
     //The ShebangCompiler doesn't make sense on the client side
     if (typeof window !== "undefined") {
         Require.makeCompiler = function(config) {
-            return Require.JsonCompiler(
+            return Require.MetaCompiler(
                 config,
-                Require.DependenciesCompiler(
+                Require.SerializationCompiler(
                     config,
-                    Require.LintCompiler(
+                    Require.TemplateCompiler(
                         config,
-                        Require.Compiler(config)
+                        Require.JsonCompiler(
+                            config,
+                            Require.DependenciesCompiler(
+                                config,
+                                Require.LintCompiler(
+                                    config,
+                                    Require.Compiler(config)
+                                )
+                            )
+                        )
                     )
                 )
             );
@@ -959,15 +995,24 @@
     }
     else {
         Require.makeCompiler = function(config) {
-            return Require.JsonCompiler(
+            return Require.MetaCompiler(
                 config,
-                Require.ShebangCompiler(
+                Require.SerializationCompiler(
                     config,
-                    Require.DependenciesCompiler(
+                    Require.TemplateCompiler(
                         config,
-                        Require.LintCompiler(
+                        Require.JsonCompiler(
                             config,
-                            Require.Compiler(config)
+                            Require.ShebangCompiler(
+                                config,
+                                Require.DependenciesCompiler(
+                                    config,
+                                    Require.LintCompiler(
+                                        config,
+                                        Require.Compiler(config)
+                                    )
+                                )
+                            )
                         )
                     )
                 )
@@ -1051,8 +1096,8 @@
             if (
                 !extension || (
                     extension !== "js" &&
-                    extension !== "json" &&
-                    config.moduleTypes.indexOf(extension) === -1
+                        extension !== "json" &&
+                            config.moduleTypes.indexOf(extension) === -1
                 )
             ) {
                 path += ".js";
@@ -1072,25 +1117,159 @@
         return memoize(load, config.cache);
     };
 
-    var normalizePattern = /^(.*)\.js$/;
-    var normalizeId = function normalizeId(id) {
-        if (!normalizeId.cache.has(id)) {
-            var match = normalizeId.normalizePattern.exec(id);
-            normalizeId.cache.set(id,( match ? match[1] : id));
-        }
-        return normalizeId.cache.get(id);
+    /**
+     * Allows reel directories to load the contained eponymous JavaScript
+     * module.
+     * @see Loader middleware in require/require.js
+     * @param config
+     * @param loader the next loader in the chain
+     */
+    var reelExpression = /([^\/]+)\.reel$/,
+        dotREEL = ".reel",
+        SLASH = "/";
+    Require.ReelLoader = function(config, load) {
+        return function reelLoader(id, module) {
+            if (id.endsWith(dotREEL)) {
+                module.redirect = id;
+                module.redirect += SLASH;
+                module.redirect += reelExpression.exec(id)[1];
+                return module;
+            } else {
+                return load(id, module);
+            }
+        };
     };
-    normalizeId.cache = new Map();
-    normalizeId.normalizePattern = normalizePattern;
 
-    var memoize = function (callback, cache) {
-        cache = cache || new Map();
-        function _memoize(key, arg) {
-            //return cache[key] || (cache[key] = Promise.try(callback, [key, arg]));
-            return _memoize.cache.get(key) || (_memoize.cache.set(key, callback(key, arg))) && _memoize.cache.get(key) || _memoize.cache.get(key);
-        }
-        _memoize.cache = cache;
-        return _memoize;
+    /**
+     * Allows the .meta and .mjson files to be loaded as json
+     * @see Compiler middleware in require/require.js
+     * @param config
+     * @param compile
+     */
+    Require.MetaCompiler = function(config, compile) {
+        return function(module) {
+            if (module.location && (module.location.endsWith(".meta") || module.location.endsWith(".mjson"))) {
+                module.exports = JSON.parse(module.text);
+                return module;
+            } else {
+                return compile(module);
+            }
+        };
     };
 
+    /**
+     * Allows the reel's html file to be loaded via require.
+     *
+     * @see Compiler middleware in require/require.js
+     * @param config
+     * @param compile
+     */
+    var directoryExpression = /(.*\/)?(?=[^\/]+)/,
+        dotHTML = ".html",
+        dotHTML_LOAD_JS = ".html.load.js";
+
+    Require.TemplateCompiler = function(config, compile) {
+        return function(module) {
+            var location = module.location;
+
+            if (!location) {
+                return;
+            }
+
+            if (location.endsWith(dotHTML) || location.endsWith(dotHTML_LOAD_JS)) {
+                var match = location.match(directoryExpression);
+
+                if (match) {
+                    module.dependencies = module.dependencies || [];
+                    module.exports = {
+                        directory: match[1],
+                        content: module.text
+                    };
+
+                    return module;
+                }
+            }
+
+            compile(module);
+        };
+    };
+
+    var MontageMetaData = function(require, id, name) {
+        this.require = require;
+        this.module = id;
+        //moduleId: id, // deprecated
+        this.property = name;
+        //objectName: name, // deprecated
+        //this.aliases = [name];
+        //this.isInstance = false;
+        return this;
+    };
+
+    MontageMetaData.prototype = {
+        get moduleId() {
+            return this.module;
+        },
+        get objectName() {
+            return this.property;
+        },
+        get aliases() {
+            return this._aliases || (this._aliases = [this.property]);
+        },
+        _aliases: null,
+        isInstance: false
+    };
+
+
+    var _MONTAGE_METADATA = "_montage_metadata",
+        reverseReelExpression = /((.*)\.reel)\/\2$/,
+        reverseReelFunction = function($0, $1) {
+            return $1;
+        };
+
+    Require.SerializationCompiler = function(config, compile) {
+        return function(module) {
+            compile(module);
+            if (!module.factory) {
+                return;
+            }
+            var defaultFactory = module.factory;
+            module.factory = function(require, exports, module) {
+                var moduleExports;
+                //call it to validate:
+                try {
+                    moduleExports = defaultFactory.call(this, require, exports, module);
+                } catch (e) {
+                    if (e instanceof SyntaxError) {
+                        config.lint(module);
+                    } else {
+                        throw e;
+                    }
+                }
+
+                if (moduleExports) {
+                    return moduleExports;
+                }
+
+                var i, object, name,
+                    keys = Object.keys(exports);
+
+                for (i = 0, name; name = keys[i]; i++) {
+                    // avoid attempting to initialize a non-object
+                    if (((object = exports[name]) instanceof Object)) {
+                        // avoid attempting to reinitialize an aliased property
+                        //jshint -W106
+                        if (object.hasOwnProperty(_MONTAGE_METADATA) && !object._montage_metadata.isInstance) {
+                            object._montage_metadata.aliases.push(name);
+                            //object._montage_metadata.objectName = name;
+                            //jshint +W106
+                        } else if (!Object.isSealed(object)) {
+                            object._montage_metadata = new MontageMetaData(require, module.id.replace(reverseReelExpression, reverseReelFunction), name);
+                        }
+                    }
+                }
+            };
+
+            return module;
+        };
+    };
 });

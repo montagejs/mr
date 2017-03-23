@@ -11,7 +11,6 @@ var Promise = require("bluebird");
 var FS = require("fs");
 var URL = require("url");
 var PATH = require("path");
-
 var globalEval = eval;
 
 Require.getLocation = function getLocation() {

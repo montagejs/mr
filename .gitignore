@@ -1,8 +1,9 @@
-report
 .npmignore
 .tmp
 .idea
 .DS_Store
-lcov.info
-lcov-report/
-/node_modules
+atlassian-ide-plugin.xml
+npm-debug.log
+report/
+node_modules/
+out/
