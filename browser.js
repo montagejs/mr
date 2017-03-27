@@ -270,7 +270,7 @@ bootstrap("require/browser", function (require) {
             return loadPackageDescription(dependency, config);
         }
     };
-
+    
     Require.makeLoader = function (config) {
         var Loader;
         if (config.useScriptInjection) {
@@ -278,13 +278,15 @@ bootstrap("require/browser", function (require) {
         } else {
             Loader = Require.XhrLoader;
         }
-        return Require.MappingsLoader(
-            config,
-            Require.LocationLoader(
+        return Require.ReelLoader(config,
+            Require.MappingsLoader(
                 config,
-                Require.MemoizedLoader(
+                Require.LocationLoader(
                     config,
-                    Loader(config)
+                    Require.MemoizedLoader(
+                        config,
+                        Loader(config)
+                    )
                 )
             )
         );
