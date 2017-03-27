@@ -21,10 +21,8 @@ config.makeLoader = function (config) {
 return require.loadPackage(module.directory, config)
 .then(function (packageRequire) {
     return packageRequire.async("a.extension");
-})
-.then(function (aExports) {
+}).then(function (aExports) {
     test.assert(aExports === 10, 'require with extension loader');
-
     test.print('DONE', 'info');
 });
 

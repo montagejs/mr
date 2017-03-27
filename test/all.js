@@ -100,6 +100,7 @@ run(require, [
     "spec/module-reel",
     "spec/module-mjson",
     "spec/module-error",
+    "spec/module-metadata",
     "spec/flat-module-tree",
     "spec/nested-module-tree",
     "spec/serialization-compiler",
