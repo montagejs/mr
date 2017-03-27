@@ -376,7 +376,7 @@
         config.paths = config.paths || [config.location];
         config.mappings = config.mappings || {}; // EXTENSION
         config.exposedConfigs = config.exposedConfigs || Require.exposedConfigs;
-        config.moduleTypes = config.moduleTypes || [];
+        config.moduleTypes = config.moduleTypes || ["html", "meta", "mjson"];
         config.makeLoader = config.makeLoader || Require.makeLoader;
         config.load = config.load || config.makeLoader(config);
         config.makeCompiler = config.makeCompiler || Require.makeCompiler;
@@ -384,7 +384,7 @@
         config.parseDependencies = config.parseDependencies || Require.parseDependencies;
         config.read = config.read || Require.read;
         config.strategy = config.strategy || 'nested';
-
+        
         // Modules: { exports, id, location, directory, factory, dependencies,
         // dependees, text, type }
         var modules = config.modules = config.modules || Object.create(null);
@@ -1038,6 +1038,137 @@
         };
     };
 
+    /**
+     * Allows the .meta and .mjson files to be loaded as json
+     * @see Compiler middleware in require/require.js
+     * @param config
+     * @param compile
+     */
+    Require.MetaCompiler = function(config, compile) {
+        return function(module) {
+            if (module.location && (module.location.endsWith(".meta") || module.location.endsWith(".mjson"))) {
+                module.exports = JSON.parse(module.text);
+                return module;
+            } else {
+                return compile(module);
+            }
+        };
+    };
+
+    /**
+     * Allows the reel's html file to be loaded via require.
+     *
+     * @see Compiler middleware in require/require.js
+     * @param config
+     * @param compile
+     */
+    var directoryExpression = /(.*\/)?(?=[^\/]+)/,
+        dotHTML = ".html",
+        dotHTML_LOAD_JS = ".html.load.js";
+
+    Require.TemplateCompiler = function(config, compile) {
+        return function(module) {
+            var location = module.location;
+
+            if (!location) {
+                return;
+            }
+
+            if (location.endsWith(dotHTML) || location.endsWith(dotHTML_LOAD_JS)) {
+                var match = location.match(directoryExpression);
+
+                if (match) {
+                    module.dependencies = module.dependencies || [];
+                    module.exports = {
+                        directory: match[1],
+                        content: module.text
+                    };
+
+                    return module;
+                }
+            }
+
+            compile(module);
+        };
+    };
+
+    var MontageMetaData = function(require, id, name) {
+        this.require = require;
+        this.module = id;
+        this.property = name;
+        //this.aliases = [name];
+        //this.isInstance = false;
+        return this;
+    };
+
+    MontageMetaData.prototype = {
+        get moduleId() {
+            return this.module;
+        },
+        get objectName() {
+            return this.property;
+        },
+        get aliases() {
+            return this._aliases || (this._aliases = [this.property]);
+        },
+        _aliases: null,
+        isInstance: false
+    };
+
+
+    var _MONTAGE_METADATA = "_montage_metadata",
+        reverseReelExpression = /((.*)\.reel)\/\2$/,
+        reverseReelFunction = function($0, $1) {
+            return $1;
+        };
+
+    Require.SerializationCompiler = function(config, compile) {
+        return function(module) {
+            compile(module);
+            if (!module.factory) {
+                return;
+            }
+            var defaultFactory = module.factory;
+            module.factory = function(require, exports, module) {
+                var moduleExports;
+                //call it to validate:
+                try {
+                    moduleExports = defaultFactory.call(this, require, exports, module);
+                } catch (e) {
+                    if (e instanceof SyntaxError) {
+                        config.lint(module);
+                    } else {
+                        throw e;
+                    }
+                }
+
+                if (moduleExports) {
+                    return moduleExports;
+                }
+
+                var i, object, name,
+                    keys = Object.keys(exports);
+
+                for (i = 0, name; name = keys[i]; i++) {
+                    // avoid attempting to initialize a non-object
+                    if (((object = exports[name]) instanceof Object)) {
+                        // avoid attempting to reinitialize an aliased property
+                        //jshint -W106
+                        if (object.hasOwnProperty(_MONTAGE_METADATA) && !object._montage_metadata.isInstance) {
+                            object._montage_metadata.aliases.push(name);
+                            //object._montage_metadata.objectName = name;
+                            //jshint +W106
+                        } else if (!Object.isSealed(object)) {
+                            object._montage_metadata = new MontageMetaData(require, module.id.replace(reverseReelExpression, reverseReelFunction), name);
+                        }
+                    }
+                }
+            };
+
+            return module;
+        };
+    };
+    
     // Built-in loader "middleware":
 
     // Using mappings hash to load modules that match a mapping.
@@ -1137,139 +1268,6 @@
             } else {
                 return load(id, module);
             }
-        };
-    };
-
-    /**
-     * Allows the .meta and .mjson files to be loaded as json
-     * @see Compiler middleware in require/require.js
-     * @param config
-     * @param compile
-     */
-    Require.MetaCompiler = function(config, compile) {
-        return function(module) {
-            if (module.location && (module.location.endsWith(".meta") || module.location.endsWith(".mjson"))) {
-                module.exports = JSON.parse(module.text);
-                return module;
-            } else {
-                return compile(module);
-            }
-        };
-    };
-
-    /**
-     * Allows the reel's html file to be loaded via require.
-     *
-     * @see Compiler middleware in require/require.js
-     * @param config
-     * @param compile
-     */
-    var directoryExpression = /(.*\/)?(?=[^\/]+)/,
-        dotHTML = ".html",
-        dotHTML_LOAD_JS = ".html.load.js";
-
-    Require.TemplateCompiler = function(config, compile) {
-        return function(module) {
-            var location = module.location;
-
-            if (!location) {
-                return;
-            }
-
-            if (location.endsWith(dotHTML) || location.endsWith(dotHTML_LOAD_JS)) {
-                var match = location.match(directoryExpression);
-
-                if (match) {
-                    module.dependencies = module.dependencies || [];
-                    module.exports = {
-                        directory: match[1],
-                        content: module.text
-                    };
-
-                    return module;
-                }
-            }
-
-            compile(module);
-        };
-    };
-
-    var MontageMetaData = function(require, id, name) {
-        this.require = require;
-        this.module = id;
-        //moduleId: id, // deprecated
-        this.property = name;
-        //objectName: name, // deprecated
-        //this.aliases = [name];
-        //this.isInstance = false;
-        return this;
-    };
-
-    MontageMetaData.prototype = {
-        get moduleId() {
-            return this.module;
-        },
-        get objectName() {
-            return this.property;
-        },
-        get aliases() {
-            return this._aliases || (this._aliases = [this.property]);
-        },
-        _aliases: null,
-        isInstance: false
-    };
-
-
-    var _MONTAGE_METADATA = "_montage_metadata",
-        reverseReelExpression = /((.*)\.reel)\/\2$/,
-        reverseReelFunction = function($0, $1) {
-            return $1;
-        };
-
-    Require.SerializationCompiler = function(config, compile) {
-        return function(module) {
-            compile(module);
-            if (!module.factory) {
-                return;
-            }
-            var defaultFactory = module.factory;
-            module.factory = function(require, exports, module) {
-                var moduleExports;
-                //call it to validate:
-                try {
-                    moduleExports = defaultFactory.call(this, require, exports, module);
-                } catch (e) {
-                    if (e instanceof SyntaxError) {
-                        config.lint(module);
-                    } else {
-                        throw e;
-                    }
-                }
-
-                if (moduleExports) {
-                    return moduleExports;
-                }
-
-                var i, object, name,
-                    keys = Object.keys(exports);
-
-                for (i = 0, name; name = keys[i]; i++) {
-                    // avoid attempting to initialize a non-object
-                    if (((object = exports[name]) instanceof Object)) {
-                        // avoid attempting to reinitialize an aliased property
-                        //jshint -W106
-                        if (object.hasOwnProperty(_MONTAGE_METADATA) && !object._montage_metadata.isInstance) {
-                            object._montage_metadata.aliases.push(name);
-                            //object._montage_metadata.objectName = name;
-                            //jshint +W106
-                        } else if (!Object.isSealed(object)) {
-                            object._montage_metadata = new MontageMetaData(require, module.id.replace(reverseReelExpression, reverseReelFunction), name);
-                        }
-                    }
-                }
-            };
-
-            return module;
         };
     };
 });
