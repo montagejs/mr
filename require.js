@@ -91,7 +91,7 @@
     Module.prototype.uuid = null;
 
     var normalizePattern = /^(.*)\.js$/;
-    var normalizeId = function normalizeId(id) {
+    function normalizeId(id) {
         if (!normalizeId.cache.has(id)) {
             var match = normalizeId.normalizePattern.exec(id);
             normalizeId.cache.set(id,( match ? match[1] : id));
@@ -101,7 +101,7 @@
     normalizeId.cache = new Map();
     normalizeId.normalizePattern = normalizePattern;
 
-    var memoize = function (callback, cache) {
+    function memoize(callback, cache) {
         cache = cache || new Map();
         function _memoize(key, arg) {
             //return cache[key] || (cache[key] = Promise.try(callback, [key, arg]));
@@ -110,6 +110,34 @@
         _memoize.cache = cache;
         return _memoize;
     };
+
+    function endsWith(string, search, position) {
+        var stringLength = string.length;
+        var searchString = String(search);
+        var searchLength = searchString.length;
+        var pos = stringLength;
+
+            if (position !== undefined) {   
+                // `ToInteger`
+                pos = position ? Number(position) : 0;
+                if (pos != pos) { // better `isNaN`
+                    pos = 0;
+                }
+            }
+        
+        var end = Math.min(Math.max(pos, 0), stringLength);
+        var start = end - searchLength;
+        if (start < 0) {
+            return false;
+        }
+        var index = -1;
+        while (++index < searchLength) {
+            if (string.charCodeAt(start + index) != searchString.charCodeAt(index)) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     // We need to find the best time to flush _resolveStringtoArray and _resolved once their content isn't needed anymore
     var _resolved = new Map();
@@ -1046,7 +1074,7 @@
      */
     Require.MetaCompiler = function(config, compile) {
         return function(module) {
-            if (module.location && (module.location.endsWith(".meta") || module.location.endsWith(".mjson"))) {
+            if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
                 module.exports = JSON.parse(module.text);
                 return module;
             } else {
@@ -1074,7 +1102,7 @@
                 return;
             }
 
-            if (location.endsWith(dotHTML) || location.endsWith(dotHTML_LOAD_JS)) {
+            if (endsWith(location, dotHTML) || endsWith(location, dotHTML_LOAD_JS)) {
                 var match = location.match(directoryExpression);
 
                 if (match) {
@@ -1260,7 +1288,7 @@
         SLASH = "/";
     Require.ReelLoader = function(config, load) {
         return function reelLoader(id, module) {
-            if (id.endsWith(dotREEL)) {
+            if (endsWith(id, dotREEL)) {
                 module.redirect = id;
                 module.redirect += SLASH;
                 module.redirect += reelExpression.exec(id)[1];
