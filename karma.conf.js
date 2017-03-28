@@ -23,19 +23,7 @@ module.exports = function(config) {
             included: false
         },
         {
-            pattern: 'test/**/*.js',
-            included: false
-        },
-        {
-            pattern: 'test/**/*.json',
-            included: false
-        },
-        {
-            pattern: 'test/**/*.html',
-            included: false
-        },
-        {
-            pattern: 'test/**/*.plus-one',
+            pattern: 'test/**/**',
             included: false
         },
         {
