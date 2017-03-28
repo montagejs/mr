@@ -343,22 +343,19 @@
                 location: params.mrLocation,
                 hash: params.mrHash
             }, config).then(function (mrRequire) {
-                return mrRequire.inject("mini-url", URL).then(function () {
-                    return mrRequire.inject("promise", Promise); 
-                }).then(function () {
-                    return mrRequire.inject("require", mrRequire);
-                }).then(function () {
+                mrRequire.inject("mini-url", URL);
+                mrRequire.inject("promise", Promise); 
+                mrRequire.inject("require", mrRequire);
 
-                    if ("autoPackage" in params) {
-                        mrRequire.injectPackageDescription(applicationLocation, {});
-                    }
+                if ("autoPackage" in params) {
+                    mrRequire.injectPackageDescription(applicationLocation, {});
+                }
 
-                    return mrRequire.loadPackage({
-                        location: applicationLocation,
-                        hash: params.applicationHash
-                    }).then(function (pkg) {
-                        return pkg.async(applicationModuleId);
-                    });
+                return mrRequire.loadPackage({
+                    location: applicationLocation,
+                    hash: params.applicationHash
+                }).then(function (pkg) {
+                    return pkg.async(applicationModuleId);
                 });
             });
         });
