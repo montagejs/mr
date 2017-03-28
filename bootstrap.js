@@ -238,8 +238,13 @@
                 });
             });
 
+            // Load other module and skip promise
             for (var id in pending) {
-                load(resolve(mrLocation, pending[id]));
+                if (pending.hasOwnProperty(id)) {
+                    if (id !== 'promise') {
+                        load(resolve(mrLocation, pending[id]));   
+                    }
+                }
             }       
         }
 
