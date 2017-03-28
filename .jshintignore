@@ -1,4 +1,3 @@
-**/lcov-report/**
 **/node_modules/**
-**/packages/**
-**/spec/**
+**/test/spec/**
+**/report/**
