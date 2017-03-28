@@ -253,7 +253,7 @@
             definitions[id] = factory;
             delete pending[id];
             for (id in pending) {
-                if (id.hasOwnProperty(pending)) {
+                if (pending.hasOwnProperty(id)) {
                     // this causes the function to exit if there are any remaining
                     // scripts loading, on the first iteration.  consider it
                     // equivalent to an array length check
