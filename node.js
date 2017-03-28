@@ -104,15 +104,17 @@ Require.NodeLoader = function NodeLoader(config) {
 };
 
 Require.makeLoader = function makeLoader(config) {
-    return Require.MappingsLoader(
-        config,
-        Require.LocationLoader(
+    return Require.ReelLoader(config,
+        Require.MappingsLoader(
             config,
-            Require.MemoizedLoader(
+            Require.LocationLoader(
                 config,
-                Require.Loader(
+                Require.MemoizedLoader(
                     config,
-                    Require.NodeLoader(config)
+                    Require.Loader(
+                        config,
+                        Require.NodeLoader(config)
+                    )
                 )
             )
         )
