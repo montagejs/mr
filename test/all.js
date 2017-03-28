@@ -1,3 +1,4 @@
+/* global it, fail, expect, jasmine, Promise */
 console.log('mr-testing', 'Start');
 
 function run(suiteRequire, modules) {
@@ -30,14 +31,8 @@ function run(suiteRequire, modules) {
                     location: require.location
                 }).then(function (pkg) {
                     pkg.inject("test", {
-                        print: function (_message, level) {
-                            //console.log(test + ":", _message);
-                            if (_message === "DONE") {
-                                message = _message;
-                            }
-                        },
-                        assert: function (guard, message) {
-                            //console.log(test + ":", guard ? "PASS" : "FAIL", message);
+                        print: function (msg, level) {},
+                        assert: function (guard, msg) {
                             expect(!!guard).toBe(true);
                         }
                     });

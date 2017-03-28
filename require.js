@@ -48,7 +48,9 @@
 
     // reassigning causes eval to not use lexical scope.
     var globalEval = eval,
+        /*jshint evil:true */
         global = globalEval('this');
+        /*jshint evil:false */
 
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
     // comment.
@@ -97,7 +99,8 @@
             normalizeId.cache.set(id,( match ? match[1] : id));
         }
         return normalizeId.cache.get(id);
-    };
+    }
+
     normalizeId.cache = new Map();
     normalizeId.normalizePattern = normalizePattern;
 
@@ -109,7 +112,7 @@
         }
         _memoize.cache = cache;
         return _memoize;
-    };
+    }
 
     function endsWith(string, search, position) {
         var stringLength = string.length;
@@ -120,7 +123,7 @@
             if (position !== undefined) {   
                 // `ToInteger`
                 pos = position ? Number(position) : 0;
-                if (pos != pos) { // better `isNaN`
+                if (pos !== pos) { // better `isNaN`
                     pos = 0;
                 }
             }
@@ -132,7 +135,7 @@
         }
         var index = -1;
         while (++index < searchLength) {
-            if (string.charCodeAt(start + index) != searchString.charCodeAt(index)) {
+            if (string.charCodeAt(start + index) !== searchString.charCodeAt(index)) {
                 return false;
             }
         }
@@ -1090,7 +1093,7 @@
      */
     var directoryExpression = /(.*\/)?(?=[^\/]+)/,
         dotHTML = ".html",
-        dotHTML_LOAD_JS = ".html.load.js";
+        dotHTMLLoadJs = ".html.load.js";
 
     Require.TemplateCompiler = function(config, compile) {
         return function(module) {
@@ -1100,7 +1103,7 @@
                 return;
             }
 
-            if (endsWith(location, dotHTML) || endsWith(location, dotHTML_LOAD_JS)) {
+            if (endsWith(location, dotHTML) || endsWith(location, dotHTMLLoadJs)) {
                 var match = location.match(directoryExpression);
 
                 if (match) {
@@ -1180,12 +1183,12 @@
                     if (((object = exports[name]) instanceof Object)) {
                         // avoid attempting to reinitialize an aliased property
                         //jshint -W106
-                        if (object.hasOwnProperty(_MONTAGE_METADATA) && !object._montage_metadata.isInstance) {
-                            object._montage_metadata.aliases.push(name);
+                        if (object.hasOwnProperty(_MONTAGE_METADATA) && !object[_MONTAGE_METADATA].isInstance) {
+                            object[_MONTAGE_METADATA].aliases.push(name);
                             //object._montage_metadata.objectName = name;
                             //jshint +W106
                         } else if (!Object.isSealed(object)) {
-                            object._montage_metadata = new MontageMetaData(require, module.id.replace(reverseReelExpression, reverseReelFunction), name);
+                            object[_MONTAGE_METADATA] = new MontageMetaData(require, module.id.replace(reverseReelExpression, reverseReelFunction), name);
                         }
                     }
                 }

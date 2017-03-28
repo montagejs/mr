@@ -1,3 +1,4 @@
+/* global __dirname */
 var jasmineRequire = require('jasmine-core/lib/jasmine-core/jasmine.js');
 var JasmineConsoleReporter = require('jasmine-console-reporter');
 
@@ -10,7 +11,9 @@ var jasmineInterface = jasmineRequire.interface(jasmine, jasmineEnv);
 global.jasmine = jasmine;
 global.jasmineRequire = jasmineRequire;
 for (var property in jasmineInterface) {
-	global[property] = jasmineInterface[property];
+	if (jasmineInterface.hasOwnProperty(property)) {
+		global[property] = jasmineInterface[property];	
+	}
 }	
 
 // Default reporter

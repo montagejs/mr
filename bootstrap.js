@@ -1,4 +1,4 @@
-/*global module: false */
+/*global module: false, define, callbackApplication */
 (function (root, factory) {
     if (typeof define === 'function' && define.amd) {
         // AMD. Register as an anonymous module.
@@ -155,7 +155,7 @@
 
             return resolved;
         };
-    };
+    }
 
     var resolve = makeResolve();
 
@@ -253,10 +253,12 @@
             definitions[id] = factory;
             delete pending[id];
             for (id in pending) {
-                // this causes the function to exit if there are any remaining
-                // scripts loading, on the first iteration.  consider it
-                // equivalent to an array length check
-                return;
+                if (id.hasOwnProperty(pending)) {
+                    // this causes the function to exit if there are any remaining
+                    // scripts loading, on the first iteration.  consider it
+                    // equivalent to an array length check
+                    return;
+                }
             }
             // if we get past the for loop, bootstrapping is complete.  get rid
             // of the bootstrap function and proceed.
@@ -359,7 +361,7 @@
                 });
             });
         });
-    }
+    };
 
     if (typeof window !== "undefined") {
         if (global.__MONTAGE_REQUIRE_LOADED__) {
