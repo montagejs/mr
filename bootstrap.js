@@ -25,29 +25,38 @@
 
         // determine which scripts to load
         var pending = {
+            "promise": "node_modules/bluebird/js/browser/bluebird.min.js",
             "require": "require.js",
             "require/browser": "browser.js",
-            "promise": "node_modules/bluebird/js/browser/bluebird.min.js"
         };
 
-        /*jshint -W089 */
+        // Handle preload
+        // TODO rename to MontagePreload
         if (!global.preload) {
-            var mrLocation = resolve(window.location, params.mrLocation);
-
-            //Special Case bluebird for now:
-            load(resolve(mrLocation, "node_modules/bluebird/js/browser/bluebird.min.js"),function() {
+            var mrLocation = resolve(window.location, params.mrLocation),
+                promiseLocation = params.promiseLocation || resolve(mrLocation, pending.promise);
+                
+            // Special Case bluebird for now:
+            load(promiseLocation, function() {
+                
                 //global.bootstrap cleans itself from window once all known are loaded. "bluebird" is not known, so needs to do it first
-                global.bootstrap("bluebird", function (require, exports) {
+                global.bootstrap("bluebird", function (mrRequire, exports) {
                     return window.Promise;
                 });
-                global.bootstrap("promise", function (require, exports) {
+
+                global.bootstrap("promise", function (mrRequire, exports) {
                     return window.Promise;
                 });
             });
 
+            // Load other module and skip promise
             for (var id in pending) {
-                load(resolve(mrLocation, pending[id]));
-            }
+                if (pending.hasOwnProperty(id)) {
+                    if (id !== 'promise') {
+                        load(resolve(mrLocation, pending[id]));   
+                    }
+                }
+            }       
         }
 
         // register module definitions for deferred,
