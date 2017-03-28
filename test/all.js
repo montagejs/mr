@@ -29,7 +29,7 @@ function run(suiteRequire, modules) {
                 return suiteRequire.loadPackage(packagePath, {
                     location: require.location
                 }).then(function (pkg) {
-                    return pkg.inject("test", {
+                    pkg.inject("test", {
                         print: function (_message, level) {
                             //console.log(test + ":", _message);
                             if (_message === "DONE") {
@@ -40,9 +40,9 @@ function run(suiteRequire, modules) {
                             //console.log(test + ":", guard ? "PASS" : "FAIL", message);
                             expect(!!guard).toBe(true);
                         }
-                    }).then(function () {
-                        return pkg.async("program");
                     });
+
+                    return pkg.async("program");
                 }).then(function () {
                     expect("DONE").toBe("DONE");
                 }).catch(function (err) {
