@@ -2,43 +2,43 @@
 console.log('mr-testing', 'Start');
 
 function run(suiteRequire, modules) {
-    return new Promise(function (resolve, reject) {
 
-        // Filter node:false
-        modules = modules.filter(function (module) {
-            if (typeof module === "object") {
-                if (module.node === false && typeof process !== "undefined") {
-                    return false;
-                } else if (module.browser === false && typeof window !== "undefined") {
-                    return false;
+    // Filter node:false
+    modules = modules.filter(function (module) {
+        if (typeof module === "object") {
+            if (module.node === false && typeof process !== "undefined") {
+                return false;
+            } else if (module.browser === false && typeof window !== "undefined") {
+                return false;
+            }
+        }
+        return true;
+    }).map(function (module) {
+        if (typeof module === "object") {
+            return module.name;
+        } else {
+            return module;
+        }
+    });
+
+    var promises = modules.map(function (module) {
+        
+        var spec = this,
+            packagePath = module + '/';
+        
+        return suiteRequire.loadPackage(packagePath, {
+            location: require.location
+        }).then(function (pkg) {
+
+            pkg.inject("test", {
+                print: function (msg, level) {},
+                assert: function (guard, msg) {
+                    expect(!!guard).toBe(true);
                 }
-            }
-            return true;
-        }).map(function (module) {
-            if (typeof module === "object") {
-                return module.name;
-            } else {
-                return module;
-            }
-        });
+            });
 
-        return Promise.all(modules.map(function (module) {
-            console.log('mr-testing', 'load ' + module);
             it(module, function (done) {
-                var spec = this,
-                    packagePath = module + '/';
-                return suiteRequire.loadPackage(packagePath, {
-                    location: require.location
-                }).then(function (pkg) {
-                    pkg.inject("test", {
-                        print: function (msg, level) {},
-                        assert: function (guard, msg) {
-                            expect(!!guard).toBe(true);
-                        }
-                    });
-
-                    return pkg.async("program");
-                }).then(function () {
+                return pkg.async("program").then(function () {
                     expect("DONE").toBe("DONE");
                 }).catch(function (err) {
                     fail(err);
@@ -46,11 +46,30 @@ function run(suiteRequire, modules) {
                     done();
                 });
             });
-        })).then(resolve, reject);
+
+            return 'a';
+        });
+    });
+
+    return Promise.all(promises).then(function(results) {
+
+        var deferred = Promise.defer();
+
+        jasmine.getEnv().addReporter({
+            jasmineDone: deferred.resolve
+        });
+
+        if (global.__karma__) {
+            global.__karma__.start();
+        } else {
+            jasmine.getEnv().execute();    
+        }
+
+        return deferred.promise;
     });
 }
 
-run(require, [
+return run(require, [
     "spec/cyclic",
     "spec/determinism",
     "spec/exactExports",
@@ -100,13 +119,7 @@ run(require, [
     "spec/nested-module-tree",
     "spec/serialization-compiler",
     {name: "spec/dot-js-module", node: false},
-]).then(function() {
-    if (global.__karma__) {
-        global.__karma__.start();
-    } else {
-        jasmine.getEnv().execute();    
-    }
-}).then(function () {
+]).then(function () {
     console.log('mr-testing', 'End');
 }, function (err) {
     console.log('mr-testing', 'Fail', err, err.stack);
