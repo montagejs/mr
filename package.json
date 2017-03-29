@@ -45,7 +45,7 @@
     "karma-firefox-launcher": "^1.0.1",
     "karma-jasmine": "^1.1.0",
     "karma-phantomjs-launcher": "^1.0.2",
-    "mop-integration": "git+ssh://git@github.com/montagejs/mop-integration.git#master",
+    "mop-integration": "git://github.com/montagejs/mop-integration.git#master",
     "open": "0.0.5"
   },
   "exclude": [
