@@ -64,7 +64,13 @@ At time of writing, tests pass in Chrome 21, Safari 5.1.5, and Firefox
 ## Maintenance
 
 Tests are in the `spec` directory. Use `npm test` to run the tests in
-PhantomJS or open `spec/run.html` in a browser.
+NodeJS or open `spec/run.html` in a browser. 
+
+To run the tests in your browser, simply use `npm run test:jasmine`.
+
+To run the tests using Karma use `npm run test:karma` and for continious tests run with file changes detection `npm run test:karma-dev`.
+
+## About
 
 This implementation is a part from Motorola Mobility’s [Montage][] web
 application framework.  The module system was  written by Tom Robinson
