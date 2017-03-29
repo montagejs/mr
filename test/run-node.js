@@ -1,4 +1,4 @@
-/* global __dirname */
+/*jshint node:true, browser:false */
 var jasmineRequire = require('jasmine-core/lib/jasmine-core/jasmine.js');
 var JasmineConsoleReporter = require('jasmine-console-reporter');
 
