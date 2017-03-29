@@ -1,3 +1,13 @@
+### 17.0.0
+  - Update Travis NodeJS to 4.8.0
+  - Migrate Montage custom loaders to MontageRequire
+    - Import support for module types html, mjson and reel from Montage.js
+    - Import module metadata annotation from Montage.js
+  - Upgrade tests stack
+    - Migrate specs to Jasmine 2.5.2O (npm run test:jasmine)
+    - Revamp NodeJS tests runner (npm test)
+    - Migrate Phantom.js tests runner to Karma (npm run test:karma)
+
 ### 16.0.4
    - Memory optimization by caching a regex and making sure XHRs that are re-used don’t hold on their responses by calling abort() after the request succeeded or failed
     - Minimize object creation and closure scope
