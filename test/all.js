@@ -38,7 +38,7 @@ function run(suiteRequire, modules) {
             });
 
             it(module, function (done) {
-                return pkg.async("program").then(function () {
+                pkg.async("program").then(function () {
                     expect("DONE").toBe("DONE");
                 }).catch(function (err) {
                     fail(err);
@@ -46,8 +46,6 @@ function run(suiteRequire, modules) {
                     done();
                 });
             });
-
-            return 'a';
         });
     });
 
@@ -56,7 +54,9 @@ function run(suiteRequire, modules) {
         var deferred = Promise.defer();
 
         jasmine.getEnv().addReporter({
-            jasmineDone: deferred.resolve
+            jasmineDone: function () {
+                deferred.resolve();
+            }
         });
 
         if (global.__karma__) {
