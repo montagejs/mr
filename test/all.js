@@ -50,26 +50,24 @@ function run(suiteRequire, modules) {
     });
 
     return Promise.all(promises).then(function(results) {
+        return new Promise(function (resolve, reject) {
+            var jasmineEnv = jasmine.getEnv();
+            jasmineEnv.addReporter({
+                jasmineDone: function(result) {
+                    resolve();
+                }
+            });
 
-        var deferred = Promise.defer();
-
-        jasmine.getEnv().addReporter({
-            jasmineDone: function () {
-                deferred.resolve();
+            if (global.__karma__) {
+                global.__karma__.start();
+            } else {
+                jasmine.getEnv().execute();    
             }
         });
-
-        if (global.__karma__) {
-            global.__karma__.start();
-        } else {
-            jasmine.getEnv().execute();    
-        }
-
-        return deferred.promise;
     });
 }
 
-return run(require, [
+module.exports = run(require, [
     "spec/cyclic",
     "spec/determinism",
     "spec/exactExports",
