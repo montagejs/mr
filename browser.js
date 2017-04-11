@@ -15,7 +15,13 @@ bootstrap("require/browser", function (require) {
     var APPLICATION_JAVASCRIPT_MIMETYPE = "application/javascript";
     var FILE_PROTOCOL = "file:";
     var JAVASCRIPT = "javascript";
-    var global = typeof global !== "undefined" ? global : window;
+    
+
+    // reassigning causes eval to not use lexical scope.
+    var globalEval = eval,
+        /*jshint evil:true */
+        global = globalEval('this');
+        /*jshint evil:false */
 
     var location;
     Require.getLocation = function() {
@@ -122,7 +128,7 @@ bootstrap("require/browser", function (require) {
     var DoubleUnderscore = "__",
         Underscore = "_",
         globalEvalConstantA = "(function ",
-        globalEvalConstantB = "(require, exports, module) {",
+        globalEvalConstantB = "(require, exports, module, global) {",
         globalEvalConstantC = "//*/\n})\n//# sourceURL=",
         globalConcatenator = [globalEvalConstantA,undefined,globalEvalConstantB,undefined,globalEvalConstantC,undefined],
         nameRegex = /[^\w\d]/g;

@@ -1162,7 +1162,7 @@
                 var moduleExports;
                 //call it to validate:
                 try {
-                    moduleExports = defaultFactory.call(this, require, exports, module);
+                    moduleExports = defaultFactory.call(this, require, exports, module, global);
                 } catch (e) {
                     if (e instanceof SyntaxError) {
                         config.lint(module);
