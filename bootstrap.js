@@ -359,7 +359,7 @@
                 }).then(function (pkg) {
 
                     // Expose global require and mr
-                    global.require = global.mr = mrRequire;
+                    global.require = global.mr = pkg;
                     
                     return pkg.async(applicationModuleId);
                 });
