@@ -357,6 +357,10 @@
                     location: applicationLocation,
                     hash: params.applicationHash
                 }).then(function (pkg) {
+
+                    // Expose global require and mr
+                    global.require = global.mr = mrRequire;
+                    
                     return pkg.async(applicationModuleId);
                 });
             });
