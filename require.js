@@ -92,25 +92,31 @@
     Module.prototype.extraDependencies = void 0;
     Module.prototype.uuid = null;
 
-    var normalizePattern = /^(.*)\.js$/;
+    var normalizePattern = /^(.*)\.js$/,
+        normalizeIdCache = new Map();
     function normalizeId(id) {
-        if (!normalizeId.cache.has(id)) {
-            var match = normalizeId.normalizePattern.exec(id);
-            normalizeId.cache.set(id,( match ? match[1] : id));
+        var result;
+        if (!normalizeIdCache.has(id)) {
+            result = normalizePattern.exec(id);
+            result = ( result ? result[1] : id);
+            normalizeIdCache.set(id, result);
+        } else {
+            result = normalizeIdCache.get(id);
         }
-        return normalizeId.cache.get(id);
+        return result;
     }
 
-    normalizeId.cache = new Map();
-    normalizeId.normalizePattern = normalizePattern;
-
     function memoize(callback, cache) {
-        cache = cache || new Map();
         function _memoize(key, arg) {
-            //return cache[key] || (cache[key] = Promise.try(callback, [key, arg]));
-            return _memoize.cache.get(key) || (_memoize.cache.set(key, callback(key, arg))) && _memoize.cache.get(key) || _memoize.cache.get(key);
+            var result;
+            if (!cache.has(key)) {
+                result = callback(key, arg);
+                cache.set(key, result);
+            } else {
+                result = cache.get(key);
+            }
+            return result;
         }
-        _memoize.cache = cache;
         return _memoize;
     }
 
@@ -402,6 +408,7 @@
 
         // Configuration defaults:
         config = config || {};
+        config.cache = config.cache || new Map();
         config.rootLocation = URL.resolve(config.rootLocation || Require.getLocation(), "./");
         config.location = URL.resolve(config.location || config.rootLocation, "./");
         config.paths = config.paths || [config.location];
@@ -462,8 +469,8 @@
                 // configured as a redirection to another module
                 if (
                     module.factory === void 0 &&
-                    module.exports === void 0 &&
-                    module.redirect === void 0
+                        module.exports === void 0 &&
+                            module.redirect === void 0
                 ) {
                     //return Promise.try(config.load, [topId, module]);
                     return config.load(topId, module);
@@ -481,7 +488,7 @@
                     Array.prototype.push.apply(module.dependencies, module.extraDependencies);
                 }
             });
-        });
+        }, config.cache);
 
         // Load a module definition, and the definitions of its transitive
         // dependencies
@@ -653,23 +660,22 @@
 
             // Main synchronously executing "require()" function
             var require = function require(id) {
-                //var topId = resolve(id, require.viaId);
-                return getExports(/*topId*/normalizeId(resolve(id, require.viaId)), require.viaId);
+                var topId = normalizeId(resolve(id, viaId));
+                return getExports(topId, viaId);
             };
             require.viaId = viaId;
 
             // Asynchronous "require.async()" which ensures async executation
             // (even with synchronous loaders)
             require.async = function(id) {
-                var topId = normalizeId(resolve(id, this.viaId));
-                return deepLoad(topId, this.viaId)
-                .then(function () {
+                var topId = normalizeId(resolve(id, viaId));
+                return deepLoad(topId, viaId).then(function () {
                     return require(topId);
                 });
             };
 
             require.resolve = function (id) {
-                return normalizeId(resolve(id, this.viaId));
+                return normalizeId(resolve(id, viaId));
             };
 
             require.getModule = getModuleDescriptor; // XXX deprecated, use:
@@ -681,7 +687,7 @@
                 if (givenConfig) { // explicit configuration, fresh environment
                     return Require.loadPackage(dependency, givenConfig);
                 } else { // inherited environment
-                    return this.config.loadPackage(dependency, this.config);
+                    return config.loadPackage(dependency, config);
                 }
             };
 
@@ -719,7 +725,7 @@
             require.inject = inject;
 
             var exposedConfigs = config.exposedConfigs;
-            for(var i=0, countI=exposedConfigs.length;i<countI;i++) {
+            for(var i = 0, countI = exposedConfigs.length; i < countI; i++) {
                 require[exposedConfigs[i]] = config[exposedConfigs[i]];
             }
 
@@ -1216,6 +1222,13 @@
             var prefixes = Object.keys(mappings);
             var length = prefixes.length;
 
+            function loadMapping(mappingRequire) {
+                var rest = id.slice(prefix.length + 1);
+                module.mappingRedirect = rest;
+                module.mappingRequire = mappingRequire;
+                return mappingRequire.deepLoad(rest, config.location);
+            }
+
             // TODO: remove this when all code has been migrated off of the autonomous name-space problem
             if (
                 config.name !== void 0 &&
@@ -1228,19 +1241,12 @@
             for (i = 0; i < length; i++) {
                 prefix = prefixes[i];
                 if (
-                    id === prefix ||
-                    id.indexOf(prefix) === 0 &&
-                    id.charAt(prefix.length) === "/"
+                    id === prefix || (
+                        id.indexOf(prefix) === 0 &&
+                            id.charAt(prefix.length) === "/"
+                    )
                 ) {
-                    /*jshint -W083 */
-                    return config.loadPackage(/*mapping*/ mappings[prefix], config)
-                    .then(function (mappingRequire) {
-                        var rest = id.slice(prefix.length + 1);
-                        /*jshint +W083 */
-                        module.mappingRedirect = rest;
-                        module.mappingRequire = mappingRequire;
-                        return mappingRequire.deepLoad(rest, config.location);
-                    });
+                    return config.loadPackage(mappings[prefix], config).then(loadMapping);
                 }
             }
             return load(id, module);
