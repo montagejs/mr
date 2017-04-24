@@ -33,7 +33,7 @@
   },
   "production": true,
   "dependencies": {
-    "bluebird": "~3.4.6"
+    "bluebird": "~3.4.7"
   },
   "devDependencies": {
     "concurrently": "^3.4.0",
