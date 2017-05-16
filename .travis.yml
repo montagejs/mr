@@ -6,6 +6,7 @@ node_js:
 script: npm run $COMMAND
 env:
   - COMMAND=test
+  - COMMAND=test:karma
   #- COMMAND=integration MR_VERSION=. MOP_VERSION=0.13
   - COMMAND=integration MR_VERSION=. MOP_VERSION=latest
   - COMMAND=integration MR_VERSION=. MOP_VERSION="#master"
