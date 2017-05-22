@@ -45,12 +45,10 @@
     "use strict";
 
     // reassigning causes eval to not use lexical scope.
-    var globalEval = eval;
-    
-    // Here we expose global for legacy mop support.
-    /*jshint evil:true */
-    global = globalEval('this'); 
-    /*jshint evil:false */
+    var globalEval = eval,
+        /*jshint evil:true */
+        global = globalEval('this'); 
+        /*jshint evil:false */
 
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
     // comment.
