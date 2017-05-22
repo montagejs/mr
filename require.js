@@ -465,7 +465,6 @@
         var load = memoize(function (topId, viaId) {
             var module = getModuleDescriptor(topId);
             return Promise.try(function () {
-                debugger;
                 // if not already loaded, already instantiated, or
                 // configured as a redirection to another module
                 if (
