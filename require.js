@@ -1,12 +1,10 @@
-
 /*
     Based in part on Motorola Mobility’s Montage
     Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
     3-Clause BSD License
     https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
 */
-
-/*global bootstrap,define */
+/*global bootstrap, define, global */
 (function (definition) {
 
     // Boostrapping Browser
@@ -47,10 +45,12 @@
     "use strict";
 
     // reassigning causes eval to not use lexical scope.
-    var globalEval = eval,
-        /*jshint evil:true */
-        global = globalEval('this');
-        /*jshint evil:false */
+    var globalEval = eval;
+    
+    // Here we expose global for legacy mop support.
+    /*jshint evil:true */
+    global = globalEval('this'); 
+    /*jshint evil:false */
 
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
     // comment.
