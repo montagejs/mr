@@ -827,7 +827,7 @@
         var loadingPackages = config.loadingPackages = config.loadingPackages || {};
         var loadedPackages = config.packages = {};
         var registry = config.registry = config.registry || new Map();
-        config.mainPackageLocation = location;
+        config.mainPackageLocation = config.mainPackageLocation || location;
 
         config.hasPackage = function (dependency) {
             dependency = normalizeDependency(dependency, config);
