@@ -465,6 +465,7 @@
         var load = memoize(function (topId, viaId) {
             var module = getModuleDescriptor(topId);
             return Promise.try(function () {
+                debugger;
                 // if not already loaded, already instantiated, or
                 // configured as a redirection to another module
                 if (
@@ -915,7 +916,9 @@
     };
 
     // Extracts dependencies by parsing code and looking for "require" (currently using a simple regexp)
-    var requirePattern = /(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g;
+    var requirePattern = /(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g,
+        escapeSimpleComment = /^\/\/.*/gm,
+        escapeMultiComment = /^\/\*[\S\s]*?\*\//gm;
 
     // Require.parseDependencies = function parseDependencies(factory) {
     //     var o = {};
@@ -936,6 +939,10 @@
     // };
 
     Require.parseDependencies = function parseDependencies(factory) {
+
+        // Clear commented require calls
+        factory = factory.replace(escapeSimpleComment, '').replace(escapeMultiComment, '');
+
         var o = [], myArray;
         while ((myArray = requirePattern.exec(factory)) !== null) {
             o.push(myArray[1]);

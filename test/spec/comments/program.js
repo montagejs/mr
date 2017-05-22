@@ -29,6 +29,6 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 </copyright> */
 // require("a");
+/* require("b"); */
 var test = require('test');
-test.print("Can't XHR a.js expected", "info");
 test.print('DONE', 'info');
