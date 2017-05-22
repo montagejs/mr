@@ -58,6 +58,6 @@
     "adhoc.*",
     "bin",
     "demo",
-    "spec"
+    "test"
   ]
 }
