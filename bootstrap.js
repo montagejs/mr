@@ -33,9 +33,10 @@
         letterAfterDashPattern = /-([a-z])/g;
 
     function getParams() {
-        var i, j,
+        var i, j, attr, name,
             match, script, scripts,
-            mrLocation, attr, name;
+            packagesDirectory,  rootLocation, mrLocation,
+            currentLocation = window.location;
 
         if (!paramsCache) {
             paramsCache = {};
@@ -47,8 +48,17 @@
                 if (script.src && (match = script.src.match(boostrapPattern))) {
                     mrLocation = match[1];
                 }
+                // Will asume rootLocation based on currentLocation
+                if (script.hasAttribute("data-package")) {
+                    rootLocation = resolve(currentLocation, script.getAttribute("data-package"));
+                }
+                // Will asume packagesDirectory based on currentLocation unless rootLocation
+                if (script.hasAttribute("data-packages")) {
+                    packagesDirectory = resolve(rootLocation || currentLocation, script.getAttribute("data-packages"));
+                }
+                // Will asume mrLocation based on currentLocation unless rootLocation
                 if (script.hasAttribute("data-mr-location")) {
-                    mrLocation = resolve(window.location, script.getAttribute("data-mr-location"));
+                    mrLocation = resolve(rootLocation || currentLocation, script.getAttribute("data-mr-location"));
                 }
                 if (mrLocation) {
                     if (script.dataset) {
@@ -69,8 +79,13 @@
                     // Permits multiple bootstrap.js <scripts>; by
                     // removing as they are discovered, next one
                     // finds itself.
+
                     script.parentNode.removeChild(script);
                     paramsCache.mrLocation = mrLocation;
+                    // assume package by default in path: mrLocation + '/../../' '
+                    paramsCache.rootLocation = rootLocation || resolve(mrLocation, '../../'); 
+                    // assume packakes by default are installed in path: rootLocation + '/nodes_modules'
+                    paramsCache.packagesDirectory = packagesDirectory || resolve(paramsCache.rootLocation, '/node_modules/'); 
                     break;
                 }
             }
