@@ -228,47 +228,17 @@
         }
 
         // determine which scripts to load
-        var pending = {
+        var dependencies = {
             "promise": "node_modules/bluebird/js/browser/bluebird.min.js",
             "require": "require.js",
             "require/browser": "browser.js",
         };
 
-        // Handle preload
-        // TODO rename to MontagePreload
-        if (!global.preload) {
-            var mrLocation = resolve(window.location, params.mrLocation),
-                promiseLocation = params.promiseLocation || resolve(mrLocation, pending.promise);
-                
-            // Special Case bluebird for now:
-            load(promiseLocation, function() {
-                
-                //global.bootstrap cleans itself from window once all known are loaded. "bluebird" is not known, so needs to do it first
-                global.bootstrap("bluebird", function (mrRequire, exports) {
-                    return window.Promise;
-                });
-
-                global.bootstrap("promise", function (mrRequire, exports) {
-                    return window.Promise;
-                });
-            });
-
-            // Load other module and skip promise
-            for (var id in pending) {
-                if (pending.hasOwnProperty(id)) {
-                    if (id !== 'promise') {
-                        load(resolve(mrLocation, pending[id]));   
-                    }
-                }
-            }       
-        }
-
-        // register module definitions for deferred, serial execution
-        global.bootstrap = function (id, factory) {
+        function bootModule(id, factory) {
             definitions[id] = factory;
-            delete pending[id];
-            for (id in pending) {
-                if (pending.hasOwnProperty(id)) {
+            delete dependencies[id];
+            for (id in dependencies) {
+                if (dependencies.hasOwnProperty(id)) {
                     // this causes the function to exit if there are any remaining
                     // scripts loading, on the first iteration.  consider it
                     // equivalent to an array length check
@@ -279,12 +249,46 @@
             // of the bootstrap function and proceed.
             delete global.bootstrap;
             allModulesLoaded();
-        };
+        }
+
+        // Handle preload
+        // TODO rename to MontagePreload
+        if (!global.preload) {
+            var mrLocation = resolve(window.location, params.mrLocation),
+                promiseLocation = params.promiseLocation || resolve(mrLocation, dependencies.promise);
+                
+            // Special Case bluebird for now:
+            load(promiseLocation, function() {
+                
+                // global.bootstrap cleans itself from window once all known are loaded. "bluebird" is not known, so needs to do it first
+                bootModule("bluebird", function (mrRequire, exports) {
+                    return window.Promise;
+                });
+
+                bootModule("promise", function (mrRequire, exports) {
+                    return window.Promise;
+                });
+            });
+
+            // Load other module and skip promise
+            for (var id in dependencies) {
+                if (dependencies.hasOwnProperty(id)) {
+                    if (id !== 'promise') {
+                        load(resolve(mrLocation, dependencies[id]));   
+                    }
+                }
+            }       
+        }
 
         // one module loaded for free, for use in require.js, browser.js
-        global.bootstrap("mini-url", function (mrRequire, exports) {
+        bootModule("mini-url", function (mrRequire, exports) {
             exports.resolve = resolve;
         });
+
+        // register module definitions for deferred, serial execution
+        // global.bootstrap cleans itself from window once all known are loaded.
+        global.bootstrap = bootModule;
+
     };
 
     var browser = {
