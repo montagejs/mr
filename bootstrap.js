@@ -257,18 +257,52 @@
             var mrLocation = resolve(window.location, params.mrLocation),
                 promiseLocation = params.promiseLocation || resolve(mrLocation, dependencies.promise);
                 
-            // Special Case bluebird for now:
-            load(promiseLocation, function() {
-                
-                // global.bootstrap cleans itself from window once all known are loaded. "bluebird" is not known, so needs to do it first
-                bootModule("bluebird", function (mrRequire, exports) {
-                    return window.Promise;
-                });
+            // (default: false) Special Case to avoid bluebird or Native Promise
+            if (params.useNativePromise) {
+
+                var Promise = global.Promise;
+
+                Promise.prototype['finally'] = Promise.prototype['finally'] || function finallyPolyfill(callback) {
+                    var constructor = this.constructor;
+                    return this.then(function(value) {
+                            return constructor.resolve(callback()).then(function() {
+                                return value;
+                            });
+                        }, function(reason) {
+                            return constructor.resolve(callback()).then(function() {
+                                throw reason;
+                            });
+                        });
+                };
+
+                Promise['try'] = Promise['try'] || function tryPofyfill(callback, args) {
+                    return new Promise(function (resolve, reject) {
+                        try {
+                            resolve(callback.apply(callback, args));
+                        } catch (err) {
+                            console.error(err);
+                            reject(err);
+                        }
+                    });
+                }
 
                 bootModule("promise", function (mrRequire, exports) {
-                    return window.Promise;
+                    return Promise;
                 });
-            });
+
+            } else {
+                load(promiseLocation, function() {
+                    // global.bootstrap cleans itself from global once all known are loaded. 
+                    // "bluebird" is not known, so needs to do it first
+                    bootModule("bluebird", function (mrRequire, exports) {
+                        return global.Promise;
+                    });
+
+                    bootModule("promise", function (mrRequire, exports) {
+                        return global.Promise;
+                    });
+                });   
+            }
 
             // Load other module and skip promise
             for (var id in dependencies) {
