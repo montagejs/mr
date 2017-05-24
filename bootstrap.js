@@ -228,10 +228,13 @@
         }
 
         // determine which scripts to load
+        var packagesDirectory = params.packagesDirectory,
+            mrLocation = params.mrLocation;
+
         var dependencies = {
-            "promise": "node_modules/bluebird/js/browser/bluebird.min.js",
-            "require": "require.js",
-            "require/browser": "browser.js",
+            "promise": params.promiseLocation || resolve(packagesDirectory, "bluebird/js/browser/bluebird.min.js"),
+            "require": resolve(mrLocation, "require.js"),
+            "require/browser": resolve(mrLocation, "browser.js")
         };
 
         function bootModule(id, factory) {
@@ -254,9 +257,7 @@
         // Handle preload
         // TODO rename to MontagePreload
         if (!global.preload) {
-            var mrLocation = resolve(window.location, params.mrLocation),
-                promiseLocation = params.promiseLocation || resolve(mrLocation, dependencies.promise);
-                
+            
             // (default: false) Special Case to avoid bluebird or Native Promise
             if (params.useNativePromise) {
 
@@ -291,7 +292,7 @@
                 });
 
             } else {
-                load(promiseLocation, function() {
+                load(dependencies.promise, function() {
                     // global.bootstrap cleans itself from global once all known are loaded. 
                     // "bluebird" is not known, so needs to do it first
                     bootModule("bluebird", function (mrRequire, exports) {
