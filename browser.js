@@ -16,12 +16,14 @@ bootstrap("require/browser", function (require) {
     var FILE_PROTOCOL = "file:";
     var JAVASCRIPT = "javascript";
     
+    // By using a named "eval" most browsers will execute in the global scope.
+    // http://www.davidflanagan.com/2010/12/global-eval-in.html
+    // Unfortunately execScript doesn't always return the value of the evaluated expression (at least in Chrome)
+    var globalEval = /*this.execScript ||*/eval;
 
-    // reassigning causes eval to not use lexical scope.
-    var globalEval = eval,
-        /*jshint evil:true */
-        global = globalEval('this');
-        /*jshint evil:false */
+    /*jshint evil:true */
+    var global = globalEval('this');
+    /*jshint evil:false */
 
     var location;
     Require.getLocation = function() {
@@ -113,11 +115,6 @@ bootstrap("require/browser", function (require) {
     RequireRead.XMLHttpRequest = XMLHttpRequest;
     RequireRead.onload = onload;
     RequireRead.onerror = onerror;
-
-    // By using a named "eval" most browsers will execute in the global scope.
-    // http://www.davidflanagan.com/2010/12/global-eval-in.html
-    // Unfortunately execScript doesn't always return the value of the evaluated expression (at least in Chrome)
-    var globalEval = /*this.execScript ||*/eval;
 
     // For Firebug, evaled code wasn't debuggable otherwise
     // http://code.google.com/p/fbug/issues/detail?id=2198
