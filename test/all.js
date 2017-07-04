@@ -105,7 +105,7 @@ module.exports = run(require, [
     "spec/main-name",
     "spec/main",
     "spec/sandbox",
-    //"browser-alternative",
+    "spec/browser-alternative",
     "spec/browser-alternatives",
     "spec/extension-loader",
     "spec/overlay",
