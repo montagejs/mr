@@ -38,7 +38,7 @@ jasmineEnv.addReporter({
 });
 
 // Execute
-var mrRequire = require('../bootstrap-node');
+var mrRequire = require('../bootstrap');
 var PATH = require("path");
 
 mrRequire.loadPackage(PATH.join(__dirname, ".")).then(function (mr) {
@@ -46,4 +46,9 @@ mrRequire.loadPackage(PATH.join(__dirname, ".")).then(function (mr) {
 }).then(function () {
     console.log('Done');
     process.exit(exitCode);
-}).thenReturn();
+}, function (e) {
+    console.log(e.stack || e);
+    exitCode = 1;
+}).finally(function () {
+    process.exit(exitCode);
+});
