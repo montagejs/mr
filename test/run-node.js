@@ -38,7 +38,7 @@ jasmineEnv.addReporter({
 });
 
 // Execute
-var mrRequire = require('../require');
+var mrRequire = require('../bootstrap');
 var PATH = require("path");
 
 mrRequire.loadPackage(PATH.join(__dirname, ".")).then(function (mr) {
