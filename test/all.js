@@ -81,8 +81,8 @@ module.exports = run(require, [
     "spec/transitive",
     "spec/module-exports",
     "spec/return",
-    {name: "spec/named-packages", node: false},
-    {name: "spec/named-mappings", node: false},
+    {name: "spec/named-packages", node: true},
+    {name: "spec/named-mappings", node: true},
     "spec/named-parent-package",
     "spec/load-package",
     "spec/load-package-name",
@@ -119,6 +119,7 @@ module.exports = run(require, [
     "spec/nested-module-tree",
     "spec/serialization-compiler",
     {name: "spec/dot-js-module", node: false},
+    {name: "spec/node", browser: false, karma: false},
 ]).then(function () {
     console.log('mr-testing', 'End');
 }, function (err) {
