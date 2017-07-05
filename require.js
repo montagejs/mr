@@ -1,4 +1,4 @@
-/* global define, exports, require, process, window, document*/
+/* global define, exports, require, process, window, document, bootstrap*/
 /*
     Based in part on Motorola Mobility’s Montage
     Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
@@ -9,7 +9,7 @@
     if (typeof bootstrap === 'function') {
         // Montage. Register module.
         bootstrap("require", function (mrRequire, exports) {
-            var Promise = mrRequire("promise");
+            var Promise = mrRequire("promise").Promise;
             var URL = mrRequire("mini-url");
             factory(exports, Promise, URL);
         });
@@ -35,7 +35,6 @@
         /*jshint evil:false */
 
     // Non-CommonJS Promise
-    var Promise = global.Promise;
     Promise.prototype['finally'] = Promise.prototype['finally'] || function finallyPolyfill(callback) {
         var constructor = this.constructor;
         return this.then(function(value) {
@@ -58,7 +57,7 @@
                 reject(err);
             }
         });
-    }
+    };
 
     URL = URL || {};
     URL.resolve = URL.resolve || (function makeResolve() {
@@ -883,7 +882,7 @@
                     finallyHandler();
                 };
                 script.onerror = function (err) {
-                    reject(err);
+                    reject(new Error("Can't load script " + JSON.stringify(url)));
                     finallyHandler();
                 };
                 script.setAttribute('src', location);
@@ -992,15 +991,14 @@
 
     exports.loadPackageDescription = function (dependency, config) {
 
+        var location; 
         if (dependency.hash) { // use script injection
             var definition = exports.getDefinition(dependency.hash, "package.json");
-            var location = URL.resolve(dependency.location, "package.json.load.js");
-
+            location = URL.resolve(dependency.location, "package.json.load.js");
             exports.loadIfNotPreloaded(location, definition, config.preloaded);
-
             return definition.get("exports");
         } else {
-            var location = dependency.location;
+            location = dependency.location;
             var descriptions =
                 config.descriptions =
                     config.descriptions || {};
@@ -1039,14 +1037,18 @@
 
     exports.loadPackage = function (dependency, config, packageDescription) {
 
+        //console.log('loadPackage', dependency);
+        
         config = config || {
             location: URL.resolve(exports.getLocation(), dependency)
         };
 
         dependency = normalizeDependency(dependency, config);
+
         if (!dependency.location) {
             throw new Error("Can't find dependency: " + JSON.stringify(dependency));
         }
+
         var location = dependency.location;
         config = Object.create(config || null);
         var loadingPackages = config.loadingPackages = config.loadingPackages || {};
@@ -1147,6 +1149,10 @@
 
 
     // exports.parseDependencies = function parseDependencies(factory) {
+    //    // Clear commented require calls
+    //    factory = factory.replace(escapeSimpleComment, '')
+    //        .replace(escapeMultiComment, '');
+    //
     //     var o = {};
     //     String(factory).replace(requirePattern, function(_, id) {
     //         o[id] = true;
@@ -1155,6 +1161,10 @@
     // };
 
     // exports.parseDependencies = function parseDependencies(factory) {
+    //    // Clear commented require calls
+    //    factory = factory.replace(escapeSimpleComment, '')
+    //        .replace(escapeMultiComment, '');
+    //
     //     var o = [];
     //     String(factory).replace(requirePattern, function(_, id) {
     //         if (o.indexOf(id) === -1) {
@@ -1167,7 +1177,8 @@
     exports.parseDependencies = function parseDependencies(factory) {
 
         // Clear commented require calls
-        factory = factory.replace(escapeSimpleComment, '').replace(escapeMultiComment, '');
+        factory = factory.replace(escapeSimpleComment, '')
+            .replace(escapeMultiComment, '');
 
         var o = [], myArray;
         while ((myArray = requirePattern.exec(factory)) !== null) {
@@ -1702,20 +1713,17 @@
                 module.text !== void 0 &&
                 module.type === "javascript"
             ) {
-                var factory = globalEval(
-                    "(function(" + names.join(",") + "){" +
-                    module.text +
-                    "\n//*/\n})\n//@ sourceURL=" + module.location
-                );
-                module.factory = function (require, exports, module, global) {
-                    Array.prototype.push.apply(arguments, scopeNames.map(function (name) {
-                        return config.scope[name];
-                    }));
-                    return factory.apply(this, arguments);
-                };
+
+                // Convert __filename and __dirname based on module.location.
+                var __filename = URL.resolve(exports.getLocation(), module.location),
+                    __dirname = URL.resolve(__filename, './');
+                module.text = module.text.replace('__filename', JSON.stringify(__filename));
+                module.text = module.text.replace('__dirname', JSON.stringify(__dirname));
+
                 // new Function will have its body reevaluated at every call, hence using eval instead
                 // https://developer.mozilla.org/en/JavaScript/Reference/Functions_and_function_scope
-                //module.factory = new Function("require", "exports", "module", "global", module.text + "\n//*/\n//@ sourceURL="+module.path);
+                var factoryArgs = names.concat([module.text + "\n//*/\n//@ sourceURL=" + module.location])
+                module.factory = Function.apply(global, factoryArgs);
             }
         };
     };
@@ -1765,7 +1773,7 @@
                 module.text = text;
                 module.location = url;
             });
-        }
+        };
     };
 
     exports.CommonJSLoader = function CommonJSLoader(config) {

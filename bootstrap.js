@@ -1,92 +1,46 @@
-/*global module: false, define, callbackApplication */
+/* global define, exports, require, process, window, document, bootstrap*/
+/*
+    Based in part on Motorola Mobility’s Montage
+    Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
+    3-Clause BSD License
+    https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
+*/
 (function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
+    if (typeof bootstrap === 'function') {
+        // Montage. Register module.
+        bootstrap("bootstrap", function (mrRequire, exports) {
+            var Promise = mrRequire("promise").Promise;
+            var URL = mrRequire("mini-url");
+            factory(exports, Promise, URL, mrRequire);
+        });
+    } else if (typeof define === 'function' && define.amd) {
         // AMD. Register as an anonymous module.
-        define('mr', [], factory);
-    } else if (typeof module === 'object' && module.exports) {
-        // Node. Does not work with strict CommonJS, but
-        // only CommonJS-like environments that support module.exports,
-        // like Node.
-        module.exports = factory(require, exports, module);
+        define(['exports', 'bluebird'], function (exports, bluebird) {
+            factory((root.mrBootstrap = exports), bluebird);
+        });
+    } else if (typeof exports === 'object' && typeof exports.nodeName !== 'string') {
+        // CommonJS
+        var Promise = (require)("bluebird");
+        var URL = (require)('url');
+        var mrRequire = (require)('./require');
+        factory(exports, Promise, URL, mrRequire);
     } else {
-        // Browser globals (root is window)
-        root.Montage = factory({}, {}, {});
+        // Browser globals
+        factory((root.mrBootstrap = {}), root.Promise, root.URL, root.mrRequire);
     }
-}(this, function (require, exports, module) {
+}(this, function (exports, Promise, URL, mrRequire) {
     "use strict";
 
     // reassigning causes eval to not use lexical scope.
     var globalEval = eval,
+        /*jshint evil:true */
         global = globalEval('this');
+        /*jshint evil:false */
 
-    //
-    //
-    //
-
-    function upperCaseChar(_, c) {
-        return c.toUpperCase();
-    }
-
-    var paramsCache,
-        dataAttrPattern = /^data-(.*)$/,
-        boostrapPattern = /^(.*)bootstrap.js(?:[\?\.]|$)/i,
-        letterAfterDashPattern = /-([a-z])/g;
-
-    function getParams() {
-        var i, j,
-            match, script, scripts,
-            mrLocation, attr, name;
-
-        if (!paramsCache) {
-            paramsCache = {};
-            // Find the <script> that loads us, so we can divine our
-            // parameters from its attributes.
-            scripts = document.getElementsByTagName("script");
-            for (i = 0; i < scripts.length; i++) {
-                script = scripts[i];
-                if (script.src && (match = script.src.match(boostrapPattern))) {
-                    mrLocation = match[1];
-                }
-                if (script.hasAttribute("data-mr-location")) {
-                    mrLocation = resolve(window.location, script.getAttribute("data-mr-location"));
-                }
-                if (mrLocation) {
-                    if (script.dataset) {
-                        for (name in script.dataset) {
-                            if (script.dataset.hasOwnProperty(name)) {
-                                paramsCache[name] = script.dataset[name];
-                            }
-                        }
-                    } else if (script.attributes) {
-                        for (j = 0; j < script.attributes.length; j++) {
-                            attr = script.attributes[j];
-                            match = attr.name.match(dataAttrPattern);
-                            if (match) {
-                                paramsCache[match[1].replace(letterAfterDashPattern, upperCaseChar)] = attr.value;
-                            }
-                        }
-                    }
-                    // Permits multiple bootstrap.js <scripts>; by
-                    // removing as they are discovered, next one
-                    // finds itself.
-                    script.parentNode.removeChild(script);
-                    paramsCache.mrLocation = mrLocation;
-                    break;
-                }
-            }
-        }
-
-        return paramsCache;
-    }
-
-    function load(location, loadCallback, errorCallback, finallyCallback) {
+    function loadScript(location, callback) {
         var script;
-
+        callback = callback || function noop() {};
         function finallyHandler() {
-            if (finallyCallback) {
-                finallyCallback(script);
-            }
-
             // remove clutter
             if (script.parentNode) {
                 script.parentNode.removeChild(script);   
@@ -94,213 +48,305 @@
         }
 
         if (typeof document !== "undefined") {
-
             script = document.createElement("script");
             script.setAttribute('async', '');
-            script.setAttribute('src', location);
+            script.setAttribute('src', location + '');
             script.onload = function () {
-                if (loadCallback) {
-                    loadCallback(script);
-                }
+                callback(null, script);
                 finallyHandler();
             };
             script.onerror = function (err) {
-                if (errorCallback) {
-                    errorCallback(err, script);
-                }
+                callback(new Error("Can't load script " + JSON.stringify(location)), script);
                 finallyHandler();
             };
             document.querySelector("head").appendChild(script);
         } else {
-            errorCallback(new Error("document not supported"));
-            finallyHandler();
+            throw new Error("document not supported");
         }   
     }
 
-    // mini-url library
-    var isAbsolutePattern = /^[\w\-]+:/;
-    function makeResolve() {
-        var baseElement = document.querySelector("base"),
-            existingBaseElement = baseElement;
+    exports.initBrowser = function initBrowser() {
 
-        if (!existingBaseElement) {
-            baseElement = document.createElement("base");
-            baseElement.href = "";
+        function resolve(base, relative) {
+            return new URL(relative, base).href;
         }
 
-        return function (base, relative) {
-
-            base = String(base);
-
-            var resolved, restore,
-                head = document.querySelector("head"),
-                relativeElement = document.createElement("a");
-
-            if (!existingBaseElement) {
-                head.appendChild(baseElement);
-            }
-
-            if (!isAbsolutePattern.test(base)) {
-                throw new Error("Can't resolve " + JSON.stringify(relative) + " relative to " + JSON.stringify(base));
-            }
-
-            restore = baseElement.href;
-            baseElement.href = base;
-            relativeElement.href = relative;
-            resolved = relativeElement.href;
-            baseElement.href = restore;
-            if (!existingBaseElement) {
-                head.removeChild(baseElement);
-            }
-
-            return resolved;
-        };
-    }
-
-    var resolve = makeResolve();
-
-    //
-    //
-    //
-
-    var readyStatePattern = /interactive|complete/;
-    var bootstrap = function (callback) {
-
-        callback = callback || callbackApplication;
-
-        var domLoaded, Require, Promise, URL,
-            params = getParams();
-
-        function callbackIfReady() {
-            if (domLoaded && Require) {
-                callback(Require, Promise, URL);
-            }
+        function upperCaseChar(_, c) {
+            return c.toUpperCase();
         }
+        
+        var paramsCache,
+            paramsNamespace = 'mr',
+            dataAttrPattern = /^data-(.*)$/,
+            boostrapScript = 'bootstrap.js',
+            boostrapPattern = new RegExp('^(.*)' + boostrapScript + '(?:[\?\.]|$)', 'i'),
+            letterAfterDashPattern = /-([a-z])/g;
 
-        // execute bootstrap scripts
-        function allModulesLoaded() {
-            Promise = bootRequire("promise");
-            Require = bootRequire("require");
-            URL = bootRequire("mini-url");
-            callbackIfReady();
-        }
+        return  {
+            getParams: function getParams() {
+                var i, j,
+                    match, script, scripts,
+                    mrLocation, attr, name,
+                    base, location;
 
-        // observe dom loading and load scripts in parallel
-        function domLoad() {
-            // observe dom loaded
-            document.removeEventListener("DOMContentLoaded", domLoad, true);
-            domLoaded = true;
-            callbackIfReady();
-        }
+                if (!paramsCache) {
+                    paramsCache = {};
+                    // Find the <script> that loads us, so we can divine our
+                    // parameters from its attributes.
+                    scripts = document.getElementsByTagName("script");
+                    base = document.querySelector("head > base"),
+                    location = base ? base.href :  window.location
+                    for (i = 0; i < scripts.length; i++) {
+                        script = scripts[i];
+                        if (script.src && (match = script.src.match(boostrapPattern))) {
+                            mrLocation = match[1];
+                        }
+                        if (script.hasAttribute("data-" + paramsNamespace + "-location")) {
+                            mrLocation = resolve(location, script.getAttribute("data-" + paramsNamespace + "-location"));
+                        }
+                        if (mrLocation) {
+                            if (script.dataset) {
+                                for (name in script.dataset) {
+                                    if (script.dataset.hasOwnProperty(name)) {
+                                        paramsCache[name] = script.dataset[name];
+                                    }
+                                }
+                            } else if (script.attributes) {
+                                for (j = 0; j < script.attributes.length; j++) {
+                                    attr = script.attributes[j];
+                                    match = attr.name.match(dataAttrPattern);
+                                    if (match) {
+                                        paramsCache[match[1].replace(letterAfterDashPattern, upperCaseChar)] = attr.value;
+                                    }
+                                }
+                            }
 
-        // miniature module system
-        var bootModules = {};
-        var definitions = {};
-        function bootRequire(id) {
-            if (!bootModules[id] && definitions[id]) {
-                var exports = bootModules[id] = {};
-                bootModules[id] = definitions[id](bootRequire, exports) || exports;
-            }
-            return bootModules[id];
-        }
-
-        // this permits bootstrap.js to be injected after DOMContentLoaded
-        // http://jsperf.com/readystate-boolean-vs-regex/2
-        if (readyStatePattern.test(document.readyState)) {
-            domLoad();
-        } else {
-            document.addEventListener("DOMContentLoaded", domLoad, true);
-        }
-
-        // determine which scripts to load
-        var pending = {
-            "promise": "node_modules/bluebird/js/browser/bluebird.min.js",
-            "require": "require.js"
-        };
-
-        // Handle preload
-        // TODO rename to MontagePreload
-        if (!global.preload) {
-            var mrLocation = resolve(window.location, params.mrLocation),
-                promiseLocation = params.promiseLocation || resolve(mrLocation, pending.promise);
-                
-            // Special Case bluebird for now:
-            load(promiseLocation, function() {
-                
-                //global.bootstrap cleans itself from window once all known are loaded. "bluebird" is not known, so needs to do it first
-                global.bootstrap("bluebird", function (mrRequire, exports) {
-                    return window.Promise;
-                });
-
-                global.bootstrap("promise", function (mrRequire, exports) {
-                    return window.Promise;
-                });
-            });
-
-            // Load other module and skip promise
-            for (var id in pending) {
-                if (pending.hasOwnProperty(id)) {
-                    if (id !== 'promise') {
-                        load(resolve(mrLocation, pending[id]));   
+                            // Permits multiple bootstrap.js <scripts>; by
+                            // removing as they are discovered, next one
+                            // finds itself.
+                            script.parentNode.removeChild(script);
+                            paramsCache.mrLocation = mrLocation;
+                            break;
+                        }
                     }
                 }
-            }       
-        }
 
-        // register module definitions for deferred, serial execution
-        global.bootstrap = function (id, factory) {
-            definitions[id] = factory;
-            delete pending[id];
-            for (id in pending) {
-                if (pending.hasOwnProperty(id)) {
-                    // this causes the function to exit if there are any remaining
-                    // scripts loading, on the first iteration.  consider it
-                    // equivalent to an array length check
-                    return;
+                return paramsCache;
+            },
+            loadPackage: function (dependency, config, packageDescription) {
+                return mrRequire.loadPackage(dependency, config, packageDescription);
+            },
+            bootstrap: function (callback) {
+
+                var self = this,
+                    params = self.getParams();
+
+
+                // determine which scripts to load
+                var dependencies = {
+                    "promise": {
+                        strategy: 'auto',
+                        global: "Promise",
+                        exports: "Promise",
+                        location: "node_modules/bluebird/js/browser/bluebird.min.js",
+                    },
+                    "require": "./require.js"
+                };
+
+                // miniature module system
+                var bootModules = {},
+                    definitions = {};
+                function bootRequire(id) {
+                    if (!bootModules[id] && definitions[id]) {
+                        var exports = bootModules[id] = {};
+                        bootModules[id] = definitions[id](bootRequire, exports) || exports;
+                    }
+                    return bootModules[id];
+                }
+
+
+                // Expose bootstrap
+                var initalBoostrap = global.bootstrap;
+
+                // register module definitions for deferred, serial execution
+                function bootstrapModule(id, factory) {
+                    definitions[id] = factory;
+                    delete dependencies[id];
+                    for (id in dependencies) {
+                        if (dependencies.hasOwnProperty(id)) {
+                            // this causes the function to exit if there are any remaining
+                            // scripts loading, on the first iteration.  consider it
+                            // equivalent to an array length check
+                            return;
+                        }
+                    }
+
+                    // if we get past the for loop, bootstrapping is complete.  get rid
+                    // of the bootstrap function and proceed.
+                    delete global.bootstrap;
+
+                    // Restore inital Boostrap
+                    if (initalBoostrap) {
+                        global.bootstrap = initalBoostrap;   
+                    }
+
+                    //
+                    var Promise = bootRequire("promise"),
+                        Require = bootRequire("require"),
+                        miniURL = bootRequire("mini-url");
+                            
+                    // Update
+                    mrRequire = Require;
+
+                    callback(Require, Promise, miniURL);
+                }
+
+                global.bootstrap = bootstrapModule;
+
+                function bootstrapModuleScript(err, script) {
+                    var module = this;
+
+                    if (err) {
+                        
+                        if (module.strategy === 'auto') {
+                            module.script = resolve(resolve(params.mrLocation, '../../'), module.location);
+                            loadScript(module.script, bootstrapModuleScript.bind(this));
+                        }
+
+                        throw err;
+                    } else if (module.exports || module.global) {
+                        bootstrap(module.id, function (mrRequire, exports) {
+                            if (module.exports) {
+                                exports[module.exports] = global[module.global]; 
+                            } else {
+                                return global[module.global];
+                            }
+                        });
+                    }
+                }
+
+                // one module loaded for free, for use in require.js, browser.js
+                bootstrapModule("mini-url", function (mrRequire, exports) {
+                    exports.resolve = resolve;
+                });
+
+                // Load other module and skip promise
+                for (var id in dependencies) {
+                    if (dependencies.hasOwnProperty(id)) {
+                        var module = dependencies[id];
+
+                        if (typeof module === 'string') {
+                            module = {
+                                location: module
+                            };
+                        }
+
+                        module.id = id;
+
+                        var paramLocation = id + 'Location';
+                        
+                        if (params.hasOwnProperty(paramLocation)) {
+                            module.script = resolve(params.mrLocation, params[paramLocation]);
+                        } else {
+                            module.script = resolve(params.mrLocation, module.location);
+                        }
+
+                        loadScript(module.script, bootstrapModuleScript.bind(module));
+                    }
+                } 
+            }
+        };
+    };
+
+    exports.initRequire = function initServer() {
+
+        var path = require("path"),
+            fs  = require("fs");
+
+        var paramsCache,
+            paramsNamespace = 'mr',
+            paramCommand = 'bin/mr';
+
+        return  {
+
+            getParams: function () {
+
+                if (!paramsCache) {
+
+                    paramsCache = {};
+                    paramsCache[paramsNamespace + 'Location'] = "file://" + __dirname;
+
+                    // Detect command line
+                    if (
+                        typeof process !== "undefined" && 
+                            typeof process.argv !== "undefined"
+                    ) {
+
+                        var command, module, modulePackage,
+                            args = process.argv.slice(1);
+
+                        command = args.shift() || "";
+
+                        // Detect /bin/mr usage
+                        if (command.indexOf(paramCommand) === command.length - paramCommand.length) {
+                            module = args.shift() || "";
+
+                            if (module.slice(module.length - 1, module.length) !== "/") {
+                                module += "/";
+                            }
+
+                            paramsCache.module = path.basename(module);
+                            paramsCache.package = path.dirname(fs.realpathSync(module));   
+                        }
+                    }
+                }
+
+                return paramsCache; 
+            },
+            loadPackage: function (dependency, config, packageDescription) {
+                return mrRequire.loadPackage(dependency, config, packageDescription);
+            },
+            bootstrap: function (callback) {
+
+                var self = this,
+                    params = self.getParams();
+
+                if (params.package) {
+                    callback(mrRequire, Promise, URL);
                 }
             }
-            // if we get past the for loop, bootstrapping is complete.  get rid
-            // of the bootstrap function and proceed.
-            delete global.bootstrap;
-            allModulesLoaded();
         };
-
-        // one module loaded for free, for use in require.js, browser.js
-        global.bootstrap("mini-url", function (mrRequire, exports) {
-            exports.resolve = resolve;
-        });
     };
 
-    var browser = {
-        getParams: getParams,
-        bootstrap: bootstrap
-    };
-
-    // Bootstrapping for multiple-platforms
-    exports.getPlatform = function() {
-        if (typeof window !== "undefined" && window && window.document) {
-            return browser;
-        } else if (typeof process !== "undefined") {
-            return require("./node.js");
+    var platform;
+    exports.getPlatform = function () {
+        if (platform) {
+            return platform;
+        } else if (typeof window !== "undefined" && window && window.document) {
+            platform = exports.initBrowser();
+        } else if (typeof mrRequire !== "undefined") {
+            platform = exports.initRequire();
         } else {
             throw new Error("Platform not supported.");
         }
+        return platform;
     };
 
-    exports.Require = null;
+    exports.loadPackage = function (dependency, config, packageDescription) {
+        var platform = exports.getPlatform();
+        return platform.loadPackage(dependency, config, packageDescription)
+    };
 
     /**
      * Initializes Montage and creates the application singleton if
      * necessary.
      */
     exports.initMontageRequire = function() {
-        var platform = exports.getPlatform();
-
-        // Platform dependent
-        return platform.bootstrap(function(mrRequire, Promise, URL) {
-
+        return exports.getPlatform().bootstrap(function (mrRequire, Promise, URL) {
+            
             var config = {},
                 params = platform.getParams(),
+                mrLocation = params.mrLocation,
                 applicationModuleId = params.module || "",
                 applicationLocation = URL.resolve(mrRequire.getLocation(), params.package || ".");
 
@@ -321,13 +367,13 @@
                 
                 var preloading = Promise.resolve();
                 config.preloaded = preloading.promise;
-                // preload bundles sequentially
 
+                // preload bundles sequentially
                 var preloaded = Promise.resolve();
                 global.preload.forEach(function (bundleLocations) {
                     preloaded = preloaded.then(function () {
                         return Promise.all(bundleLocations.map(function (bundleLocation) {
-                            load(bundleLocation);
+                            loadScript(bundleLocation);
                             return getDefinition(bundleLocation).promise;
                         }));
                     });
@@ -344,9 +390,6 @@
                 location: params.mrLocation,
                 hash: params.mrHash
             }, config).then(function (mrRequire) {
-                mrRequire.inject("mini-url", URL);
-                mrRequire.inject("promise", Promise); 
-                mrRequire.inject("require", mrRequire);
 
                 if ("autoPackage" in params) {
                     mrRequire.injectPackageDescription(applicationLocation, {});
@@ -357,6 +400,11 @@
                     hash: params.applicationHash
                 }).then(function (pkg) {
 
+                    pkg.inject("bootstrap", mrRequire);
+                    pkg.inject("mini-url", URL);
+                    pkg.inject("promise", Promise); 
+                    pkg.inject("require", mrRequire);
+
                     // Expose global require and mr
                     global.require = global.mr = pkg;
                     
@@ -366,12 +414,17 @@
         });
     };
 
-    if (typeof window !== "undefined") {
+    if (
+        typeof window !== "undefined" || 
+            (typeof module === 'object' && module.exports &&
+                typeof require !== "undefined")
+    ) {
         if (global.__MONTAGE_REQUIRE_LOADED__) {
             console.warn("MontageRequire already loaded!");
         } else {
             global.__MONTAGE_REQUIRE_LOADED__ = true;
             exports.initMontageRequire();
+            console.warn("MontageRequire ready!");
         }
     } else {
         // may cause additional exports to be injected:
