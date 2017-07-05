@@ -6,10 +6,17 @@
     https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
 */
 (function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
+    if (typeof bootstrap === 'function') {
+        // Montage. Register module.
+        bootstrap("require", function (mrRequire, exports) {
+            var Promise = mrRequire("promise");
+            var URL = mrRequire("mini-url");
+            factory(exports, Promise, URL);
+        });
+    } else if (typeof define === 'function' && define.amd) {
         // AMD. Register as an anonymous module.
-        define(['exports', 'bluebird'], function (exports, b) {
-            factory((root.commonJsStrictGlobal = exports), b);
+        define(['exports', 'bluebird'], function (exports, bluebird) {
+            factory((root.mr = exports), bluebird);
         });
     } else if (typeof exports === 'object' && typeof exports.nodeName !== 'string') {
         // CommonJS
@@ -53,11 +60,9 @@
         });
     }
 
-    // 
-
-
-    var isAbsolutePattern = /^[\w\-]+:/;
-    function makeResolve() {
+    URL = URL || {};
+    URL.resolve = URL.resolve || (function makeResolve() {
+        var isAbsolutePattern = /^[\w\-]+:/;
         var baseElement = document.querySelector("base"),
             existingBaseElement = baseElement;
 
@@ -93,9 +98,7 @@
 
             return resolved;
         };
-    }
-
-    URL.resolve = URL.resolve || makeResolve();
+    }());
     
     // Non-CommonJS Map
     var Map;
@@ -321,6 +324,14 @@
         return description._args ? 'flat' : 'nested';
     }
 
+    function inferOverlay(description) {
+        return (typeof window !== "undefined" ? ["window", "browser", "montage"] : ["node", "server", "montage"]);
+    }
+
+    //
+    //
+    //
+
     function configurePackage(location, description, parent) {
 
         if (!isRelativePattern.test(location)) {
@@ -332,8 +343,9 @@
         config.location = location || exports.getLocation();
         config.packageDescription = description;
         config.useScriptInjection = description.useScriptInjection;
-        config.strategy = inferStrategy(description);
-
+        config.strategy = config.strategy || inferStrategy(description);
+        config.overlays = config.overlays || inferOverlay(description);
+        
         if (description.production !== void 0) {
             config.production = description.production;
         }
@@ -376,7 +388,7 @@
 
         // overlay continued...
         var layer, overlays, engine, name;
-        overlays = config.overlays = config.overlays || exports.overlays;
+        overlays = config.overlays;
         for(var i=0, countI=overlays.length;i<countI;i++) {
             if ((layer = overlay[(engine = overlays[i])])) {
                 for (name in layer) {
@@ -442,12 +454,6 @@
         return config;
     }
 
-    //
-    //
-    //
-
-    exports.overlays = ["window", "browser", "montage"];
-
     var isLowercasePattern = /^[a-z]+$/;
     exports.makeRequire = function (config) {
         var require;
@@ -467,7 +473,6 @@
         config.compile = config.compile || config.makeCompiler(config);
         config.parseDependencies = config.parseDependencies || exports.parseDependencies;
         config.read = config.read || exports.read;
-        config.strategy = config.strategy || 'nested';
 
         // Modules: { exports, id, location, directory, factory, dependencies,
         // dependees, text, type }
@@ -592,9 +597,10 @@
             if (topId in loading) {
                 return null; // break the cycle of violence.
             }
+            
             loading[topId] = true; // this has happened before
-            return load(topId, viaId)
-            .then(function () {
+            
+            return load(topId, viaId).then(function () {
                 // load the transitive dependencies using the magic of
                 // recursion.
                 var promises, iModule , depId, dependees, iPromise,
@@ -934,9 +940,9 @@
         // want to issue a script injection. However, if by the time preloading
         // has finished the package.json has not arrived, we will need to kick off
         // a request for the requested script.
+        console.log('loadIfNotPreloaded', location);
         if (preloaded && preloaded.isPending()) {
-            preloaded
-            .then(function () {
+            preloaded.then(function () {
                 if (definition.isPending()) {
                     exports.loadScript(location);
                 }
@@ -1596,13 +1602,10 @@
         names.push.apply(names, scopeNames);
 
         return function (module) {
-        
-            //if (config.useScriptInjection) {
-            //    throw new Error("Can't use eval.");
-            //}
-
-            if (module.factory) {
+            if (module.factory || module.text === void 0) {
                 return module;
+            } else if (config.useScriptInjection) {
+                throw new Error("Can't use eval.");
             } else if (
                 module.text !== void 0 &&
                 module.type === "javascript"
@@ -1664,23 +1667,30 @@
     };
 
     exports.XhrLoader = function XhrLoader(config) {
-        return function XhrRequire(location, module) {
-            return exports.loadXHR(location).then(function (xhr) {
+        return function XhrRequire(url, module) {
+            return config.read(url).then(function (text) {
                 module.type = 'javascript';
-                module.text = xhr.responseText;
-                module.location = location;
+                module.text = text;
+                module.location = url;
             });
         }
     };
 
     exports.CommonJSLoader = function CommonJSLoader(config) {
         return function CommonJSRequire(location, module) {
-            var id = location.slice(config.location.length);
-            id = id.substr(0, id.lastIndexOf('.'));
-            module.type = "native";
-            module.exports = require(id);
-            module.location = location;
-            return module;
+            return config.read(location)
+            .then(function (text) {
+                module.type = "javascript";
+                module.text = text;
+                module.location = location;
+            }, function (reason, error, rejection) {
+                var id = location.slice(config.location.length);
+                id = id.substr(0, id.lastIndexOf('.'));
+                module.type = "native";
+                module.exports = require(id);
+                module.location = location;
+                return module;
+            });
         };
     };
 
@@ -1703,25 +1713,11 @@
     //
     //
 
-    exports.Loader = function Loader(config, load) {
-        return function (location, module) {
-            return config.read(location)
-            .then(function (text) {
-                module.type = "javascript";
-                module.text = text;
-                module.location = location;
-            }, function (reason, error, rejection) {
-                return load(location, module);
-            });
-        };
-    };
-
-    exports.makeLoader = function makeLoader(config) {
-
+    exports.Loader = function Loader(config) {
         var Loader;
         if (typeof define === 'function' && define.amd) {
             Loader = exports.AMDLoader;
-        } else if (typeof require !== "undefined") {
+        } else if (typeof module === 'object' && module.exports) {
             Loader = exports.CommonJSLoader;
         } else if (typeof window !== "undefined") {
             if (config.useScriptInjection) {
@@ -1730,7 +1726,10 @@
                 Loader = exports.XhrLoader;
             }   
         }
+        return Loader(config);
+    };
 
+    exports.makeLoader = function makeLoader(config) {
         return exports.ReelLoader(config,
             exports.MappingsLoader(
                 config,
@@ -1739,8 +1738,7 @@
                     exports.MemoizedLoader(
                         config,
                         exports.Loader(
-                            config,
-                            Loader(config)
+                            config
                         )
                     )
                 )
