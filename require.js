@@ -1,4 +1,4 @@
-/* global define, exports, require, process, window, document*/
+/* global define, exports, require, process, window, document, bootstrap*/
 /*
     Based in part on Motorola Mobility’s Montage
     Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
@@ -9,7 +9,7 @@
     if (typeof bootstrap === 'function') {
         // Montage. Register module.
         bootstrap("require", function (mrRequire, exports) {
-            var Promise = mrRequire("promise");
+            var Promise = mrRequire("promise").Promise;
             var URL = mrRequire("mini-url");
             factory(exports, Promise, URL);
         });
@@ -35,7 +35,6 @@
         /*jshint evil:false */
 
     // Non-CommonJS Promise
-    var Promise = global.Promise;
     Promise.prototype['finally'] = Promise.prototype['finally'] || function finallyPolyfill(callback) {
         var constructor = this.constructor;
         return this.then(function(value) {
@@ -58,7 +57,7 @@
                 reject(err);
             }
         });
-    }
+    };
 
     URL = URL || {};
     URL.resolve = URL.resolve || (function makeResolve() {
@@ -997,15 +996,14 @@
 
     exports.loadPackageDescription = function (dependency, config) {
 
+        var location; 
         if (dependency.hash) { // use script injection
             var definition = exports.getDefinition(dependency.hash, "package.json");
-            var location = URL.resolve(dependency.location, "package.json.load.js");
-
+            location = URL.resolve(dependency.location, "package.json.load.js");
             exports.loadIfNotPreloaded(location, definition, config.preloaded);
-
             return definition.get("exports");
         } else {
-            var location = dependency.location;
+            location = dependency.location;
             var descriptions =
                 config.descriptions =
                     config.descriptions || {};
@@ -1675,7 +1673,7 @@
                 module.text = text;
                 module.location = url;
             });
-        }
+        };
     };
 
     exports.CommonJSLoader = function CommonJSLoader(config) {

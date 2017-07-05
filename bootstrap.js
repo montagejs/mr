@@ -1,4 +1,4 @@
-/* global define, exports, require, process, window, document*/
+/* global define, exports, require, process, window, document, bootstrap*/
 /*
     Based in part on Motorola Mobility’s Montage
     Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
@@ -6,20 +6,29 @@
     https://github.com/motorola-mobility/montage/blob/master/LICENSE.md
 */
 (function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
+    if (typeof bootstrap === 'function') {
+        // Montage. Register module.
+        bootstrap("bootstrap", function (mrRequire, exports) {
+            var Promise = mrRequire("promise").Promise;
+            var URL = mrRequire("mini-url");
+            factory(exports, Promise, URL, mrRequire);
+        });
+    } else if (typeof define === 'function' && define.amd) {
         // AMD. Register as an anonymous module.
         define(['exports', 'bluebird'], function (exports, bluebird) {
             factory((root.mrBootstrap = exports), bluebird);
         });
     } else if (typeof exports === 'object' && typeof exports.nodeName !== 'string') {
         // CommonJS
-        var urlRequire = (typeof URL !== 'undefined' ? URL : (require)('url'));
-        factory(exports, require('bluebird'), urlRequire);
+        var Promise = (require)("bluebird");
+        var URL = (require)('url');
+        var mrRequire = (require)('./require');
+        factory(exports, Promise, URL, mrRequire);
     } else {
         // Browser globals
-        factory((root.mrBootstrap = {}), root.Promise, root.URL);
+        factory((root.mrBootstrap = {}), root.Promise, root.URL, root.mrRequire);
     }
-}(this, function (exports, Promise, URL) {
+}(this, function (exports, Promise, URL, mrRequire) {
     "use strict";
 
     // reassigning causes eval to not use lexical scope.
@@ -28,41 +37,42 @@
         global = globalEval('this');
         /*jshint evil:false */
 
-    exports.initBrowser = function initBrowser() {
-
-        var Require;
-
-        function loadScript(location, callback) {
-            var script;
-            callback = callback || function noop() {};
-            function finallyHandler() {
-                // remove clutter
-                if (script.parentNode) {
-                    script.parentNode.removeChild(script);   
-                }
+    function loadScript(location, callback) {
+        var script;
+        callback = callback || function noop() {};
+        function finallyHandler() {
+            // remove clutter
+            if (script.parentNode) {
+                script.parentNode.removeChild(script);   
             }
-
-            if (typeof document !== "undefined") {
-                script = document.createElement("script");
-                script.setAttribute('async', '');
-                script.setAttribute('src', location);
-                script.onload = function () {
-                    callback(null, script);
-                    finallyHandler();
-                };
-                script.onerror = function (err) {
-                    callback(err, script);
-                    finallyHandler();
-                };
-                document.querySelector("head").appendChild(script);
-            } else {
-                errorCallback(new Error("document not supported"));
-                finallyHandler();
-            }   
         }
+
+        if (typeof document !== "undefined") {
+            script = document.createElement("script");
+            script.setAttribute('async', '');
+            script.setAttribute('src', location);
+            script.onload = function () {
+                callback(null, script);
+                finallyHandler();
+            };
+            script.onerror = function (err) {
+                callback(err, script);
+                finallyHandler();
+            };
+            document.querySelector("head").appendChild(script);
+        } else {
+            throw new Error("document not supported");
+        }   
+    }
+
+    exports.initBrowser = function initBrowser() {
 
         function resolve(base, relative) {
             return new URL(relative, base).href;
+        }
+
+        function upperCaseChar(_, c) {
+            return c.toUpperCase();
         }
         
         var paramsCache,
@@ -117,6 +127,9 @@
 
                 return paramsCache;
             },
+            bootstrapRequire: function () {
+                
+            },
             bootstrap: function (callback) {
 
                 var self = this,
@@ -124,7 +137,11 @@
 
                 // determine which scripts to load
                 var dependencies = {
-                    "promise": "node_modules/bluebird/js/browser/bluebird.min.js",
+                    "promise": {
+                        global: "Promise",
+                        exports: "Promise",
+                        location: "node_modules/bluebird/js/browser/bluebird.min.js",
+                    },
                     "require": "./require.js"
                 };
 
@@ -139,8 +156,12 @@
                     return bootModules[id];
                 }
 
+
+                // Expose bootstrap
+                var initalBoostrap = global.bootstrap;
+
                 // register module definitions for deferred, serial execution
-                global.bootstrap = function (id, factory) {
+                function bootstrapModule(id, factory) {
                     definitions[id] = factory;
                     delete dependencies[id];
                     for (id in dependencies) {
@@ -156,54 +177,85 @@
                     // of the bootstrap function and proceed.
                     delete global.bootstrap;
 
+                    // Restore inital Boostrap
+                    if (initalBoostrap) {
+                        global.bootstrap = initalBoostrap;   
+                    }
+
                     //
                     var Promise = bootRequire("promise"),
                         Require = bootRequire("require"),
                         miniURL = bootRequire("mini-url");
                         
                     callback(Require, Promise, miniURL);
-                };
+                }
+
+                global.bootstrap = bootstrapModule;
+
+                function bootstrapModuleScript(module) {
+                    if (module.exports || module.global) {
+                        bootstrap(module.id, function (mrRequire, exports) {
+                            if (module.exports) {
+                                exports[module.exports] = global[module.global]; 
+                            } else {
+                                return global[module.global];
+                            }
+                        });
+                    }
+                }
 
                 // one module loaded for free, for use in require.js, browser.js
-                global.bootstrap("mini-url", function (mrRequire, exports) {
+                bootstrapModule("mini-url", function (mrRequire, exports) {
                     exports.resolve = resolve;
                 });
 
                 // Load other module and skip promise
                 for (var id in dependencies) {
                     if (dependencies.hasOwnProperty(id)) {
-                        loadScript(resolve(params.mrLocation, dependencies[id]), function (id) {
-                            if (id === 'promise') {
-                                global.bootstrap(id, function (mrRequire, exports) {
-                                    exports.Promise = window.Promise; 
-                                });
-                            }
-                        }.bind(null, id));
+                        var module = dependencies[id];
+
+                        if (typeof module === 'string') {
+                            module = {
+                                location: module
+                            };
+                        }
+
+                        module.id = id;
+
+                        var paramLocation = id + 'Location';
+                        if (params.hasOwnProperty(paramLocation)) {
+                            module.location = resolve(params.mrLocation, params[paramLocation]);
+                        } else {
+                            module.location = resolve(params.mrLocation, module.location);
+                        }
+
+                        loadScript(module.location, bootstrapModuleScript.bind(null, module));
                     }
                 } 
             }
-        }
+        };
     };
 
-    exports.initServer = function initServer() {
-        
-        var mrRequire = (require)('./require');
+    exports.initRequire = function initServer() {
 
         return  {
             loadPackage: mrRequire.loadPackage,
 
             getParams: function () {
-                
-            },
-            bootstrap: function (callback) {
 
                 var command = process.argv.slice(0, 3);
                 var args = process.argv.slice(2);
                 var program = args.shift();
 
+                return {
+
+                };
+            },
+            bootstrap: function (callback) {
+
                 callback(mrRequire, Promise, URL);
             }
-        }
+        };
     };
 
     var platform;
@@ -212,8 +264,8 @@
             return platform;
         } else if (typeof window !== "undefined" && window && window.document) {
             platform = exports.initBrowser();
-        } else if (typeof process !== "undefined") {
-            platform = exports.initServer();
+        } else if (typeof mrRequire !== "undefined") {
+            platform = exports.initRequire();
         } else {
             throw new Error("Platform not supported.");
         }
@@ -264,7 +316,7 @@
                 global.preload.forEach(function (bundleLocations) {
                     preloaded = preloaded.then(function () {
                         return Promise.all(bundleLocations.map(function (bundleLocation) {
-                            load(bundleLocation);
+                            loadScript(bundleLocation);
                             return getDefinition(bundleLocation).promise;
                         }));
                     });
