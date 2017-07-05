@@ -119,7 +119,7 @@ module.exports = run(require, [
     "spec/nested-module-tree",
     "spec/serialization-compiler",
     {name: "spec/dot-js-module", node: false},
-    {name: "spec/node", browser: false, karma: false},
+    {name: "spec/node", browser: false, karma: false}
 ]).then(function () {
     console.log('mr-testing', 'End');
 }, function (err) {
