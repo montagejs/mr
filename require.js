@@ -389,7 +389,7 @@
         // overlay continued...
         var layer, overlays, engine, name;
         overlays = config.overlays;
-        for(var i=0, countI=overlays.length;i<countI;i++) {
+        for(var i = 0, countI = overlays.length; i <countI; i++) {
             if ((layer = overlay[(engine = overlays[i])])) {
                 for (name in layer) {
                     if (layer.hasOwnProperty(name)) {
@@ -424,19 +424,21 @@
         //Deal with redirects
         redirects = description.redirects;
         if (redirects !== void 0) {
-            for(var r=0, rKeys = Object.keys(redirects);(name = rKeys[r]);r++) {
-                modules[name] = {
-                    id: name,
-                    redirect: normalizeId(resolve(redirects[name], name)),
-                    location: URL.resolve(location, name)
-                };
+            for (name in redirects) {
+                if (redirects.hasOwnProperty(name)) {
+                    modules[name] = {
+                        id: name,
+                        redirect: normalizeId(resolve(redirects[name], name)),
+                        location: URL.resolve(location, name)
+                    };
+                }
             }
         }
 
         // mappings, link this package to other packages.
         var mappings = description.mappings || {};
         // dependencies, devDependencies if not in production
-        processMappingDependencies(description.dependencies,mappings);
+        processMappingDependencies(description.dependencies, mappings);
         if (!config.production) {
             processMappingDependencies(description.devDependencies,mappings);
         }
