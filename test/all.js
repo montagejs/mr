@@ -22,10 +22,10 @@ function run(suiteRequire, modules) {
     });
 
     var promises = modules.map(function (module) {
-        
+
         var spec = this,
             packagePath = module + '/';
-        
+
         return suiteRequire.loadPackage(packagePath, {
             location: require.location
         }).then(function (pkg) {
@@ -61,7 +61,7 @@ function run(suiteRequire, modules) {
             if (global.__karma__) {
                 global.__karma__.start();
             } else {
-                jasmine.getEnv().execute();    
+                jasmine.getEnv().execute();
             }
         });
     });
@@ -81,8 +81,8 @@ module.exports = run(require, [
     "spec/transitive",
     "spec/module-exports",
     "spec/return",
-    {name: "spec/named-packages", node: false},
-    {name: "spec/named-mappings", node: false},
+    "spec/named-packages",
+    "spec/named-mappings",
     "spec/named-parent-package",
     "spec/load-package",
     "spec/load-package-name",
@@ -120,7 +120,8 @@ module.exports = run(require, [
     "spec/nested-module-tree",
     "spec/serialization-compiler",
     "spec/directory-index",
-    {name: "spec/dot-js-module", node: false}
+    {name: "spec/dot-js-module", node: false},
+    {name: "spec/node", browser: false, karma: false}
 ]).then(function () {
     console.log('mr-testing', 'End');
 }, function (err) {
