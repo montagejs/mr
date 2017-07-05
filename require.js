@@ -366,12 +366,14 @@
         //Deal with redirects
         redirects = description.redirects;
         if (redirects !== void 0) {
-            for(var r=0, rKeys = Object.keys(redirects);(name = rKeys[r]);r++) {
-                modules[name] = {
-                    id: name,
-                    redirect: normalizeId(resolve(redirects[name], name)),
-                    location: URL.resolve(location, name)
-                };
+            for (name in redirects) {
+                if (redirects.hasOwnProperty(name)) {
+                    modules[name] = {
+                        id: name,
+                        redirect: normalizeId(resolve(redirects[name], name)),
+                        location: URL.resolve(location, name)
+                    };
+                }
             }
         }
 
