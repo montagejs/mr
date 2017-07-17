@@ -67,9 +67,45 @@
 
     exports.initBrowser = function initBrowser() {
 
-        function resolve(base, relative) {
-            return new URL(relative, base).href;
-        }
+            // mini-url library
+        var isAbsolutePattern = /^[\w\-]+:/;
+        var resolve = (function makeResolve() {
+            var baseElement = document.querySelector("base"),
+                existingBaseElement = baseElement;
+
+            if (!existingBaseElement) {
+                baseElement = document.createElement("base");
+                baseElement.href = "";
+            }
+
+            return function (base, relative) {
+
+                base = String(base);
+
+                var resolved, restore,
+                    head = document.querySelector("head"),
+                    relativeElement = document.createElement("a");
+
+                if (!existingBaseElement) {
+                    head.appendChild(baseElement);
+                }
+
+                if (!isAbsolutePattern.test(base)) {
+                    throw new Error("Can't resolve " + JSON.stringify(relative) + " relative to " + JSON.stringify(base));
+                }
+
+                restore = baseElement.href;
+                baseElement.href = base;
+                relativeElement.href = relative;
+                resolved = relativeElement.href;
+                baseElement.href = restore;
+                if (!existingBaseElement) {
+                    head.removeChild(baseElement);
+                }
+
+                return resolved;
+            };
+        }());
 
         function upperCaseChar(_, c) {
             return c.toUpperCase();
@@ -211,9 +247,9 @@
                         if (module.strategy === 'auto') {
                             module.script = resolve(resolve(params.mrLocation, '../../'), module.location);
                             loadScript(module.script, bootstrapModuleScript.bind(this));
+                        } else {
+                            throw err;   
                         }
-
-                        throw err;
                     } else if (module.exports || module.global) {
                         bootstrap(module.id, function (mrRequire, exports) {
                             if (module.exports) {
