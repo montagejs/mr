@@ -50,13 +50,13 @@
         if (typeof document !== "undefined") {
             script = document.createElement("script");
             script.setAttribute('async', '');
-            script.setAttribute('src', location);
+            script.setAttribute('src', location + '');
             script.onload = function () {
                 callback(null, script);
                 finallyHandler();
             };
             script.onerror = function (err) {
-                callback(err, script);
+                callback(new Error("Can't load script " + JSON.stringify(location)), script);
                 finallyHandler();
             };
             document.querySelector("head").appendChild(script);
@@ -76,28 +76,33 @@
         }
         
         var paramsCache,
+            paramsNamespace = 'mr',
             dataAttrPattern = /^data-(.*)$/,
-            boostrapPattern = /^(.*)bootstrap.js(?:[\?\.]|$)/i,
+            boostrapScript = 'bootstrap.js',
+            boostrapPattern = new RegExp('^(.*)' + boostrapScript + '(?:[\?\.]|$)', 'i'),
             letterAfterDashPattern = /-([a-z])/g;
 
         return  {
             getParams: function getParams() {
                 var i, j,
                     match, script, scripts,
-                    mrLocation, attr, name;
+                    mrLocation, attr, name,
+                    base, location;
 
                 if (!paramsCache) {
                     paramsCache = {};
                     // Find the <script> that loads us, so we can divine our
                     // parameters from its attributes.
                     scripts = document.getElementsByTagName("script");
+                    base = document.querySelector("head > base"),
+                    location = base ? base.href :  window.location
                     for (i = 0; i < scripts.length; i++) {
                         script = scripts[i];
                         if (script.src && (match = script.src.match(boostrapPattern))) {
                             mrLocation = match[1];
                         }
-                        if (script.hasAttribute("data-mr-location")) {
-                            mrLocation = resolve(window.location, script.getAttribute("data-mr-location"));
+                        if (script.hasAttribute("data-" + paramsNamespace + "-location")) {
+                            mrLocation = resolve(location, script.getAttribute("data-" + paramsNamespace + "-location"));
                         }
                         if (mrLocation) {
                             if (script.dataset) {
@@ -115,6 +120,7 @@
                                     }
                                 }
                             }
+
                             // Permits multiple bootstrap.js <scripts>; by
                             // removing as they are discovered, next one
                             // finds itself.
@@ -127,17 +133,19 @@
 
                 return paramsCache;
             },
-            bootstrapRequire: function () {
-                
+            loadPackage: function (dependency, config, packageDescription) {
+                return mrRequire.loadPackage(dependency, config, packageDescription);
             },
             bootstrap: function (callback) {
 
                 var self = this,
                     params = self.getParams();
 
+
                 // determine which scripts to load
                 var dependencies = {
                     "promise": {
+                        strategy: 'auto',
                         global: "Promise",
                         exports: "Promise",
                         location: "node_modules/bluebird/js/browser/bluebird.min.js",
@@ -146,8 +154,8 @@
                 };
 
                 // miniature module system
-                var bootModules = {};
-                var definitions = {};
+                var bootModules = {},
+                    definitions = {};
                 function bootRequire(id) {
                     if (!bootModules[id] && definitions[id]) {
                         var exports = bootModules[id] = {};
@@ -186,14 +194,27 @@
                     var Promise = bootRequire("promise"),
                         Require = bootRequire("require"),
                         miniURL = bootRequire("mini-url");
-                        
+                            
+                    // Update
+                    mrRequire = Require;
+
                     callback(Require, Promise, miniURL);
                 }
 
                 global.bootstrap = bootstrapModule;
 
-                function bootstrapModuleScript(module) {
-                    if (module.exports || module.global) {
+                function bootstrapModuleScript(err, script) {
+                    var module = this;
+
+                    if (err) {
+                        
+                        if (module.strategy === 'auto') {
+                            module.script = resolve(resolve(params.mrLocation, '../../'), module.location);
+                            loadScript(module.script, bootstrapModuleScript.bind(this));
+                        }
+
+                        throw err;
+                    } else if (module.exports || module.global) {
                         bootstrap(module.id, function (mrRequire, exports) {
                             if (module.exports) {
                                 exports[module.exports] = global[module.global]; 
@@ -223,13 +244,14 @@
                         module.id = id;
 
                         var paramLocation = id + 'Location';
+                        
                         if (params.hasOwnProperty(paramLocation)) {
-                            module.location = resolve(params.mrLocation, params[paramLocation]);
+                            module.script = resolve(params.mrLocation, params[paramLocation]);
                         } else {
-                            module.location = resolve(params.mrLocation, module.location);
+                            module.script = resolve(params.mrLocation, module.location);
                         }
 
-                        loadScript(module.location, bootstrapModuleScript.bind(null, module));
+                        loadScript(module.script, bootstrapModuleScript.bind(module));
                     }
                 } 
             }
@@ -238,22 +260,60 @@
 
     exports.initRequire = function initServer() {
 
+        var path = require("path"),
+            fs  = require("fs");
+
+        var paramsCache,
+            paramsNamespace = 'mr',
+            paramCommand = 'bin/mr';
+
         return  {
-            loadPackage: mrRequire.loadPackage,
 
             getParams: function () {
 
-                var command = process.argv.slice(0, 3);
-                var args = process.argv.slice(2);
-                var program = args.shift();
+                if (!paramsCache) {
 
-                return {
+                    paramsCache = {};
+                    paramsCache[paramsNamespace + 'Location'] = "file://" + __dirname;
 
-                };
+                    // Detect command line
+                    if (
+                        typeof process !== "undefined" && 
+                            typeof process.argv !== "undefined"
+                    ) {
+
+                        var command, module, modulePackage,
+                            args = process.argv.slice(1);
+
+                        command = args.shift() || "";
+
+                        // Detect /bin/mr usage
+                        if (command.indexOf(paramCommand) === command.length - paramCommand.length) {
+                            module = args.shift() || "";
+
+                            if (module.slice(module.length - 1, module.length) !== "/") {
+                                module += "/";
+                            }
+
+                            paramsCache.module = path.basename(module);
+                            paramsCache.package = path.dirname(fs.realpathSync(module));   
+                        }
+                    }
+                }
+
+                return paramsCache; 
+            },
+            loadPackage: function (dependency, config, packageDescription) {
+                return mrRequire.loadPackage(dependency, config, packageDescription);
             },
             bootstrap: function (callback) {
 
-                callback(mrRequire, Promise, URL);
+                var self = this,
+                    params = self.getParams();
+
+                if (params.package) {
+                    callback(mrRequire, Promise, URL);
+                }
             }
         };
     };
@@ -272,13 +332,9 @@
         return platform;
     };
 
-    exports.loadPackage = function (location, config) {
+    exports.loadPackage = function (dependency, config, packageDescription) {
         var platform = exports.getPlatform();
-        return new Promise(function (resolve, reject) {
-            platform.bootstrap(function (mrRequire, Promise, URL) {
-                return mrRequire.loadPackage(location, config).then(resolve, reject);
-            });
-        });
+        return platform.loadPackage(dependency, config, packageDescription)
     };
 
     /**
@@ -290,6 +346,7 @@
             
             var config = {},
                 params = platform.getParams(),
+                mrLocation = params.mrLocation,
                 applicationModuleId = params.module || "",
                 applicationLocation = URL.resolve(mrRequire.getLocation(), params.package || ".");
 
@@ -333,9 +390,6 @@
                 location: params.mrLocation,
                 hash: params.mrHash
             }, config).then(function (mrRequire) {
-                mrRequire.inject("mini-url", URL);
-                mrRequire.inject("promise", Promise); 
-                mrRequire.inject("require", mrRequire);
 
                 if ("autoPackage" in params) {
                     mrRequire.injectPackageDescription(applicationLocation, {});
@@ -345,6 +399,11 @@
                     location: applicationLocation,
                     hash: params.applicationHash
                 }).then(function (pkg) {
+
+                    pkg.inject("bootstrap", mrRequire);
+                    pkg.inject("mini-url", URL);
+                    pkg.inject("promise", Promise); 
+                    pkg.inject("require", mrRequire);
 
                     // Expose global require and mr
                     global.require = global.mr = pkg;
@@ -358,7 +417,7 @@
     if (
         typeof window !== "undefined" || 
             (typeof module === 'object' && module.exports &&
-                typeof require !== "undefined" && require.main === module)
+                typeof require !== "undefined")
     ) {
         if (global.__MONTAGE_REQUIRE_LOADED__) {
             console.warn("MontageRequire already loaded!");
