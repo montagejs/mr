@@ -936,7 +936,9 @@
         // want to issue a script injection. However, if by the time preloading
         // has finished the package.json has not arrived, we will need to kick off
         // a request for the requested script.
-        console.log('loadIfNotPreloaded', location);
+        
+        //console.log('loadIfNotPreloaded', location);
+
         if (preloaded && preloaded.isPending()) {
             preloaded.then(function () {
                 if (definition.isPending()) {
