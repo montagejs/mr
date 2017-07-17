@@ -181,7 +181,7 @@
                 // determine which scripts to load
                 var dependencies = {
                     "promise": {
-                        strategy: 'auto',
+                        strategy: 'nested',
                         global: "Promise",
                         exports: "Promise",
                         location: "node_modules/bluebird/js/browser/bluebird.min.js",
@@ -243,8 +243,10 @@
                     var module = this;
 
                     if (err) {
-                        
-                        if (module.strategy === 'auto') {
+
+                        // Fallback on flat strategy for missing nested module
+                        if (module.strategy === 'nested') {
+                            module.strategy = 'flat';
                             module.script = resolve(resolve(params.mrLocation, '../../'), module.location);
                             loadScript(module.script, bootstrapModuleScript.bind(this));
                         } else {
