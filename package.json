@@ -24,6 +24,7 @@
     "test": "node test/run-node.js",
     "lint": "jshint .",
     "integration": "mop-integration",
+    "lint": "jshint *.js",
     "test:karma": "karma start --no-auto-watch --single-run",
     "test:karma-firefox": "karma start --no-auto-watch --single-run --browsers=Firefox",
     "test:karma-chrome": "karma start --no-auto-watch --single-run --browsers=Chrome",

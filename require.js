@@ -1,4 +1,5 @@
-/* global define, exports, require, process, window, document, bootstrap*/
+/* global define, exports, require, process, bootstrap */
+
 /*
     Based in part on Motorola Mobility’s Montage
     Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
@@ -455,7 +456,7 @@
 
     var isLowercasePattern = /^[a-z]+$/;
     exports.makeRequire = function (config) {
-        var require;
+        var require, makeRequire;
 
         // Configuration defaults:
         config = config || {};
@@ -495,6 +496,23 @@
             return modules[lookupId];
         }
 
+        function extractPrefixFromInjectId(id) {
+            var mappings = config.mappings;
+            var prefixes = Object.keys(mappings);
+            var length = prefixes.length;
+
+            var i, prefix;
+            for (i = 0; i < length; i++) {
+                prefix = prefixes[i];
+                if (
+                    id === prefix ||
+                    id.indexOf(prefix) === 0 &&
+                    id.charAt(prefix.length) === "/"
+                ) {
+                    return prefix;
+                }
+            }
+        }
 
         // for preloading modules by their id and exports, useful to
         // prevent wasteful multiple instantiation if a module was loaded
@@ -536,24 +554,6 @@
             module.error = void 0;
             // delete module.redirect;
             // delete module.mappingRedirect;
-        }
-
-        function extractPrefixFromInjectId(id) {
-            var mappings = config.mappings;
-            var prefixes = Object.keys(mappings);
-            var length = prefixes.length;
-
-            var i, prefix;
-            for (i = 0; i < length; i++) {
-                prefix = prefixes[i];
-                if (
-                    id === prefix ||
-                    id.indexOf(prefix) === 0 &&
-                    id.charAt(prefix.length) === "/"
-                ) {
-                    return prefix;
-                }
-            }
         }
 
         // Ensures a module definition is loaded, compiled, analyzed
@@ -750,7 +750,7 @@
 
         // Creates a unique require function for each module that encapsulates
         // that module's id for resolving relative module IDs against.
-        function makeRequire(viaId) {
+        makeRequire = function makeRequire(viaId) {
 
             // Main synchronously executing "require()" function
             var require = function require(id) {
@@ -828,13 +828,10 @@
             require.read = config.read;
 
             return require;
-        }
+        };
 
-        require = makeRequire("");
-        return require;
+        return (require = makeRequire(""));
     };
-
-
 
     //
     //
@@ -882,7 +879,7 @@
                     finallyHandler();
                 };
                 script.onerror = function (err) {
-                    reject(new Error("Can't load script " + JSON.stringify(url)));
+                    reject(new Error("Can't load script " + JSON.stringify(location)));
                     finallyHandler();
                 };
                 script.setAttribute('src', location);
@@ -936,7 +933,7 @@
         // want to issue a script injection. However, if by the time preloading
         // has finished the package.json has not arrived, we will need to kick off
         // a request for the requested script.
-        
+
         //console.log('loadIfNotPreloaded', location);
 
         if (preloaded && preloaded.isPending()) {
@@ -993,7 +990,7 @@
 
     exports.loadPackageDescription = function (dependency, config) {
 
-        var location; 
+        var location;
         if (dependency.hash) { // use script injection
             var definition = exports.getDefinition(dependency.hash, "package.json");
             location = URL.resolve(dependency.location, "package.json.load.js");
@@ -1040,7 +1037,7 @@
     exports.loadPackage = function (dependency, config, packageDescription) {
 
         //console.log('loadPackage', dependency);
-        
+
         config = config || {
             location: URL.resolve(exports.getLocation(), dependency)
         };
@@ -1536,13 +1533,6 @@
             var prefixes = Object.keys(mappings);
             var length = prefixes.length;
 
-            function loadMapping(mappingRequire) {
-                var rest = id.slice(prefix.length + 1);
-                config.mappings[prefix].mappingRequire = mappingRequire;
-                module.mappingRedirect = rest;
-                module.mappingRequire = mappingRequire;
-                return mappingRequire.deepLoad(rest, config.location);
-            }
 
             // TODO: remove this when all code has been migrated off of the autonomous name-space problem
             if (
@@ -1552,7 +1542,18 @@
             ) {
                 console.warn("Package reflexive module ignored:", id);
             }
+
             var i, prefix;
+
+
+            function loadMapping(mappingRequire) {
+                var rest = id.slice(prefix.length + 1);
+                config.mappings[prefix].mappingRequire = mappingRequire;
+                module.mappingRedirect = rest;
+                module.mappingRequire = mappingRequire;
+                return mappingRequire.deepLoad(rest, config.location);
+            }
+
             for (i = 0; i < length; i++) {
                 prefix = prefixes[i];
                 if (
@@ -1724,7 +1725,7 @@
 
                 // new Function will have its body reevaluated at every call, hence using eval instead
                 // https://developer.mozilla.org/en/JavaScript/Reference/Functions_and_function_scope
-                var factoryArgs = names.concat([module.text + "\n//*/\n//@ sourceURL=" + module.location])
+                var factoryArgs = names.concat([module.text + "\n//*/\n//@ sourceURL=" + module.location]);
                 module.factory = Function.apply(global, factoryArgs);
             }
         };
@@ -1816,19 +1817,19 @@
     //
 
     exports.Loader = function Loader(config) {
-        var Loader;
+        var loader;
         if (typeof define === 'function' && define.amd) {
-            Loader = exports.AMDLoader;
+            loader = exports.AMDLoader;
         } else if (typeof module === 'object' && module.exports) {
-            Loader = exports.CommonJSLoader;
+            loader = exports.CommonJSLoader;
         } else if (typeof window !== "undefined") {
             if (config.useScriptInjection) {
-                Loader = exports.ScriptLoader;
+                loader = exports.ScriptLoader;
             } else {
-                Loader = exports.XhrLoader;
+                loader = exports.XhrLoader;
             }
         }
-        return Loader(config);
+        return loader(config);
     };
 
     exports.makeLoader = function makeLoader(config) {
