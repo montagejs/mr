@@ -11,6 +11,7 @@ before_script:
   - npm run lint
 script: npm run $COMMAND
 env:
+  - COMMAND=lint
   - COMMAND=test
   - COMMAND=test:karma
   #- COMMAND=integration MR_VERSION=. MOP_VERSION=0.13
