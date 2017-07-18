@@ -1,4 +1,5 @@
-/* global define, exports, require, process, window, document, bootstrap*/
+/* global define, exports, require, process, bootstrap */
+
 /*
     Based in part on Motorola Mobility’s Montage
     Copyright (c) 2012, Motorola Mobility LLC. All Rights Reserved.
@@ -836,8 +837,6 @@
 
         return (require = makeRequire(""));
     };
-
-
 
     //
     //
@@ -1728,19 +1727,19 @@
     //
 
     exports.Loader = function Loader(config) {
-        var Loader;
+        var loader;
         if (typeof define === 'function' && define.amd) {
-            Loader = exports.AMDLoader;
+            loader = exports.AMDLoader;
         } else if (typeof module === 'object' && module.exports) {
-            Loader = exports.CommonJSLoader;
+            loader = exports.CommonJSLoader;
         } else if (typeof window !== "undefined") {
             if (config.useScriptInjection) {
-                Loader = exports.ScriptLoader;
+                loader = exports.ScriptLoader;
             } else {
-                Loader = exports.XhrLoader;
+                loader = exports.XhrLoader;
             }   
         }
-        return Loader(config);
+        return loader(config);
     };
 
     exports.makeLoader = function makeLoader(config) {
