@@ -130,8 +130,8 @@
                     // Find the <script> that loads us, so we can divine our
                     // parameters from its attributes.
                     scripts = document.getElementsByTagName("script");
-                    base = document.querySelector("head > base"),
-                    location = base ? base.href :  window.location
+                    base = document.querySelector("head > base");
+                    location = base ? base.href :  window.location;
                     for (i = 0; i < scripts.length; i++) {
                         script = scripts[i];
                         if (script.src && (match = script.src.match(boostrapPattern))) {
@@ -176,7 +176,6 @@
 
                 var self = this,
                     params = self.getParams();
-
 
                 // determine which scripts to load
                 var dependencies = {
@@ -239,16 +238,14 @@
 
                 global.bootstrap = bootstrapModule;
 
-                function bootstrapModuleScript(err, script) {
-                    var module = this;
-
+                function bootstrapModuleScript(module, err, script) {
                     if (err) {
 
                         // Fallback on flat strategy for missing nested module
                         if (module.strategy === 'nested') {
                             module.strategy = 'flat';
                             module.script = resolve(resolve(params.mrLocation, '../../'), module.location);
-                            loadScript(module.script, bootstrapModuleScript.bind(this));
+                            loadScript(module.script, bootstrapModuleScript.bind(null, module));
                         } else {
                             throw err;   
                         }
@@ -289,7 +286,7 @@
                             module.script = resolve(params.mrLocation, module.location);
                         }
 
-                        loadScript(module.script, bootstrapModuleScript.bind(module));
+                        loadScript(module.script, bootstrapModuleScript.bind(null, module));
                     }
                 } 
             }
@@ -372,7 +369,7 @@
 
     exports.loadPackage = function (dependency, config, packageDescription) {
         var platform = exports.getPlatform();
-        return platform.loadPackage(dependency, config, packageDescription)
+        return platform.loadPackage(dependency, config, packageDescription);
     };
 
     /**
@@ -394,9 +391,7 @@
 
                 var bundleDefinitions = {};
                 var getDefinition = function (name) {
-                    return bundleDefinitions[name] =
-                        bundleDefinitions[name] ||
-                            Promise.resolve();
+                    return (bundleDefinitions[name] = bundleDefinitions[name] || Promise.resolve());
                 };
                 
                 global.bundleLoaded = function (name) {

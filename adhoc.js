@@ -21,19 +21,6 @@ function getQueryParams() {
     return hashParams;
 }
 
-
-var packageLocation;
-var moduleId;
-
-if (window.location.search) {
-    var query = getQueryParams();
-    var packageLocation = query['package-location'];
-    var moduleId = query['module-id'];
-    document.querySelector("[name=package-location]").value = packageLocation;
-    document.querySelector("[name=module-id]").value = moduleId;
-    run(packageLocation, moduleId);
-}
-
 function run(packageLocation, moduleId) {
     packageLocation = URL.resolve(window.location, packageLocation);
     moduleId = moduleId || "";
@@ -47,4 +34,17 @@ function run(packageLocation, moduleId) {
         console.log("Exports:", exports);
         console.log("Packages:", require.packages);
     });
+}
+
+
+var packageLocation;
+var moduleId;
+
+if (window.location.search) {
+    var query = getQueryParams();
+    var packageLocation = query['package-location'];
+    var moduleId = query['module-id'];
+    document.querySelector("[name=package-location]").value = packageLocation;
+    document.querySelector("[name=module-id]").value = moduleId;
+    run(packageLocation, moduleId);
 }

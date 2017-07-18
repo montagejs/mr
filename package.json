@@ -23,6 +23,7 @@
   "scripts": {
     "test": "node test/run-node.js",
     "integration": "mop-integration",
+    "lint": "jshint *.js",
     "test:karma": "karma start --no-auto-watch --single-run",
     "test:karma-firefox": "karma start --no-auto-watch --single-run --browsers=Firefox",
     "test:karma-chrome": "karma start --no-auto-watch --single-run --browsers=Chrome",
@@ -43,6 +44,7 @@
     "http-server": "^0.9.0",
     "jasmine-console-reporter": "^1.2.7",
     "jasmine-core": "^2.5.2",
+    "jshint": "^2.9.5",
     "karma": "^1.5.0",
     "karma-chrome-launcher": "^2.0.0",
     "karma-coverage": "^1.1.1",

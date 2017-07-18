@@ -457,7 +457,7 @@
 
     var isLowercasePattern = /^[a-z]+$/;
     exports.makeRequire = function (config) {
-        var require;
+        var require, makeRequire;
 
         // Configuration defaults:
         config = config || {};
@@ -496,6 +496,23 @@
             return modules[lookupId];
         }
 
+        function extractPrefixFromInjectId(id) {
+            var mappings = config.mappings;
+            var prefixes = Object.keys(mappings);
+            var length = prefixes.length;
+
+            var i, prefix;
+            for (i = 0; i < length; i++) {
+                prefix = prefixes[i];
+                if (
+                    id === prefix ||
+                    id.indexOf(prefix) === 0 &&
+                    id.charAt(prefix.length) === "/"
+                ) {
+                    return prefix;
+                }
+            }
+        }
 
         // for preloading modules by their id and exports, useful to
         // prevent wasteful multiple instantiation if a module was loaded
@@ -537,24 +554,6 @@
             module.error = void 0;
             // delete module.redirect;
             // delete module.mappingRedirect;
-        }
-
-        function extractPrefixFromInjectId(id) {
-            var mappings = config.mappings;
-            var prefixes = Object.keys(mappings);
-            var length = prefixes.length;
-
-            var i, prefix;
-            for (i = 0; i < length; i++) {
-                prefix = prefixes[i];
-                if (
-                    id === prefix ||
-                    id.indexOf(prefix) === 0 &&
-                    id.charAt(prefix.length) === "/"
-                ) {
-                    return prefix;
-                }
-            }
         }
 
         // Ensures a module definition is loaded, compiled, analyzed
@@ -755,7 +754,7 @@
 
         // Creates a unique require function for each module that encapsulates
         // that module's id for resolving relative module IDs against.
-        function makeRequire(viaId) {
+        makeRequire = function makeRequire(viaId) {
 
             // Main synchronously executing "require()" function
             var require = function require(id) {
@@ -833,10 +832,9 @@
             require.read = config.read;
 
             return require;
-        }
+        };
 
-        require = makeRequire("");
-        return require;
+        return (require = makeRequire(""));
     };
 
 
@@ -887,7 +885,7 @@
                     finallyHandler();
                 };
                 script.onerror = function (err) {
-                    reject(new Error("Can't load script " + JSON.stringify(url)));
+                    reject(new Error("Can't load script " + JSON.stringify(location)));
                     finallyHandler();
                 };
                 script.setAttribute('src', location);
@@ -1454,13 +1452,6 @@
             var prefixes = Object.keys(mappings);
             var length = prefixes.length;
 
-            function loadMapping(mappingRequire) {
-                var rest = id.slice(prefix.length + 1);
-                config.mappings[prefix].mappingRequire = mappingRequire;
-                module.mappingRedirect = rest;
-                module.mappingRequire = mappingRequire;
-                return mappingRequire.deepLoad(rest, config.location);
-            }
 
             // TODO: remove this when all code has been migrated off of the autonomous name-space problem
             if (
@@ -1470,7 +1461,18 @@
             ) {
                 console.warn("Package reflexive module ignored:", id);
             }
+
             var i, prefix;
+            
+
+            function loadMapping(mappingRequire) {
+                var rest = id.slice(prefix.length + 1);
+                config.mappings[prefix].mappingRequire = mappingRequire;
+                module.mappingRedirect = rest;
+                module.mappingRequire = mappingRequire;
+                return mappingRequire.deepLoad(rest, config.location);
+            }
+
             for (i = 0; i < length; i++) {
                 prefix = prefixes[i];
                 if (
@@ -1634,7 +1636,7 @@
 
                 // new Function will have its body reevaluated at every call, hence using eval instead
                 // https://developer.mozilla.org/en/JavaScript/Reference/Functions_and_function_scope
-                var factoryArgs = names.concat([module.text + "\n//*/\n//@ sourceURL=" + module.location])
+                var factoryArgs = names.concat([module.text + "\n//*/\n//@ sourceURL=" + module.location]);
                 module.factory = Function.apply(global, factoryArgs);
             }
         };
