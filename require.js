@@ -472,6 +472,7 @@
         config.makeLoader = config.makeLoader || exports.makeLoader;
         config.load = config.load || config.makeLoader(config);
         config.makeCompiler = config.makeCompiler || exports.makeCompiler;
+        config.executeCompiler = config.executeCompiler || exports.executeCompiler;
         config.compile = config.compile || config.makeCompiler(config);
         config.parseDependencies = config.parseDependencies || exports.parseDependencies;
         config.read = config.read || exports.read;
@@ -679,17 +680,11 @@
                 );
             }
 
-            module.directory = URL.resolve(module.location, "./"); // EXTENSION
             module.exports = {};
 
             var returnValue;
             try {
-                // Execute the factory function:
-                returnValue = module.factory(
-                    makeRequire(topId), // require
-                    module.exports, // exports
-                    module // module
-                );
+                returnValue = config.executeCompiler(module.factory, makeRequire(topId), module.exports, module);
             } catch (_error) {
                 // Delete the exports so that the factory is run again if this
                 // module is required again
@@ -1394,10 +1389,10 @@
             }
             var defaultFactory = module.factory;
             module.factory = function(require, exports, module) {
-                var moduleExports;
+                var returnValue;
                 //call it to validate:
                 try {
-                    moduleExports = defaultFactory.call(this, require, exports, module, global);
+                    returnValue = config.executeCompiler(defaultFactory, require, exports, module);
                 } catch (e) {
                     if (e instanceof SyntaxError) {
                         config.lint(module);
@@ -1406,8 +1401,8 @@
                     }
                 }
 
-                if (moduleExports) {
-                    return moduleExports;
+                if (returnValue !== void 0) {
+                    return returnValue;
                 }
 
                 var i, object, name,
@@ -1613,7 +1608,7 @@
     // Can be overriden by the platform to make the engine aware of the source path. Uses sourceURL hack by default.
     exports.Compiler = function Compiler(config) {
         config.scope = config.scope || {};
-        var names = ["require", "exports", "module", "global"];
+        var names = ["require", "exports", "module", "global", "__filename", "__dirname"];
         var scopeNames = Object.keys(config.scope);
         names.push.apply(names, scopeNames);
 
@@ -1627,18 +1622,33 @@
                 module.type === "javascript"
             ) {
 
-                // Convert __filename and __dirname based on module.location.
-                var __filename = URL.resolve(exports.getLocation(), module.location),
-                    __dirname = URL.resolve(__filename, './');
-                module.text = module.text.replace('__filename', JSON.stringify(__filename));
-                module.text = module.text.replace('__dirname', JSON.stringify(__dirname));
-
                 // new Function will have its body reevaluated at every call, hence using eval instead
                 // https://developer.mozilla.org/en/JavaScript/Reference/Functions_and_function_scope
                 var factoryArgs = names.concat([module.text + "\n//*/\n//@ sourceURL=" + module.location]);
                 module.factory = Function.apply(global, factoryArgs);
             }
         };
+    };
+
+    exports.executeCompiler = function (factory, require, exports, module) {
+        var returnValue;
+
+        module.directory = URL.resolve(module.location, "./"); 
+        module.filename = URL.resolve(module.location, module.location);
+        module.exports = exports || {};
+       
+        // Execute the factory function:
+        // TODO use config.scope
+        returnValue = factory.call(global,
+            require,            // require
+            exports,     // exports
+            module,             // module
+            global,
+            module.filename,     // __filename
+            module.directory     // __dirname
+        );
+
+        return returnValue;
     };
 
     //
