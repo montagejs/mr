@@ -26,9 +26,9 @@
         factory(exports, Promise, URL, mrRequire);
     } else {
         // Browser globals
-        factory((root.mrBootstrap = {}), root.Promise, root.URL, root.mrRequire);
+        factory((root.mrBootstrap = {}), root.mrPromise, root.URL, root.mrRequire);
     }
-}(this, function (exports, Promise, URL, mrRequire) {
+}(this, function (exports, mrPromise, miniURL, mrRequire) {
     "use strict";
 
     // reassigning causes eval to not use lexical scope.
@@ -60,99 +60,116 @@
                 finallyHandler();
             };
             document.querySelector("head").appendChild(script);
+        } else if (typeof require === 'function') {
+            var module;
+            try {
+                module = require(location);
+                callback(null, module);
+            } catch (err) {
+                callback(err, module);
+            }
         } else {
-            throw new Error("document not supported");
+            throw new Error("Platform not supported");
         }   
     }
 
     exports.initBrowser = function initBrowser() {
-
-            // mini-url library
-        var isAbsolutePattern = /^[\w\-]+:/;
-        var resolve = (function makeResolve() {
-            var baseElement = document.querySelector("base"),
-                existingBaseElement = baseElement;
-
-            if (!existingBaseElement) {
-                baseElement = document.createElement("base");
-                baseElement.href = "";
-            }
-
-            return function (base, relative) {
-
-                base = String(base);
-
-                var resolved, restore,
-                    head = document.querySelector("head"),
-                    relativeElement = document.createElement("a");
-
-                if (!existingBaseElement) {
-                    head.appendChild(baseElement);
-                }
-
-                if (!isAbsolutePattern.test(base)) {
-                    throw new Error("Can't resolve " + JSON.stringify(relative) + " relative to " + JSON.stringify(base));
-                }
-
-                restore = baseElement.href;
-                baseElement.href = base;
-                relativeElement.href = relative;
-                resolved = relativeElement.href;
-                baseElement.href = restore;
-                if (!existingBaseElement) {
-                    head.removeChild(baseElement);
-                }
-
-                return resolved;
-            };
-        }());
-
-        function upperCaseChar(_, c) {
-            return c.toUpperCase();
-        }
         
-        var paramsCache,
-            paramsNamespace = 'mr',
-            dataAttrPattern = /^data-(.*)$/,
-            boostrapScript = 'bootstrap.js',
-            boostrapPattern = new RegExp('^(.*)' + boostrapScript + '(?:[\?\.]|$)', 'i'),
-            letterAfterDashPattern = /-([a-z])/g;
-
         return  {
-            getParams: function getParams() {
-                var i, j,
-                    match, script, scripts,
-                    mrLocation, attr, name,
-                    base, location;
 
-                if (!paramsCache) {
-                    paramsCache = {};
+            resolveUrl: (function makeResolveUrl() {
+
+                var isAbsolutePattern = /^[\w\-]+:/,
+                    baseElement = document.querySelector("base"),
+                    existingBaseElement = baseElement;
+
+                if (!existingBaseElement) {
+                    baseElement = document.createElement("base");
+                    baseElement.href = "";
+                }
+
+                return function (base, relative) {
+
+                    base = String(base);
+
+                    var resolved, restore,
+                        head = document.querySelector("head"),
+                        relativeElement = document.createElement("a");
+
+                    if (!existingBaseElement) {
+                        head.appendChild(baseElement);
+                    }
+
+                    if (!isAbsolutePattern.test(base)) {
+                        throw new Error("Can't resolve " + JSON.stringify(relative) + " relative to " + JSON.stringify(base));
+                    }
+
+                    restore = baseElement.href;
+                    baseElement.href = base;
+                    relativeElement.href = relative;
+                    resolved = relativeElement.href;
+                    baseElement.href = restore;
+                    if (!existingBaseElement) {
+                        head.removeChild(baseElement);
+                    }
+
+                    return resolved;
+                };
+            }()),
+
+            getLocation: function () {
+                
+                var base = document.querySelector("head > base"),
+                    location = base ? base.href :  window.location;
+
+                return location;
+            },
+
+            _params: null,
+
+            namespace: 'mr',
+
+            boostrapScript: 'bootstrap.js',
+
+            getParams: function getParams() {
+                var params = this.params;
+
+                if (!params) {
+                    params = this.params = {};
+                    
                     // Find the <script> that loads us, so we can divine our
                     // parameters from its attributes.
-                    scripts = document.getElementsByTagName("script");
-                    base = document.querySelector("head > base");
-                    location = base ? base.href :  window.location;
+                    var i, j, match, script, attr, name,
+                        namespace = this.namespace,
+                        boostrapAttrPattern = /^data-(.*)$/,
+                        boostrapPattern = new RegExp('^(.*)' + this.boostrapScript + '(?:[\?\.]|$)', 'i'),
+                        letterAfterDashPattern = /-([a-z])/g,
+                        scripts = document.getElementsByTagName("script"),
+                        upperCaseChar = function upperCaseChar(_, c) {
+                            return c.toUpperCase();
+                        };
+
                     for (i = 0; i < scripts.length; i++) {
                         script = scripts[i];
                         if (script.src && (match = script.src.match(boostrapPattern))) {
-                            mrLocation = match[1];
+                            params.location = match[1];
                         }
-                        if (script.hasAttribute("data-" + paramsNamespace + "-location")) {
-                            mrLocation = resolve(location, script.getAttribute("data-" + paramsNamespace + "-location"));
+                        if (script.hasAttribute("data-" + namespace + "-location")) {
+                            params.location = this.resolveUrl(this.getLocation(), script.getAttribute("data-" + namespace + "-location"));
                         }
-                        if (mrLocation) {
+                        if (params.location) {
                             if (script.dataset) {
                                 for (name in script.dataset) {
                                     if (script.dataset.hasOwnProperty(name)) {
-                                        paramsCache[name] = script.dataset[name];
+                                        params[name] = script.dataset[name];
                                     }
                                 }
                             } else if (script.attributes) {
                                 for (j = 0; j < script.attributes.length; j++) {
                                     attr = script.attributes[j];
-                                    match = attr.name.match(dataAttrPattern);
+                                    match = attr.name.match(boostrapAttrPattern);
                                     if (match) {
-                                        paramsCache[match[1].replace(letterAfterDashPattern, upperCaseChar)] = attr.value;
+                                        params[match[1].replace(letterAfterDashPattern, upperCaseChar)] = attr.value;
                                     }
                                 }
                             }
@@ -160,14 +177,14 @@
                             // Permits multiple bootstrap.js <scripts>; by
                             // removing as they are discovered, next one
                             // finds itself.
+                            params[namespace + 'Location'] = params.location;
                             script.parentNode.removeChild(script);
-                            paramsCache.mrLocation = mrLocation;
                             break;
                         }
                     }
                 }
 
-                return paramsCache;
+                return params;
             },
             loadPackage: function (dependency, config, packageDescription) {
                 return mrRequire.loadPackage(dependency, config, packageDescription);
@@ -175,44 +192,73 @@
             bootstrap: function (callback) {
 
                 var self = this,
-                    params = self.getParams();
+                    params = self.getParams(),
+                    location = params.location,
+                    resolveUrl = this.resolveUrl;
 
                 // determine which scripts to load
                 var dependencies = {
+                    "mini-url": {
+                        // Preloaded
+                        shim: function (bootRequire, exports) {
+                            return this.resolveUrl;
+                        }
+                    },
                     "promise": {
+                        exports: mrPromise, // Preloaded
                         strategy: 'nested',
                         global: "Promise",
-                        exports: "Promise",
+                        export: "Promise",
                         location: "node_modules/bluebird/js/browser/bluebird.min.js",
                     },
-                    "require": "./require.js"
+                    "require": {
+                        exports: mrRequire, // Preloaded
+                        location: "./require.js"
+                    }
                 };
 
-                // miniature module system
-                var bootModules = {},
-                    definitions = {};
-                function bootRequire(id) {
-                    if (!bootModules[id] && definitions[id]) {
-                        var exports = bootModules[id] = {};
-                        bootModules[id] = definitions[id](bootRequire, exports) || exports;
+                function bootModule(id) {
+                    //console.log('bootModule', id, factory);
+
+                    if (!dependencies.hasOwnProperty(id)) {
+                        return;
                     }
-                    return bootModules[id];
+
+                    var module = dependencies[id];
+
+                    if (
+                        module && 
+                            typeof module.exports === "undefined"  && 
+                                typeof module.factory === "function"
+                    ) {
+                        module.exports = module.factory(bootModule, (module.exports = {})) || module.exports;
+                    }
+
+                    return module.exports;
                 }
 
-
-                // Expose bootstrap
+                // Save initial bootstrap
                 var initalBoostrap = global.bootstrap;
 
                 // register module definitions for deferred, serial execution
                 function bootstrapModule(id, factory) {
-                    definitions[id] = factory;
-                    delete dependencies[id];
+                    //console.log('bootstrapModule', id, factory);
+
+                    if (!dependencies.hasOwnProperty(id)) {
+                        return;
+                    }
+                    
+                    dependencies[id].factory = factory;
+                    
                     for (id in dependencies) {
                         if (dependencies.hasOwnProperty(id)) {
                             // this causes the function to exit if there are any remaining
                             // scripts loading, on the first iteration.  consider it
                             // equivalent to an array length check
-                            return;
+                            if (typeof dependencies[id].factory === "undefined") {
+                                //console.log('waiting for', id);
+                                return;
+                            }
                         }
                     }
 
@@ -225,34 +271,29 @@
                         global.bootstrap = initalBoostrap;   
                     }
 
-                    //
-                    var Promise = bootRequire("promise"),
-                        Require = bootRequire("require"),
-                        miniURL = bootRequire("mini-url");
-                            
-                    // Update
-                    mrRequire = Require;
+                    // At least bootModule in order
+                    var mrPromise = bootModule("promise"),
+                        miniURL = bootModule("mini-url"),
+                        mrRequire = bootModule("require");
 
-                    callback(Require, Promise, miniURL);
+                    callback(mrRequire, mrPromise, miniURL);
                 }
-
-                global.bootstrap = bootstrapModule;
 
                 function bootstrapModuleScript(module, err, script) {
                     if (err) {
-
                         // Fallback on flat strategy for missing nested module
                         if (module.strategy === 'nested') {
                             module.strategy = 'flat';
-                            module.script = resolve(resolve(params.mrLocation, '../../'), module.location);
+                            module.script = resolveUrl(resolveUrl(location, '../../'), module.location);
                             loadScript(module.script, bootstrapModuleScript.bind(null, module));
                         } else {
                             throw err;   
                         }
-                    } else if (module.exports || module.global) {
-                        bootstrap(module.id, function (mrRequire, exports) {
-                            if (module.exports) {
-                                exports[module.exports] = global[module.global]; 
+                    } else if (module.export || module.global) {
+
+                        bootstrapModule(module.id, function (bootRequire, exports) {
+                            if (module.export) {
+                                exports[module.export] = global[module.global]; 
                             } else {
                                 return global[module.global];
                             }
@@ -260,33 +301,40 @@
                     }
                 }
 
-                // one module loaded for free, for use in require.js, browser.js
-                bootstrapModule("mini-url", function (mrRequire, exports) {
-                    exports.resolve = resolve;
-                });
+                // Expose bootstrap
+                global.bootstrap = bootstrapModule;
 
                 // Load other module and skip promise
                 for (var id in dependencies) {
                     if (dependencies.hasOwnProperty(id)) {
-                        var module = dependencies[id];
+                        var module = dependencies[id],
+                            paramModuleLocation = id + 'Location';
 
                         if (typeof module === 'string') {
                             module = {
+                                id: id,
                                 location: module
                             };
-                        }
-
-                        module.id = id;
-
-                        var paramLocation = id + 'Location';
-                        
-                        if (params.hasOwnProperty(paramLocation)) {
-                            module.script = resolve(params.mrLocation, params[paramLocation]);
                         } else {
-                            module.script = resolve(params.mrLocation, module.location);
+                            module.id = id;   
                         }
 
-                        loadScript(module.script, bootstrapModuleScript.bind(null, module));
+                        // Update dependency
+                        dependencies[id] = module;  
+                        // Update locatiom from param
+                        module.location = params.hasOwnProperty(paramModuleLocation) ? params[paramModuleLocation] : module.location;
+
+                        // Reset bad exports
+                        if (module.exports === null) {
+                            delete module.exports;
+                        }
+
+                        if (typeof module.shim !== "undefined") {
+                            bootstrapModule(module.id, module.shim);
+                        } else {
+                            module.script = resolveUrl(location, module.location);
+                            loadScript(module.script, bootstrapModuleScript.bind(null, module));
+                        }
                     }
                 } 
             }
@@ -298,18 +346,27 @@
         var path = require("path"),
             fs  = require("fs");
 
-        var paramsCache,
-            paramsNamespace = 'mr',
-            paramCommand = 'bin/mr';
-
         return  {
 
+            namespace: 'mr',
+
+            _params: null,
+
+            getLocation: function () {
+                return "file://" + __dirname;
+            },
+
             getParams: function () {
+                var params = this.params;
 
-                if (!paramsCache) {
+                if (!params) {
 
-                    paramsCache = {};
-                    paramsCache[paramsNamespace + 'Location'] = "file://" + __dirname;
+                    var paramNamespace = this.namespace,
+                        location = this.getLocation(),
+                        paramCommand = 'bin/' + paramNamespace;
+
+                    params = this.params = {};
+                    params.location = params[paramNamespace + 'Location'] = location;
 
                     // Detect command line
                     if (
@@ -330,13 +387,13 @@
                                 module += "/";
                             }
 
-                            paramsCache.module = path.basename(module);
-                            paramsCache.package = path.dirname(fs.realpathSync(module));   
+                            params.module = path.basename(module);
+                            params.package = path.dirname(fs.realpathSync(module));   
                         }
                     }
                 }
 
-                return paramsCache; 
+                return params; 
             },
             loadPackage: function (dependency, config, packageDescription) {
                 return mrRequire.loadPackage(dependency, config, packageDescription);
@@ -347,7 +404,7 @@
                     params = self.getParams();
 
                 if (params.package) {
-                    callback(mrRequire, Promise, URL);
+                    callback(mrRequire, mrPromise, miniURL);
                 }
             }
         };
@@ -377,13 +434,14 @@
      * necessary.
      */
     exports.initMontageRequire = function() {
-        return exports.getPlatform().bootstrap(function (mrRequire, Promise, URL) {
-            
+        var platform = exports.getPlatform();
+        return platform.bootstrap(function (mrRequire, mrPromise, miniURL) {
+
             var config = {},
                 params = platform.getParams(),
-                mrLocation = params.mrLocation,
+                location = params.location,
                 applicationModuleId = params.module || "",
-                applicationLocation = URL.resolve(mrRequire.getLocation(), params.package || ".");
+                applicationLocation = miniURL.resolve(platform.getLocation(), params.package || ".");
 
             // execute the preloading plan and stall the fallback module loader
             // until it has finished
@@ -402,10 +460,10 @@
                 config.preloaded = preloading.promise;
 
                 // preload bundles sequentially
-                var preloaded = Promise.resolve();
+                var preloaded = mrPromise.resolve();
                 global.preload.forEach(function (bundleLocations) {
                     preloaded = preloaded.then(function () {
-                        return Promise.all(bundleLocations.map(function (bundleLocation) {
+                        return mrPromise.all(bundleLocations.map(function (bundleLocation) {
                             loadScript(bundleLocation);
                             return getDefinition(bundleLocation).promise;
                         }));
@@ -420,7 +478,7 @@
             }
 
             mrRequire.loadPackage({
-                location: params.mrLocation,
+                location: params.location,
                 hash: params.mrHash
             }, config).then(function (mrRequire) {
 
@@ -433,9 +491,12 @@
                     hash: params.applicationHash
                 }).then(function (pkg) {
 
-                    pkg.inject("bootstrap", mrRequire);
-                    pkg.inject("mini-url", URL);
-                    pkg.inject("promise", Promise); 
+                    // Self exports
+                    pkg.inject("bootstrap", exports);
+
+                    // Default free module
+                    pkg.inject("mini-url", miniURL);
+                    pkg.inject("promise", mrPromise); 
                     pkg.inject("require", mrRequire);
 
                     // Expose global require and mr
