@@ -14,7 +14,9 @@
         "postinstall": "npm link ./.."
     },
     "mappings": {
-        "bluebird": "../node_modules/bluebird"
+        "bluebird": "../node_modules/bluebird",
+        "jasmine-console-reporter": "../node_modules/jasmine-console-reporter",
+        "jasmine-core": "../node_modules/jasmine-core"
     },
     "dependencies": {},
     "private": true

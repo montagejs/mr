@@ -9,9 +9,9 @@
 (function (root, factory) {
     if (typeof bootstrap === 'function') {
         // Montage. Register module.
-        bootstrap("require", function (mrRequire, exports) {
-            var Promise = mrRequire("promise").Promise;
-            var URL = mrRequire("mini-url");
+        bootstrap("require", function (bootRequire, exports) {
+            var Promise = bootRequire("promise").Promise;
+            var URL = bootRequire("mini-url");
             factory(exports, Promise, URL);
         });
     } else if (typeof define === 'function' && define.amd) {
