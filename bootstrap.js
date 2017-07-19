@@ -8,10 +8,10 @@
 (function (root, factory) {
     if (typeof bootstrap === 'function') {
         // Montage. Register module.
-        bootstrap("bootstrap", function (mrRequire, exports) {
-            var Promise = mrRequire("promise").Promise;
-            var URL = mrRequire("mini-url");
-            factory(exports, Promise, URL, mrRequire);
+        bootstrap("bootstrap", function (bootRequire, exports) {
+            var Promise = bootRequire("promise").Promise;
+            var URL = bootRequire("mini-url");
+            factory(exports, Promise, URL, bootRequire);
         });
     } else if (typeof define === 'function' && define.amd) {
         // AMD. Register as an anonymous module.
@@ -22,13 +22,13 @@
         // CommonJS
         var Promise = (require)("bluebird");
         var URL = (require)('url');
-        var mrRequire = (require)('./require');
-        factory(exports, Promise, URL, mrRequire);
+        var mr = (require)('mr');
+        factory(exports, Promise, URL, mr);
     } else {
         // Browser globals
-        factory((root.mrBootstrap = {}), root.mrPromise, root.URL, root.mrRequire);
+        factory((root.mrBootstrap = {}), root.Promise, root.URL, root.mr);
     }
-}(this, function (exports, mrPromise, miniURL, mrRequire) {
+}(this, function (exports, Promise, miniURL, mr) {
     "use strict";
 
     // reassigning causes eval to not use lexical scope.
@@ -174,10 +174,13 @@
                                 }
                             }
 
+                            // Legacy
+                            params[namespace + 'Location'] = params.location;
+                            params[namespace + 'Hash'] = params.hash;
+
                             // Permits multiple bootstrap.js <scripts>; by
                             // removing as they are discovered, next one
                             // finds itself.
-                            params[namespace + 'Location'] = params.location;
                             script.parentNode.removeChild(script);
                             break;
                         }
@@ -187,7 +190,7 @@
                 return params;
             },
             loadPackage: function (dependency, config, packageDescription) {
-                return mrRequire.loadPackage(dependency, config, packageDescription);
+                return mr.loadPackage(dependency, config, packageDescription);
             },
             bootstrap: function (callback) {
 
@@ -201,18 +204,18 @@
                     "mini-url": {
                         // Preloaded
                         shim: function (bootRequire, exports) {
-                            return this.resolveUrl;
+                            return resolveUrl;
                         }
                     },
                     "promise": {
-                        exports: mrPromise, // Preloaded
+                        //exports: Promise, // Preloaded
                         strategy: 'nested',
                         global: "Promise",
                         export: "Promise",
                         location: "node_modules/bluebird/js/browser/bluebird.min.js",
                     },
                     "require": {
-                        exports: mrRequire, // Preloaded
+                        exports: mr, // Preloaded
                         location: "./require.js"
                     }
                 };
@@ -325,11 +328,9 @@
                         module.location = params.hasOwnProperty(paramModuleLocation) ? params[paramModuleLocation] : module.location;
 
                         // Reset bad exports
-                        if (module.exports === null) {
-                            delete module.exports;
-                        }
-
-                        if (typeof module.shim !== "undefined") {
+                        if (module.exports !== null && module.exports !== void 0) {
+                            bootstrapModule(module.id, module.exports);
+                        } else if (typeof module.shim !== "undefined") {
                             bootstrapModule(module.id, module.shim);
                         } else {
                             module.script = resolveUrl(location, module.location);
@@ -343,8 +344,8 @@
 
     exports.initRequire = function initServer() {
 
-        var path = require("path"),
-            fs  = require("fs");
+        var PATH = require("path"),
+            FS  = require("fs");
 
         return  {
 
@@ -367,7 +368,6 @@
 
                     params = this.params = {};
                     params.location = params[paramNamespace + 'Location'] = location;
-
                     // Detect command line
                     if (
                         typeof process !== "undefined" && 
@@ -387,8 +387,10 @@
                                 module += "/";
                             }
 
-                            params.module = path.basename(module);
-                            params.package = path.dirname(fs.realpathSync(module));   
+                            params.module = PATH.basename(module);
+
+
+                            params.package = PATH.dirname(FS.realpathSync(module)) + "/" + params.module;   
                         }
                     }
                 }
@@ -396,7 +398,7 @@
                 return params; 
             },
             loadPackage: function (dependency, config, packageDescription) {
-                return mrRequire.loadPackage(dependency, config, packageDescription);
+                return mr.loadPackage(dependency, config, packageDescription);
             },
             bootstrap: function (callback) {
 
@@ -404,7 +406,7 @@
                     params = self.getParams();
 
                 if (params.package) {
-                    callback(mrRequire, mrPromise, miniURL);
+                    callback(mr, Promise, miniURL);
                 }
             }
         };
@@ -416,7 +418,7 @@
             return platform;
         } else if (typeof window !== "undefined" && window && window.document) {
             platform = exports.initBrowser();
-        } else if (typeof mrRequire !== "undefined") {
+        } else if (typeof exports === 'object' && typeof exports.nodeName !== 'string') {
             platform = exports.initRequire();
         } else {
             throw new Error("Platform not supported.");
@@ -479,14 +481,14 @@
 
             mrRequire.loadPackage({
                 location: params.location,
-                hash: params.mrHash
-            }, config).then(function (mrRequire) {
+                hash: params.hash
+            }, config).then(function (mrPkg) {
 
                 if ("autoPackage" in params) {
-                    mrRequire.injectPackageDescription(applicationLocation, {});
+                    mrPkg.injectPackageDescription(applicationLocation, {});
                 }
 
-                return mrRequire.loadPackage({
+                return mrPkg.loadPackage({
                     location: applicationLocation,
                     hash: params.applicationHash
                 }).then(function (pkg) {
@@ -497,11 +499,8 @@
                     // Default free module
                     pkg.inject("mini-url", miniURL);
                     pkg.inject("promise", mrPromise); 
-                    pkg.inject("require", mrRequire);
+                    pkg.inject("require", pkg);
 
-                    // Expose global require and mr
-                    global.require = global.mr = pkg;
-                    
                     return pkg.async(applicationModuleId);
                 });
             });

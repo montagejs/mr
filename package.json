@@ -19,7 +19,7 @@
     "type": "git",
     "url": "https://github.com/montagejs/mr.git"
   },
-  "main": "bootstrap",
+  "main": "require",
   "scripts": {
     "test": "node test/run-node.js",
     "test:mr": "./bin/mr test/run-node.js",
