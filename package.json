@@ -22,6 +22,7 @@
   "main": "bootstrap",
   "scripts": {
     "test": "node test/run-node.js",
+    "test:mr": "./bin/mr test/run-node.js",
     "integration": "mop-integration",
     "lint": "jshint *.js",
     "test:karma": "karma start --no-auto-watch --single-run",
