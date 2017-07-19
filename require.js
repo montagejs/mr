@@ -900,16 +900,16 @@
                     xhr.overrideMimeType("application/javascript");
                 }
 
-                xhr.onload = function () {
+                xhr.onload = function (event) {
                     // Determine if an XMLHttpRequest was successful
                     // Some versions of WebKit return 0 for successful file:// URLs
                     if (xhr.status === 200 || (xhr.status === 0 && xhr.responseText)) {
                         resolve(xhr.responseText);
-                    } else {
-                        xhr.onerror(event);
+                    } else if (xhr.status >= 400) {
+                        //This clears the response from memory
+                        xhr.abort();
+                        reject(new Error("Can't XHR " + JSON.stringify(url)));
                     }
-                    //This clears the response from memory
-                    xhr.abort();
                 };
 
                 xhr.onerror = function onerror(event) {
@@ -1624,7 +1624,7 @@
 
                 // new Function will have its body reevaluated at every call, hence using eval instead
                 // https://developer.mozilla.org/en/JavaScript/Reference/Functions_and_function_scope
-                var factoryArgs = names.concat([module.text + "\n//*/\n//@ sourceURL=" + module.location]);
+                var factoryArgs = names.concat([module.text + "\n//*/\n//# sourceURL=" + module.location]);
                 module.factory = Function.apply(global, factoryArgs);
             }
         };
