@@ -21,8 +21,9 @@
         });
     } else if (typeof exports === 'object' && typeof exports.nodeName !== 'string') {
         // CommonJS
-        var url = (typeof URL !== 'undefined' ? URL : (require)('url'));
-        factory(exports, require('bluebird'), url);
+        var Promise = (require)("bluebird");
+        var URL = (require)('url');
+        factory(exports, Promise, URL);
     } else {
         // Browser globals
         factory((root.mr = {}), root.Promise, root.URL);
@@ -651,6 +652,7 @@
                     " via " + JSON.stringify(viaId) +
                     " because " + module.error.message
                 );
+                error.stack = module.error.stack;
                 error.cause = module.error;
                 throw error;
             }
@@ -1572,7 +1574,7 @@
     exports.LocationLoader = function (config, load) {
         function locationLoader(id, module) {
             var location, result,
-                path = id,
+                path = id || 'index', // TODO check package.json#files[0]
                 config = locationLoader.config,
                 extension = exports.extension(id);
             if (
@@ -1787,10 +1789,8 @@
                 module.text = text;
                 module.location = location;
             }, function (reason, error, rejection) {
-                var id = location.slice(config.location.length);
-                id = id.substr(0, id.lastIndexOf('.'));
                 module.type = "native";
-                module.exports = require(id);
+                module.exports = require(module.id);
                 module.location = location;
                 return module;
             });
