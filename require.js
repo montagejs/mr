@@ -1582,7 +1582,7 @@
 
     exports.read = function read(location) {
         return new Promise(function (resolve, reject) {
-            if (typeof window !== "undefined") {
+            if (typeof XMLHttpRequest !== "undefined") {
                 return exports.loadXHR(location).then(resolve, reject);
             } else if (typeof process !== "undefined") {
                 var path = exports.locationToPath(location);
