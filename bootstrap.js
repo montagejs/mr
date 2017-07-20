@@ -117,10 +117,15 @@
                 };
             }()),
 
+            _location: null,
+
             getLocation: function () {
-                
-                var base = document.querySelector("head > base"),
+                var location = this._location;
+
+                if (!location) {
+                    var base = document.querySelector("head > base");
                     location = base ? base.href :  window.location;
+                }
 
                 return location;
             },
@@ -132,10 +137,10 @@
             boostrapScript: 'bootstrap.js',
 
             getParams: function getParams() {
-                var params = this.params;
+                var params = this._params;
 
                 if (!params) {
-                    params = this.params = {};
+                    params = this._params = {};
                     
                     // Find the <script> that loads us, so we can divine our
                     // parameters from its attributes.
@@ -351,14 +356,21 @@
 
             namespace: 'mr',
 
-            _params: null,
+            _location: null,
 
             getLocation: function () {
-                return "file://" + __dirname;
+                var location = this.location;
+                if (!location) {
+                    location = "file://" + process.cwd();
+                }
+
+                return location;
             },
 
+            _params: null,
+
             getParams: function () {
-                var params = this.params;
+                var params = this._params;
 
                 if (!params) {
 
@@ -366,7 +378,7 @@
                         location = this.getLocation(),
                         paramCommand = 'bin/' + paramNamespace;
 
-                    params = this.params = {};
+                    params = this._params = {};
                     params.location = params[paramNamespace + 'Location'] = location;
                     // Detect command line
                     if (
@@ -388,9 +400,7 @@
                             }
 
                             params.module = PATH.basename(module);
-
-
-                            params.package = PATH.dirname(FS.realpathSync(module)) + "/" + params.module;   
+                            params.package = PATH.dirname(FS.realpathSync(module)) + "/";  
                         }
                     }
                 }
