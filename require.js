@@ -12,7 +12,7 @@
         bootstrap("require", function (bootRequire, exports) {
             var Promise = bootRequire("promise").Promise;
             var URL = bootRequire("mini-url");
-            factory(exports, Promise, URL);
+            factory((root.mr = exports), Promise, URL);
         });
     } else if (typeof define === 'function' && define.amd) {
         // AMD. Register as an anonymous module.
@@ -23,10 +23,12 @@
         // CommonJS
         var Promise = (require)("bluebird");
         var URL = (require)('url');
-        factory(exports, Promise, URL);
+        factory((root.mr = exports), Promise, URL);
     } else {
         // Browser globals
-        factory((root.mr = {}), root.Promise, root.URL);
+        var Promise = null; //root.Promise 
+        var URL = null; //root.URL
+        factory((root.mr = {}), Promise, URL);
     }
 }(this, function (exports, Promise, URL) {
 
@@ -832,7 +834,7 @@
             return require;
         };
 
-        return (require = makeRequire(""));
+        return (require = makeRequire("mr"));
     };
 
     //
