@@ -492,26 +492,30 @@
             mrRequire.loadPackage({
                 location: params.location,
                 hash: params.hash
-            }, config).then(function (mrPkg) {
+            }, config).then(function (boostrapRequire) {
 
                 if ("autoPackage" in params) {
-                    mrPkg.injectPackageDescription(applicationLocation, {});
+                    mrRequire.injectPackageDescription(applicationLocation, {
+                        dependencies: {
+                            mr: "*"
+                        }
+                    }, config);
                 }
 
-                return mrPkg.loadPackage({
+                return boostrapRequire.loadPackage({
                     location: applicationLocation,
                     hash: params.applicationHash
-                }).then(function (pkg) {
+                }).then(function (applicationRequire) {
 
                     // Self exports
-                    pkg.inject("bootstrap", exports);
+                    applicationRequire.inject("bootstrap", exports);
 
                     // Default free module
-                    pkg.inject("mini-url", miniURL);
-                    pkg.inject("promise", mrPromise); 
-                    pkg.inject("require", pkg);
+                    applicationRequire.inject("mini-url", miniURL);
+                    applicationRequire.inject("promise", mrPromise); 
+                    applicationRequire.inject("require", applicationRequire);
 
-                    return pkg.async(applicationModuleId);
+                    return applicationRequire.async(applicationModuleId);
                 });
             });
         });
