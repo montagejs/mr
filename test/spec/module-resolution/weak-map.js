@@ -1,0 +1,1 @@
+exports.WeakMap = 2;

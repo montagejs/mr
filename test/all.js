@@ -117,6 +117,7 @@ module.exports = run(require, [
     "spec/module-mjson",
     "spec/module-error",
     "spec/module-metadata",
+    "spec/module-resolution",
     "spec/flat-module-tree",
     "spec/nested-module-tree",
     "spec/mixed-module-tree",
