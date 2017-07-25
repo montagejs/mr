@@ -41,7 +41,9 @@ jasmineEnv.addReporter({
 var mrRequire = require('mr');
 var PATH = require("path");
 
-mrRequire.loadPackage(PATH.join(__dirname, ".")).then(function (mr) {
+mrRequire.loadPackage(PATH.join(__dirname, "."))
+// Execute
+.then(function (mr) {
     return mr.async("all");
 }).then(function () {
     console.log('Done');
