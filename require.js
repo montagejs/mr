@@ -1027,7 +1027,7 @@
                     try {
                         return JSON.parse(json);
                     } catch (error) {
-                        error.message = error.message + " in " + JSON.stringify(descriptionLocation);
+                        error.message = "Loading package description at '" + location + "' failed cause: " + error.message + " in " + JSON.stringify(descriptionLocation);
                         throw error;
                     }
                 });
@@ -1093,8 +1093,7 @@
             }
             var location = dependency.location;
             if (!loadingPackages[location]) {
-                loadingPackages[location] = exports.loadPackageDescription(dependency, config)
-                .then(function (packageDescription) {
+                loadingPackages[location] = exports.loadPackageDescription(dependency, config).then(function (packageDescription) {
                     return exports.injectLoadedPackageDescription(location, packageDescription, config);
                 });
             }
