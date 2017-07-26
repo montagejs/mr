@@ -111,19 +111,6 @@
                 };
             }()),
 
-            _location: null,
-
-            getLocation: function () {
-                var location = this._location;
-
-                if (!location) {
-                    var base = document.querySelector("head > base");
-                    location = base ? base.href :  window.location;
-                }
-
-                return location;
-            },
-
             _params: null,
 
             getParams: function getParams() {
@@ -171,7 +158,6 @@
                             }
 
                             // Legacy
-                            params.location = this.resolveUrl(this.getLocation(), params.location);
                             params[paramNamespace + 'Location'] = params.location;
                             params[paramNamespace + 'Hash'] = params.hash;
 
@@ -350,17 +336,6 @@
 
         return  {
 
-            _location: null,
-
-            getLocation: function () {
-                var location = this.location;
-                if (!location) {
-                    location = "file://" + process.cwd();
-                }
-
-                return location;
-            },
-
             _params: null,
 
             getParams: function () {
@@ -369,7 +344,7 @@
                 if (!params) {
 
                     var paramNamespace = 'mr',
-                        location = this.getLocation(),
+                        location = mr.getLocation(),
                         paramCommand = 'bin/' + paramNamespace;
 
                     params = this._params = {};
@@ -407,6 +382,7 @@
             },
 
             bootstrap: function (callback) {
+                
 
                 var self = this,
                     params = self.getParams();
@@ -449,7 +425,7 @@
                 params = platform.getParams(),
                 location = params.location,
                 applicationModuleId = params.module || "",
-                applicationLocation = miniURL.resolve(platform.getLocation(), params.package || ".");
+                applicationLocation = miniURL.resolve(mrRequire.getLocation(), params.package || ".");
 
             // execute the preloading plan and stall the fallback module loader
             // until it has finished
