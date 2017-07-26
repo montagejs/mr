@@ -1,4 +1,5 @@
 {
   "dependencies": {
+  	"weak-map": "1"
   }
 }
