@@ -111,6 +111,7 @@ module.exports = run(require, [
     "spec/overlay",
     "spec/moduleTypes",
     "spec/module-html",
+    "spec/module-main-default",
     "spec/module-reel",
     "spec/module-mjson",
     "spec/module-error",

@@ -348,20 +348,18 @@
             config.packagesDirectory = URL.resolve(location, "node_modules/");
         }
 
-        // The default "main" module of a package has the same name as the
-        // package.
-        if (description.main !== void 0) {
+        // The default "main" module of a package is 'index' by default.
+        description.main = description.main || 'index';
 
-            // main, injects a definition for the main module, with
-            // only its path. makeRequire goes through special effort
-            // in deepLoad to re-initialize this definition with the
-            // loaded definition from the given path.
-            modules[""] = {
-                id: "",
-                redirect: normalizeId(resolve(description.main, "")),
-                location: config.location
-            };
-        }
+        // main, injects a definition for the main module, with
+        // only its path. makeRequire goes through special effort
+        // in deepLoad to re-initialize this definition with the
+        // loaded definition from the given path.
+        modules[""] = {
+            id: "",
+            redirect: normalizeId(resolve(description.main, "")),
+            location: config.location
+        };
 
         //Deal with redirects
         redirects = description.redirects;
