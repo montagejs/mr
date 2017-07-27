@@ -270,9 +270,9 @@
     }
 
     function inferStrategy(description) {
-        // The existence of an _args property in package.json distinguishes
+        // The existence of an _args or _requested property in package.json distinguishes
         // packages that were installed with npm version 3 or higher.
-        return description._args ? 'flat' : 'nested';
+        return description._args || description._requested ? 'flat' : 'nested';
     }
 
     function configurePackage(location, description, parent) {
@@ -286,7 +286,7 @@
         config.location = location || Require.getLocation();
         config.packageDescription = description;
         config.useScriptInjection = description.useScriptInjection;
-        config.strategy = inferStrategy(description);
+        config.strategy = parent.strategy || inferStrategy(description);
 
         if (description.production !== void 0) {
             config.production = description.production;
