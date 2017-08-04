@@ -97,7 +97,6 @@ module.exports = run(require, [
     "spec/case-sensitive",
     "spec/inject",
     "spec/inject-dependency",
-    "spec/inject-into-mapping",
     "spec/inject-mapping",
     {name: "spec/script-injection-dep", node: false},
     {name: "spec/script-injection", node: false},
