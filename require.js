@@ -47,7 +47,7 @@
     // reassigning causes eval to not use lexical scope.
     var globalEval = eval,
         /*jshint evil:true */
-        global = globalEval('this'); 
+        global = globalEval('this');
         /*jshint evil:false */
 
     // Non-CommonJS speced extensions should be marked with an "// EXTENSION"
@@ -124,14 +124,14 @@
         var searchLength = searchString.length;
         var pos = stringLength;
 
-            if (position !== undefined) {   
+            if (position !== undefined) {
                 // `ToInteger`
                 pos = position ? Number(position) : 0;
                 if (pos !== pos) { // better `isNaN`
                     pos = 0;
                 }
             }
-        
+
         var end = Math.min(Math.max(pos, 0), stringLength);
         var start = end - searchLength;
         if (start < 0) {
@@ -249,7 +249,7 @@
         if (dependency.name) {
             config.registry.set(dependency.name,dependency.location);
         }
-        
+
         return dependency;
     }
 
@@ -265,7 +265,7 @@
                         version: dependencies[name]
                     };
                 }
-            }   
+            }
         }
     }
 
@@ -345,7 +345,7 @@
         if (config.strategy === 'flat') {
             config.packagesDirectory = URL.resolve(config.mainPackageLocation, "node_modules/");
         } else {
-            config.packagesDirectory = URL.resolve(location, "node_modules/");   
+            config.packagesDirectory = URL.resolve(location, "node_modules/");
         }
 
         // The default "main" module of a package is 'index' by default.
@@ -420,7 +420,7 @@
         config.parseDependencies = config.parseDependencies || Require.parseDependencies;
         config.read = config.read || Require.read;
         config.strategy = config.strategy || 'nested';
-        
+
         // Modules: { exports, id, location, directory, factory, dependencies,
         // dependees, text, type }
         var modules = config.modules = config.modules || Object.create(null);
@@ -442,21 +442,65 @@
             return modules[lookupId];
         }
 
-        
+
         // for preloading modules by their id and exports, useful to
         // prevent wasteful multiple instantiation if a module was loaded
         // in the bootstrapping process and can be trivially injected into
         // the system.
         function inject(id, exports) {
-            var module = getModuleDescriptor(id);
+            var module = getModuleDescriptor(id),
+                prefix = extractPrefixFromInjectId(id),
+                mapping,
+                mappingRedirect;
+
+            if (prefix) {
+                mapping = config.mappings[prefix];
+                if (id.length > prefix.length) {
+                    mappingRedirect = id.slice(prefix.length + 1);
+                    module.location = URL.resolve(mapping.location, mappingRedirect);
+                    // Make sure the submodule is aware of this injection
+                    if (typeof mapping.mappingRequire === "undefined") {
+                        config.loadPackage(mapping, config)
+                            .then(function (mappingRequire) {
+                                mapping.mappingRequire = mappingRequire;
+                                mappingRequire.inject(mappingRedirect, exports);
+                            });
+                    } else {
+                        mapping.mappingRequire.inject(mappingRedirect, exports);
+                    }
+                } else {
+                    module.location = mapping.location;
+                }
+            } else {
+                module.location = URL.resolve(config.location, id);
+            }
+
             module.exports = exports;
-            module.location = URL.resolve(config.location, id);
             module.directory = URL.resolve(module.location, "./");
             module.injected = true;
             module.redirect = void 0;
             module.mappingRedirect = void 0;
+            module.error = void 0;
             // delete module.redirect;
             // delete module.mappingRedirect;
+        }
+
+        function extractPrefixFromInjectId(id) {
+            var mappings = config.mappings;
+            var prefixes = Object.keys(mappings);
+            var length = prefixes.length;
+
+            var i, prefix;
+            for (i = 0; i < length; i++) {
+                prefix = prefixes[i];
+                if (
+                    id === prefix ||
+                    id.indexOf(prefix) === 0 &&
+                    id.charAt(prefix.length) === "/"
+                ) {
+                    return prefix;
+                }
+            }
         }
 
         // Ensures a module definition is loaded, compiled, analyzed
@@ -1207,7 +1251,7 @@
             return module;
         };
     };
-    
+
     // Built-in loader "middleware":
 
     // Using mappings hash to load modules that match a mapping.
@@ -1228,6 +1272,7 @@
 
             function loadMapping(mappingRequire) {
                 var rest = id.slice(prefix.length + 1);
+                config.mappings[prefix].mappingRequire = mappingRequire;
                 module.mappingRedirect = rest;
                 module.mappingRequire = mappingRequire;
                 return mappingRequire.deepLoad(rest, config.location);
@@ -1272,7 +1317,7 @@
             ) {
                 path += ".js";
             }
-            
+
             location = module.location = URL.resolve(config.location, path);
             if (config.delegate && config.delegate.packageWillLoadModuleAtLocation) {
                 result = config.delegate.packageWillLoadModuleAtLocation(module,location);
