@@ -1,5 +1,5 @@
 {
   "dependencies": {
-  	"weak-map": "1"
+  	"sub-module": "1"
   }
 }
