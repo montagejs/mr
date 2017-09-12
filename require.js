@@ -1130,7 +1130,9 @@
     Require.MetaCompiler = function(config, compile) {
         return function(module) {
             if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
-                module.exports = JSON.parse(module.text);
+                if (typeof module.exports !== "object" && typeof module.text === "string") {
+                    module.exports = JSON.parse(module.text);
+                }
                 return module;
             } else {
                 return compile(module);
