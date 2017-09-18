@@ -840,7 +840,7 @@
 
             var promise;
 
-            if (Require.delegate) {
+            if (Require.delegate && typeof Require.delegate.requireWillLoadPackageDescriptionAtLocation === "function") {
                 promise = Require.delegate.requireWillLoadPackageDescriptionAtLocation(descriptionLocation,dependency, config);
             }
             if (!promise) {
@@ -1052,7 +1052,7 @@
         "packages",
         "modules"
     ];
-    
+            
     var syncCompilerChain;    
 
     //The ShebangCompiler doesn't make sense on the client side
@@ -1104,7 +1104,7 @@
         return function (module) {
             return new Promise(function (resolve, reject) {
                 return Require.MetaCompiler(module).then(function () {
-                    if (module.exports === "object") {
+                    if (typeof module.exports === "object") {
                         resolve(module);
                     } else {
                         resolve(syncCompilerChain(config)(module));
