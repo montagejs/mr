@@ -1138,9 +1138,15 @@
      * @param config
      * @param compile
      */
-    Require.MetaCompiler = function(module) {
+    Require.MetaCompiler = function (module) {
         if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
-            if (typeof module.exports !== "object" && typeof module.text === "string") {
+            if (Require.delegate && typeof Require.delegate.requireWillCompileMjsonFile === "function") {
+                return Require.delegate.requireWillCompileMjsonFile(
+                   module.location, module.text
+                ).then(function (root) {
+                    module.exports = root || JSON.parse(module.text);
+                })
+            } else {
                 module.exports = JSON.parse(module.text);
             }
         }
