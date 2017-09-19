@@ -26,9 +26,7 @@
         });
     } else {
         // Browser globals
-        var Promise = null; //root.Promise 
-        var URL = null; //root.URL
-        factory((root.mr = {}), Promise, URL);
+        factory((root.mr = {}), null, null);
     }
 }(this, function (exports, Promise, URL) {
 
