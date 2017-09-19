@@ -8,16 +8,16 @@ var config = {
             var isPlusOne = (module.location || "").match(/\.plus-one$/);
             if (isPlusOne) {
                 module.exports = parseInt(module.text, 10) + 1;
-                return module;
+                return Promise.resolve(module);
             } else {
-                compile(module);
+                return compile(module);
             }
         };
     }
 };
 
 return require.loadPackage(module.directory + "a", config)
-.then(function (packageRequire) {
+    .then(function (packageRequire) {
     return packageRequire.async("five.plus-one")
     .then(function (six) {
         test.assert(six === 6, 'can require .plus-one modules');
