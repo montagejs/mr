@@ -1142,10 +1142,11 @@
         if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
             if (Require.delegate && typeof Require.delegate.requireWillCompileMjsonFile === "function") {
                 return Require.delegate.requireWillCompileMjsonFile(
-                   module.location, module.text
+                    module.text, module.require
                 ).then(function (root) {
                     module.exports = root || JSON.parse(module.text);
-                })
+                    return module;
+                });
             } else {
                 module.exports = JSON.parse(module.text);
             }
