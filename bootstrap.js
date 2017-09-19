@@ -11,7 +11,7 @@
         // CommonJS
         var Promise = (require)("bluebird");
         var URL = (require)('url');
-        var mr = (require)('mr');
+        var mr = (require)('./require');
         factory(exports, Promise, URL, mr);
     } else if (typeof define === 'function' && define.amd) {
         // AMD. Register as an anonymous module.
