@@ -14,16 +14,16 @@
             var URL = bootRequire("mini-url");
             factory((root.mr = exports), Promise, URL);
         });
-    } else if (typeof define === 'function' && define.amd) {
-        // AMD. Register as an anonymous module.
-        define(['exports', 'bluebird'], function (exports, bluebird) {
-            factory((root.mr = exports), bluebird);
-        });
     } else if (typeof exports === 'object' && typeof exports.nodeName !== 'string') {
         // CommonJS
         var Promise = (require)("bluebird");
         var URL = (require)('url');
         factory((root.mr = exports), Promise, URL);
+    } else if (typeof define === 'function' && define.amd) {
+        // AMD. Register as an anonymous module.
+        define(['exports', 'bluebird'], function (exports, bluebird) {
+            factory((root.mr = exports), bluebird);
+        });
     } else {
         // Browser globals
         factory((root.mr = {}), null, null);
@@ -1635,7 +1635,7 @@
               if (base) {
                   location = base.href;
               } else {
-                  location = window.location;
+                  location = window.location.href;
               }
             } else if (typeof process !== "undefined") {
                 location = "file:///" + process.cwd() + "/";
