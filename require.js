@@ -1817,10 +1817,10 @@
 
     exports.Loader = function Loader(config) {
         var loader;
-        if (typeof define === 'function' && define.amd) {
-            loader = exports.AMDLoader;
-        } else if (typeof module === 'object' && module.exports) {
+        if (typeof module === 'object' && module.exports) {
             loader = exports.CommonJSLoader;
+        } else if (typeof define === 'function' && define.amd) {
+            loader = exports.AMDLoader;
         } else if (typeof window !== "undefined") {
             if (config.useScriptInjection) {
                 loader = exports.ScriptLoader;
