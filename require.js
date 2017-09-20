@@ -320,9 +320,9 @@
     }
 
     function inferStrategy(description) {
-        // The existence of an _args property in package.json distinguishes
+        // The existence of an _args or _requested property in package.json distinguishes
         // packages that were installed with npm version 3 or higher.
-        return description._args ? 'flat' : 'nested';
+        return description._args || description._requested ? 'flat' : 'nested';
     }
 
     function inferOverlay(description) {
@@ -346,7 +346,7 @@
         config.useScriptInjection = description.useScriptInjection;
         config.strategy = config.strategy || inferStrategy(description);
         config.overlays = config.overlays || inferOverlay(description);
-        
+
         if (description.production !== void 0) {
             config.production = description.production;
         }
@@ -407,20 +407,18 @@
             config.packagesDirectory = URL.resolve(location, "node_modules/");
         }
 
-        // The default "main" module of a package has the same name as the
-        // package.
-        if (description.main !== void 0) {
+        // The default "main" module of a package is 'index' by default.
+        description.main = description.main || 'index';
 
-            // main, injects a definition for the main module, with
-            // only its path. makeRequire goes through special effort
-            // in deepLoad to re-initialize this definition with the
-            // loaded definition from the given path.
-            modules[""] = {
-                id: "",
-                redirect: normalizeId(resolve(description.main, "")),
-                location: config.location
-            };
-        }
+        // main, injects a definition for the main module, with
+        // only its path. makeRequire goes through special effort
+        // in deepLoad to re-initialize this definition with the
+        // loaded definition from the given path.
+        modules[""] = {
+            id: "",
+            redirect: normalizeId(resolve(description.main, "")),
+            location: config.location
+        };
 
         //Deal with redirects
         redirects = description.redirects;
@@ -576,16 +574,16 @@
             })
             .then(function () {
                 // compile and analyze dependencies
-                //debugger;
-                config.compile(module);
-                if (module.redirect !== void 0) {
-                    module.dependencies = module.dependencies || [];
-                    module.dependencies.push(module.redirect);
-                }
-                if (module.extraDependencies !== void 0) {
-                    module.dependencies = module.dependencies || [];
-                    Array.prototype.push.apply(module.dependencies, module.extraDependencies);
-                }
+                return config.compile(module).then(function () {
+                    if (module.redirect !== void 0) {
+                        module.dependencies = module.dependencies || [];
+                        module.dependencies.push(module.redirect);
+                    }
+                    if (module.extraDependencies !== void 0) {
+                        module.dependencies = module.dependencies || [];
+                        Array.prototype.push.apply(module.dependencies, module.extraDependencies);
+                    }
+                });
             });
         }, config.cache);
 
@@ -1015,8 +1013,7 @@
                 }
 
                 var promise;
-
-                if (exports.delegate) {
+                if (exports.delegate && typeof exports.delegate.requireWillLoadPackageDescriptionAtLocation === "function") {
                     promise = exports.delegate.requireWillLoadPackageDescriptionAtLocation(descriptionLocation,dependency, config);
                 }
                 if (!promise) {
@@ -1254,11 +1251,32 @@
         "packages",
         "modules"
     ];
-
-    exports.makeCompiler = function(config) {
-        return exports.MetaCompiler(
-            config,
-            exports.SerializationCompiler(
+            
+    var syncCompilerChain;   
+    //The ShebangCompiler doesn't make sense on the client side
+    if (typeof window !== "undefined") {
+        syncCompilerChain = function(config) {
+            return exports.SerializationCompiler(
+                config,
+                exports.TemplateCompiler(
+                    config,
+                    exports.JsonCompiler(
+                        config,
+                        exports.DependenciesCompiler(
+                            config,
+                            exports.LintCompiler(
+                                config,
+                                exports.Compiler(config)
+                            )
+                        )
+                    )
+                )
+            );
+        };
+    }
+    else {
+        syncCompilerChain = function(config) {
+            return exports.SerializationCompiler(
                 config,
                 exports.TemplateCompiler(
                     config,
@@ -1276,9 +1294,23 @@
                         )
                     )
                 )
-            )
-        );
-    };
+            );
+        };
+    }    
+    
+    exports.makeCompiler = function (config) {
+        return function (module) {
+            return new Promise(function (resolve, reject) {
+                return exports.MetaCompiler(module).then(function () {
+                    if (typeof module.exports === "object") {
+                        resolve(module);
+                    } else {
+                        resolve(syncCompilerChain(config)(module));
+                    }
+                });
+            });
+        };
+    };    
 
     exports.JsonCompiler = function (config, compile) {
         var jsonPattern = /\.json$/;
@@ -1304,15 +1336,23 @@
      * @param config
      * @param compile
      */
-    exports.MetaCompiler = function(config, compile) {
-        return function(module) {
-            if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
-                module.exports = JSON.parse(module.text);
-                return module;
-            } else {
-                return compile(module);
+    exports.MetaCompiler = function (module) {
+        if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
+            if (typeof module.exports !== "object" && typeof module.text === "string") {
+                if (exports.delegate && typeof exports.delegate.requireWillCompileMJSONFile === "function") {
+                    return exports.delegate.requireWillCompileMJSONFile(
+                        module.text, module.require, module.id
+                    ).then(function (root) {
+                        module.exports = root || JSON.parse(module.text);
+                        return module;
+                    });
+                } else {
+                    module.exports = JSON.parse(module.text);
+                }
             }
-        };
+        }
+
+        return Promise.resolve(module);
     };
 
     /**

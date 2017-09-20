@@ -1,6 +1,6 @@
 {
   "name": "mr",
-  "version": "17.0.4",
+  "version": "17.0.8",
   "description": "A refresh-only CommonJS module system for browsers, used in Montage",
   "license": "BSD-3-Clause",
   "keywords": [
@@ -30,8 +30,8 @@
     "test:karma-chrome": "karma start --no-auto-watch --single-run --browsers=Chrome",
     "test:karma-debug": "karma start --auto-watch --no-single-run --browsers=PhantomJS_debug",
     "test:karma-dev": "karma start --auto-watch --no-single-run --capture",
-    "test:jasmine": "concurrently \"http-server -a localhost -p 8081\" \"open http://localhost:8081/test/run.html\"",
-    "test:demo": "concurrently \"http-server -a localhost -p 8082\" \"open http://localhost:8082/demo/\""
+    "test:jasmine": "concurrently \"http-server -p 8081\" \"open http://localhost:8081/test/run.html\"",
+    "test:demo": "concurrently \"http-server -p 8082\" \"open http://localhost:8082/demo/\""
   },
   "bin": {
     "mr": "bin/mr"

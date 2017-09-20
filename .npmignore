@@ -1,3 +1,4 @@
+.git
 .DS_Store
 .idea
 .jshintignore
@@ -12,4 +13,5 @@ docs
 lcov-report/
 lcov.info
 node_modules
-spec
+test
+report
