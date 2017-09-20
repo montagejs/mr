@@ -1,7 +1,11 @@
+
+# Montage Require (aka mr)
+
+[![npm version](https://img.shields.io/npm/v/mr.svg?style=flat)](https://www.npmjs.com/package/mr)
+
 [![Build Status](https://travis-ci.org/montagejs/mr.svg?branch=master)](http://travis-ci.org/montagejs/mr)
 
-Montage Require
-===============
+[![Analytics](https://ga-beacon.appspot.com/UA-35717912-2/montagejs/mr)](https://github.com/montagejs/mr)
 
 This is a CommonJS module system, highly compatible with NodeJS,
 intended for front-end development of web applications using npm style
