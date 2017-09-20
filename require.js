@@ -1141,9 +1141,9 @@
     Require.MetaCompiler = function (module) {
         if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
             if (typeof module.exports !== "object" && typeof module.text === "string") {
-                if (Require.delegate && typeof Require.delegate.requireWillCompileMjsonFile === "function") {
-                    return Require.delegate.requireWillCompileMjsonFile(
-                        module.text, module.require
+                if (Require.delegate && typeof Require.delegate.requireWillCompileMJSONFile === "function") {
+                    return Require.delegate.requireWillCompileMJSONFile(
+                        module.text, module.require, module.id
                     ).then(function (root) {
                         module.exports = root || JSON.parse(module.text);
                         return module;
