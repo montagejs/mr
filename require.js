@@ -416,6 +416,7 @@
         config.makeLoader = config.makeLoader || Require.makeLoader;
         config.load = config.load || config.makeLoader(config);
         config.makeCompiler = config.makeCompiler || Require.makeCompiler;
+        config.executeCompiler = config.executeCompiler || Require.executeCompiler;
         config.compile = config.compile || config.makeCompiler(config);
         config.parseDependencies = config.parseDependencies || Require.parseDependencies;
         config.read = config.read || Require.read;
@@ -629,11 +630,7 @@
             var returnValue;
             try {
                 // Execute the factory function:
-                returnValue = module.factory(
-                    makeRequire(topId), // require
-                    module.exports, // exports
-                    module // module
-                );
+                returnValue = config.executeCompiler(module.factory, makeRequire(topId), module.exports, module);
             } catch (_error) {
                 // Delete the exports so that the factory is run again if this
                 // module is required again
@@ -1224,6 +1221,28 @@
             return $1;
         };
 
+    Require.executeCompiler = function (factory, require, exports, module) {
+        var returnValue;
+
+        module.directory = URL.resolve(module.location, "./"); 
+        module.filename = URL.resolve(module.location, module.location);
+        module.exports = exports || {};
+       
+        // Execute the factory function:
+        // TODO use config.scope
+        returnValue = factory.call(global,
+            require,            // require
+            exports,     // exports
+            module,             // module
+            global,
+            module.filename,     // __filename
+            module.directory     // __dirname
+        );
+
+        return returnValue;
+    };
+
+
     Require.SerializationCompiler = function(config, compile) {
         return function(module) {
             compile(module);
@@ -1235,7 +1254,7 @@
                 var moduleExports;
                 //call it to validate:
                 try {
-                    moduleExports = defaultFactory.call(this, require, exports, module, global);
+                    moduleExports = config.executeCompiler(defaultFactory, require, exports, module);
                 } catch (e) {
                     if (e instanceof SyntaxError) {
                         config.lint(module);
