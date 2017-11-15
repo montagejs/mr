@@ -100,7 +100,7 @@
             return resolved;
         };
     }());
-    
+
     // Non-CommonJS Map
     var Map;
     if (!global.Map) {
@@ -608,9 +608,9 @@
             if (topId in loading) {
                 return null; // break the cycle of violence.
             }
-            
+
             loading[topId] = true; // this has happened before
-            
+
             return load(topId, viaId).then(function () {
                 // load the transitive dependencies using the magic of
                 // recursion.
@@ -874,7 +874,7 @@
             function finallyHandler() {
                 // remove clutter
                 if (script.parentNode) {
-                    script.parentNode.removeChild(script);   
+                    script.parentNode.removeChild(script);
                 }
             }
 
@@ -896,7 +896,7 @@
                 document.querySelector("head").appendChild(script);
             } else {
                 reject(new Error("document not supported"));
-            }  
+            }
         });
     };
 
@@ -934,7 +934,7 @@
 
             } else {
                 reject(new Error("XMLHttpRequest not supported"));
-            }  
+            }
         });
     };
 
@@ -943,7 +943,7 @@
         // want to issue a script injection. However, if by the time preloading
         // has finished the package.json has not arrived, we will need to kick off
         // a request for the requested script.
-        
+
         //console.log('loadIfNotPreloaded', location);
 
         if (preloaded && preloaded.isPending()) {
@@ -1000,7 +1000,7 @@
 
     exports.loadPackageDescription = function (dependency, config) {
 
-        var location; 
+        var location;
         if (dependency.hash) { // use script injection
             var definition = exports.getDefinition(dependency.hash, "package.json");
             location = URL.resolve(dependency.location, "package.json.load.js");
@@ -1046,7 +1046,7 @@
     exports.loadPackage = function (dependency, config, packageDescription) {
 
         //console.log('loadPackage', dependency);
-        
+
         config = config || {
             location: URL.resolve(exports.getLocation(), dependency)
         };
@@ -1232,7 +1232,7 @@
                 }
                 compile(module);
                 //module.text = null;
-            };   
+            };
         }
     };
 
@@ -1261,8 +1261,8 @@
         "packages",
         "modules"
     ];
-            
-    var syncCompilerChain;   
+
+    var syncCompilerChain;
     //The ShebangCompiler doesn't make sense on the client side
     if (typeof window !== "undefined") {
         syncCompilerChain = function(config) {
@@ -1306,8 +1306,8 @@
                 )
             );
         };
-    }    
-    
+    }
+
     exports.makeCompiler = function (config) {
         return function (module) {
             return new Promise(function (resolve, reject) {
@@ -1320,7 +1320,7 @@
                 });
             });
         };
-    };    
+    };
 
     exports.JsonCompiler = function (config, compile) {
         var jsonPattern = /\.json$/;
@@ -1508,7 +1508,7 @@
             }
 
             var i, prefix;
-            
+
 
             function loadMapping(mappingRequire) {
                 var rest = id.slice(prefix.length + 1);
@@ -1616,7 +1616,7 @@
 
     exports.filePathToLocation = function filePathToLocation(path) {
         return URL.resolve(exports.getLocation(), path);
-    };  
+    };
 
     var directoryPathToLocationPattern = !/\/$/;
     exports.directoryPathToLocation = function directoryPathToLocation(path) {
@@ -1684,10 +1684,10 @@
     exports.executeCompiler = function (factory, require, exports, module) {
         var returnValue;
 
-        module.directory = URL.resolve(module.location, "./"); 
+        module.directory = URL.resolve(module.location, "./");
         module.filename = URL.resolve(module.location, module.location);
         module.exports = exports || {};
-       
+
         // Execute the factory function:
         // TODO use config.scope
         returnValue = factory.call(global,
@@ -1731,7 +1731,7 @@
                 delete definitions[hash][module.id];
                 for (var name in definition) {
                     if (definition.hasOwnProperty(name)) {
-                        module[name] = definition[name];   
+                        module[name] = definition[name];
                     }
                 }
                 module.location = location;
@@ -1796,7 +1796,7 @@
                 loader = exports.ScriptLoader;
             } else {
                 loader = exports.XhrLoader;
-            }   
+            }
         }
         return loader(config);
     };
