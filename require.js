@@ -294,10 +294,12 @@
             // we try flat first then nested.
             dependency.strategy = "nested";
             // for npm 3+
-            dependency.flatLocation = URL.resolve(
-                config.mainPackageLocation,
-                dependency.location
-            );
+            if (config.mainPackageLocation) {
+                dependency.flatLocation = URL.resolve(
+                    config.mainPackageLocation,
+                    dependency.location
+                );
+            }
             // for npm 2 (nested)
             dependency.location = URL.resolve(
                 config.location,
