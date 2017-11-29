@@ -1339,11 +1339,19 @@
     exports.MetaCompiler = function (module) {
         if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
             if (typeof module.exports !== "object" && typeof module.text === "string") {
-                if (exports.delegate && typeof exports.delegate.requireWillCompileMJSONFile === "function") {
-                    return exports.delegate.requireWillCompileMJSONFile(
+                if (exports.delegate && typeof exports.delegate.compileMJSONFile === "function") {
+                    return exports.delegate.compileMJSONFile(
                         module.text, module.require, module.id
                     ).then(function (root) {
-                        module.exports = root || JSON.parse(module.text);
+                        module.exports = JSON.parse(module.text);
+                        if (module.exports.montageObject) {
+                            throw new Error(
+                                'using reserved word as property name, \'montageObject\' at: ' +
+                                module.location
+                            );
+                        }
+
+                        module.exports.montageObject = root;
                         return module;
                     });
                 } else {
