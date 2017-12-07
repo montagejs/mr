@@ -36,6 +36,9 @@
         global = globalEval('this');
         /*jshint evil:false */
 
+    // Needed for modules that want to use global directly
+    global.global = global;
+
     // Non-CommonJS Promise
     Promise.prototype['finally'] = Promise.prototype['finally'] || function finallyPolyfill(callback) {
         var constructor = this.constructor;
