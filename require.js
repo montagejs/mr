@@ -1153,7 +1153,13 @@
                             );
                         }
 
-                        module.exports.montageObject = root;
+                        Object.defineProperty(module.exports, 'montageObject', {
+                            value: root,
+                            enumerable: false,
+                            configurable: false,
+                            writable: false
+                        });
+                        
                         return module;
                     });
                 } else {
