@@ -1156,10 +1156,10 @@
                         Object.defineProperty(module.exports, 'montageObject', {
                             value: root,
                             enumerable: false,
-                            configurable: false,
-                            writable: false
+                            configurable: true,
+                            writable: true
                         });
-                        
+
                         return module;
                     });
                 } else {
