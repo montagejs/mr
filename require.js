@@ -1132,6 +1132,9 @@
         };
     };
 
+    var dotMJSON = ".mjson",
+        dotMJSONLoadJs = ".mjson.load.js";
+
     /**
      * Allows the .meta and .mjson files to be loaded as json
      * @see Compiler middleware in require/require.js
@@ -1139,32 +1142,36 @@
      * @param compile
      */
     Require.MetaCompiler = function (module) {
-        if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
-            if (typeof module.exports !== "object" && typeof module.text === "string") {
-                if (Require.delegate && typeof Require.delegate.compileMJSONFile === "function") {
-                    return Require.delegate.compileMJSONFile(
-                        module.text, module.require, module.id
-                    ).then(function (root) {
+        if (module.location && (endsWith(module.location, ".meta") ||
+            endsWith(module.location, dotMJSON) ||
+            endsWith(module.location, dotMJSONLoadJs)
+        )) {
+            if (Require.delegate && typeof Require.delegate.compileMJSONFile === "function") {
+                return Require.delegate.compileMJSONFile(
+                    module.text || module.exports, module.require, module.id
+                ).then(function (root) {
+                    if (typeof module.text === "string") {
                         module.exports = JSON.parse(module.text);
-                        if (module.exports.montageObject) {
-                            throw new Error(
-                                'using reserved word as property name, \'montageObject\' at: ' +
-                                module.location
-                            );
-                        }
+                    }
 
-                        Object.defineProperty(module.exports, 'montageObject', {
-                            value: root,
-                            enumerable: false,
-                            configurable: true,
-                            writable: true
-                        });
+                    if (module.exports.montageObject) {
+                        throw new Error(
+                            'using reserved word as property name, \'montageObject\' at: ' +
+                            module.location
+                        );
+                    }
 
-                        return module;
+                    Object.defineProperty(module.exports, 'montageObject', {
+                        value: root,
+                        enumerable: false,
+                        configurable: true,
+                        writable: true
                     });
-                } else {
-                    module.exports = JSON.parse(module.text);
-                }
+                    return module;
+                });
+            } else {
+                module.exports = module.text ? JSON.parse(module.text) :
+                    module.exports;
             }
         }
 
