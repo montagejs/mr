@@ -1,6 +1,6 @@
 {
   "name": "mr",
-  "version": "17.0.8",
+  "version": "17.0.11",
   "description": "A refresh-only CommonJS module system for browsers, used in Montage",
   "license": "BSD-3-Clause",
   "keywords": [

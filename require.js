@@ -1330,6 +1330,9 @@
         };
     };
 
+    var dotMJSON = ".mjson",
+        dotMJSONLoadJs = ".mjson.load.js";
+
     /**
      * Allows the .meta and .mjson files to be loaded as json
      * @see Compiler middleware in require/require.js
@@ -1337,18 +1340,36 @@
      * @param compile
      */
     exports.MetaCompiler = function (module) {
-        if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
-            if (typeof module.exports !== "object" && typeof module.text === "string") {
-                if (exports.delegate && typeof exports.delegate.requireWillCompileMJSONFile === "function") {
-                    return exports.delegate.requireWillCompileMJSONFile(
-                        module.text, module.require, module.id
-                    ).then(function (root) {
-                        module.exports = root || JSON.parse(module.text);
-                        return module;
+        if (module.location && (endsWith(module.location, ".meta") ||
+            endsWith(module.location, dotMJSON) ||
+            endsWith(module.location, dotMJSONLoadJs)
+        )) {
+            if (exports.delegate && typeof exports.delegate.compileMJSONFile === "function") {
+                return exports.delegate.compileMJSONFile(
+                    module.text || module.exports, module.require, module.id
+                ).then(function (root) {
+                    if (typeof module.text === "string") {
+                        module.exports = JSON.parse(module.text);
+                    }
+
+                    if (module.exports.montageObject) {
+                        throw new Error(
+                            'using reserved word as property name, \'montageObject\' at: ' +
+                            module.location
+                        );
+                    }
+
+                    Object.defineProperty(module.exports, 'montageObject', {
+                        value: root,
+                        enumerable: false,
+                        configurable: true,
+                        writable: true
                     });
-                } else {
-                    module.exports = JSON.parse(module.text);
-                }
+                    return module;
+                });
+            } else {
+                module.exports = module.text ? JSON.parse(module.text) :
+                    module.exports;
             }
         }
 
