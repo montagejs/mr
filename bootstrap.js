@@ -195,6 +195,7 @@
                         }
                     },
                     "promise": {
+                        "exports": Promise,
                         global: "Promise",
                         export: "Promise",
                         location: "node_modules/bluebird/js/browser/bluebird.min.js",
@@ -205,6 +206,10 @@
                         //location: "node_modules/mr/require.js",
                     }
                 };
+
+                function moduleHasExport(module) {
+                    return module.exports !== null && module.exports !== void 0;
+                }
 
                 function bootModule(id) {
                     //console.log('bootModule', id, factory);
@@ -217,7 +222,7 @@
 
                     if (
                         module && 
-                            typeof module.exports === "undefined"  && 
+                            moduleHasExport(module) === false && 
                                 typeof module.factory === "function"
                     ) {
                         module.exports = module.factory(bootModule, (module.exports = {})) || module.exports;
@@ -268,26 +273,35 @@
                     callback(mrRequire, mrPromise, miniURL);
                 }
 
-                function bootstrapModuleScript(module, err, script) {
-                    if (err) {
-                        // Fallback on flat strategy for missing nested module
-                        if (module.strategy === 'nested') {
-                            module.strategy = 'flat';
-                            module.script = resolveUrl(resolveUrl(location, '../../'), module.location);
-                            loadScript(module.script, bootstrapModuleScript.bind(null, module));
-                        } else {
-                            throw err;   
-                        }
-                    } else if (module.export || module.global) {
+                // This define if the script should be loaded has "nested" of "flat" dependencies in packagesLocation.
+                // Change to "nested" for npm 2 support or add data-packages-strategy="nested" on montage.js script tag.
+                var defaultStrategy = params.packagesStrategy || 'nested'; 
 
-                        bootstrapModule(module.id, function (bootRequire, exports) {
-                            if (module.export) {
-                                exports[module.export] = global[module.global]; 
+                function bootstrapModuleScript(module, strategy) {
+                    module.strategy = strategy || defaultStrategy; 
+                    var locationRoot = strategy === "flat" ? params.packagesLocation : params.location;
+                    module.script = resolveUrl(locationRoot, module.location);
+                    loadScript(module.script, function (err, script) {
+                        if (err) {
+                            if (module.strategy === defaultStrategy) {
+                                var nextStrategy = module.strategy === 'flat' ? 'nested' : 'flat';
+                                bootstrapModuleScript(module, nextStrategy);
                             } else {
-                                return global[module.global];
+                                throw err;
                             }
-                        });
-                    }
+                        } else if (module.export || module.global) {
+                            defaultStrategy = module.strategy;
+                            bootstrapModule(module.id, function (bootRequire, exports) {
+                                if (module.export) {
+                                    exports[module.export] = global[module.global]; 
+                                } else {
+                                    return global[module.global];
+                                }
+                            });
+                        } else if (!module.factory && !module.exports) {
+                            throw new Error('Unable to load module ' + module.id);
+                        }
+                    });
                 }
 
                 // Expose bootstrap
@@ -319,9 +333,7 @@
                         } else if (typeof module.shim !== "undefined") {
                             bootstrapModule(module.id, module.shim);
                         } else {
-                            module.strategy = "nested";
-                            module.script = resolveUrl(location, module.location);
-                            loadScript(module.script, bootstrapModuleScript.bind(null, module));
+                            bootstrapModuleScript(module);
                         }
                     }
                 } 
