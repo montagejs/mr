@@ -447,6 +447,10 @@
                 var getDefinition = function (name) {
                     return (bundleDefinitions[name] = bundleDefinitions[name] || Promise.resolve());
                 };
+
+                global.montageDefine = function (hash, id, module) {
+                    return getDefinition(hash, id).resolve(module);
+                };
                 
                 global.bundleLoaded = function (name) {
                     return getDefinition(name).resolve();
