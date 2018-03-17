@@ -46,6 +46,7 @@
 
     // reassigning causes eval to not use lexical scope.
     var globalEval = eval,
+        EMPTY_STRING = "",
         /*jshint evil:true */
         global = globalEval('this');
         /*jshint evil:false */
@@ -153,8 +154,8 @@
 
     function _resolveItem(source, part, target) {
         /*jshint -W035 */
-        if (part === "" || part === ".") {
-        } else if (part === "..") {
+        if (part === EMPTY_STRING || part === DOT) {
+        } else if (part === DOT_DOT) {
             if (target.length) {
                 target.pop();
             }
@@ -165,18 +166,20 @@
     }
 
     function resolve(id, baseId) {
-        if (id === "" && baseId === "") {
-            return "";
+        if (id === EMPTY_STRING && baseId === EMPTY_STRING) {
+            return EMPTY_STRING;
         }
-        var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map())) && resolved) || resolved;
-        var i, ii;
-        if (!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
-            id = String(id);
-            var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source) || source,
-                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split("/"))) && parts || parts),
+        var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map())) && resolved) || resolved,
+            result,
+            i, ii;
+
+        if (!(result = resolved.get(baseId)) || !(result = result.get(id))) {
+            var localId = String(id),
+                source = _resolveStringtoArray.get(localId) || (_resolveStringtoArray.set(localId, (source = localId.split(SLASH))) && source) || source,
+                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split(SLASH))) && parts || parts),
                 resolveItem = _resolveItem;
 
-            if (source.length && source[0] === "." || source[0] === "..") {
+            if (source.length && source[0] === DOT || source[0] === DOT_DOT) {
                 for (i = 0, ii = parts.length-1; i < ii; i++) {
                     resolveItem(parts, parts[i], _target);
                 }
@@ -187,10 +190,10 @@
             if (!resolved.get(baseId)) {
                 resolved.set(baseId, new Map());
             }
-            resolved.get(baseId).set(id, _target.join("/"));
+            resolved.get(baseId).set(id, (result = _target.join(SLASH)));
             _target.length = 0;
         }
-        return resolved.get(baseId).get(id);
+        return result;
     }
 
     var isRelativePattern = /\/$/;
@@ -219,7 +222,7 @@
         if (!dependency.location && config.packagesDirectory && dependency.name) {
             dependency.location = URL.resolve(
                 config.packagesDirectory,
-                dependency.name + "/"
+                dependency.name + SLASH
             );
         } else if (!dependency.location) {
             return dependency; // partially completed
@@ -228,7 +231,7 @@
         // make sure the dependency location has a trailing slash so that
         // relative urls will resolve properly
         if (!isRelativePattern.test(dependency.location)) {
-            dependency.location += "/";
+            dependency.location += SLASH;
         }
 
         // resolve the location relative to the current package
@@ -278,7 +281,7 @@
     function configurePackage(location, description, parent) {
 
         if (!isRelativePattern.test(location)) {
-            location += "/";
+            location += SLASH;
         }
 
         var config = Object.create(parent);
@@ -309,7 +312,7 @@
         // an overlay
         if (typeof description.browser === "string") {
             overlay.browser = {
-                redirects: {"": description.browser}
+                redirects: {EMPTY_STRING: description.browser}
             };
         } else if (typeof description.browser === "object") {
             var bk, iBk, countBk,
@@ -355,9 +358,9 @@
         // only its path. makeRequire goes through special effort
         // in deepLoad to re-initialize this definition with the
         // loaded definition from the given path.
-        modules[""] = {
-            id: "",
-            redirect: normalizeId(resolve(description.main, "")),
+        modules[EMPTY_STRING] = {
+            id: EMPTY_STRING,
+            redirect: normalizeId(resolve(description.main, EMPTY_STRING)),
             location: config.location
         };
 
@@ -496,7 +499,7 @@
                 if (
                     id === prefix ||
                     id.indexOf(prefix) === 0 &&
-                    id.charAt(prefix.length) === "/"
+                    id.charAt(prefix.length) === SLASH
                 ) {
                     return prefix;
                 }
@@ -535,46 +538,65 @@
 
         // Load a module definition, and the definitions of its transitive
         // dependencies
-        function deepLoad(topId, viaId, loading) {
-            // this is a memo of modules already being loaded so we don’t
-            // data-lock on a cycle of dependencies.
-            loading = loading || Object.create(null);
+        function deepLoad(topId, viaId, _loading) {
             // has this all happened before?  will it happen again?
-            if (topId in loading) {
+            if (_loading && topId in _loading) {
                 return null; // break the cycle of violence.
             }
+                        // this is a memo of modules already being loaded so we don’t
+            // data-lock on a cycle of dependencies.
+            var loading = _loading || Object.create(null);
+
             loading[topId] = true; // this has happened before
             return load(topId, viaId)
             .then(function () {
                 // load the transitive dependencies using the magic of
                 // recursion.
-                var promises, iModule , depId, dependees, iPromise,
-                    module = getModuleDescriptor(topId),
-                    dependencies =  module.dependencies;
+                var promises = null ,
+                    localTopId = topId,
+                    dependencies =  deepLoad.getModuleDescriptor(localTopId)/*module*/.dependencies,
+                    localLoading = loading;
 
-                if (dependencies && dependencies.length > 0) {
-                    for(var i=0;(depId = dependencies[i]);i++) {
-                        // create dependees set, purely for debug purposes
-                        // if (true) {
-                        //     iModule = getModuleDescriptor(depId);
-                        //     dependees = iModule.dependees = iModule.dependees || {};
-                        //     dependees[topId] = true;
-                        // }
-                        if ((iPromise = deepLoad(normalizeId(resolve(depId, topId)), topId, loading))) {
-                            /* jshint expr: true */
-                            promises ? (promises.push ? promises.push(iPromise) :
-                                (promises = [promises, iPromise])) : (promises = iPromise);
-                            /* jshint expr: false */
+                //create dependees set, purely for debug purposes
+                //var iModule, dependees;
+
+                if (dependencies) {
+                    if(dependencies.length === 1) {
+                        return deepLoad(deepLoad.normalizeId(deepLoad.resolve(dependencies[0], localTopId)), localTopId, localLoading);
+                    }
+                    else if(dependencies.length > 1) {
+                        var localNormalizeId = deepLoad.normalizeId,
+                            localResolve = deepLoad.resolve,
+                            depId, iPromise;
+
+                        promises = [];
+                        for(var i=0;(depId = dependencies[i]);i++) {
+                            // create dependees set, purely for debug purposes
+                            // if (true) {
+                            //     iModule = getModuleDescriptor(depId);
+                            //     dependees = iModule.dependees = iModule.dependees || {};
+                            //     dependees[topId] = true;
+                            // }
+                            if ((iPromise = deepLoad(localNormalizeId(localResolve(depId, localTopId)), localTopId, localLoading))) {
+                                /* jshint expr: true */
+                                promises.push(iPromise);
+                                /* jshint expr: false */
+                            }
                         }
+                        return Promise.all(promises);
+                    }
+                    else {
+                        return null;
                     }
                 }
-
-                return promises ? (promises.push === void 0 ? promises :
-                            Promise.all(promises)) : null;
+                return null;
             }, function (error) {
                 getModuleDescriptor(topId).error = error;
             });
         }
+        deepLoad.normalizeId = normalizeId;
+        deepLoad.resolve = resolve;
+        deepLoad.getModuleDescriptor = getModuleDescriptor;
 
         // Initializes a module by executing the factory function with a new
         // module "exports" object.
@@ -679,10 +701,10 @@
                 var id1 = candidate.identify(id2, require2, seen);
                 if (id1 === null) {
                     continue;
-                } else if (id1 === "") {
+                } else if (id1 === EMPTY_STRING) {
                     return name;
                 } else {
-                    name += "/";
+                    name += SLASH;
                     name += id1;
                     return name;
                 }
@@ -701,25 +723,34 @@
         // that module's id for resolving relative module IDs against.
         function makeRequire(viaId) {
 
+            // if(viaId && viaId.indexOf("reel") !== -1) {
+            //     console.log("makeRequire("+viaId+")");
+            // }
+
             // Main synchronously executing "require()" function
             var require = function require(id) {
-                var topId = normalizeId(resolve(id, viaId));
-                return getExports(topId, viaId);
+                var topId = require.normalizeId(require.resolve(id, require.viaId));
+                return require.getExports(topId, require.viaId);
             };
             require.viaId = viaId;
+            require.normalizeId = normalizeId;
+            require.resolve = resolve;
+            require.getExports = getExports;
 
             // Asynchronous "require.async()" which ensures async executation
             // (even with synchronous loaders)
-            require.async = function(id) {
-                var topId = normalizeId(resolve(id, viaId));
-                return deepLoad(topId, viaId).then(function () {
+            require.async = function require_async(id) {
+                var topId = normalizeId(resolve(id, require_async.viaId));
+                return deepLoad(topId, require_async.viaId).then(function () {
                     return require(topId);
                 });
             };
+            require.async.viaId = viaId;
 
-            require.resolve = function (id) {
-                return normalizeId(resolve(id, viaId));
+            require.resolve = function require_resolve(id) {
+                return normalizeId(resolve(id, require_resolve.viaId));
             };
+            require.resolve.viaId = viaId;
 
             require.getModule = getModuleDescriptor; // XXX deprecated, use:
             require.getModuleDescriptor = getModuleDescriptor;
@@ -779,7 +810,7 @@
             return require;
         }
 
-        require = makeRequire("");
+        require = makeRequire(EMPTY_STRING);
         return require;
     };
 
@@ -1052,8 +1083,8 @@
         "packages",
         "modules"
     ];
-            
-    var syncCompilerChain;    
+
+    var syncCompilerChain;
 
     //The ShebangCompiler doesn't make sense on the client side
     if (typeof window !== "undefined") {
@@ -1098,8 +1129,8 @@
                 )
             );
         };
-    }    
-    
+    }
+
     Require.makeCompiler = function (config) {
         return function (module) {
             return new Promise(function (resolve, reject) {
@@ -1112,12 +1143,12 @@
                 });
             });
         }
-    }    
+    }
 
     Require.JsonCompiler = function (config, compile) {
         var jsonPattern = /\.json$/;
         return function (module) {
-            var json = (module.location || "").match(jsonPattern);
+            var json = (module.location || EMPTY_STRING).match(jsonPattern);
             if (json) {
                 if (typeof module.exports !== "object" && typeof module.text === "string") {
                     module.exports = JSON.parse(module.text);
@@ -1322,7 +1353,7 @@
             if (
                 config.name !== void 0 &&
                 id.indexOf(config.name) === 0 &&
-                id.charAt(config.name.length) === "/"
+                id.charAt(config.name.length) === SLASH
             ) {
                 console.warn("Package reflexive module ignored:", id);
             }
@@ -1332,7 +1363,7 @@
                 if (
                     id === prefix || (
                         id.indexOf(prefix) === 0 &&
-                            id.charAt(prefix.length) === "/"
+                            id.charAt(prefix.length) === SLASH
                     )
                 ) {
                     return config.loadPackage(mappings[prefix], config).then(loadMapping);
@@ -1380,7 +1411,10 @@
      * @param loader the next loader in the chain
      */
     var reelExpression = /([^\/]+)\.reel$/,
+        LOWER_CASE_STRING = "string",
         dotREEL = ".reel",
+        DOT = ".",
+        DOT_DOT = "..",
         SLASH = "/";
     Require.ReelLoader = function(config, load) {
         return function reelLoader(id, module) {
