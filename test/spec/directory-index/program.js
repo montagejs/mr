@@ -30,6 +30,14 @@ POSSIBILITY OF SUCH DAMAGE.
 </copyright> */
 
 var test = require('test');
-var foo = require('foo');
-test.assert(foo.program() === exports, 'exact exports');
+var bar = require('bar');
+
+// Should all resolve same module
+var foo1 = require('foo');
+var foo2 = require('foo/index');
+var foo3 = require('foo/index.js');
+
+test.assert(foo1.program() === exports, 'exact exports');
+test.assert(foo2.program() === exports, 'exact exports');
+test.assert(foo3.program() === exports, 'exact exports');
 test.print('DONE', 'info');

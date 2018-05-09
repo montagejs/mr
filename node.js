@@ -35,14 +35,31 @@ Require.directoryPathToLocation = function directoryPathToLocation(path) {
 
 Require.read = function read(location) {
     var deferred = Promise.defer();
-    var path = Require.locationToPath(location);
-    FS.readFile(path, "utf-8", function (error, text) {
-        if (error) {
-            deferred.reject(new Error(error));
+    var path = Require.locationToPath(location),
+        indexPath = path.replace('.js', '/index.js');
+
+    // Check if file exists
+    FS.stat(path, function(err) { 
+        if (!err) { 
+            FS.readFile(path, "utf-8", function (error, text) {
+                if (error) {
+                    deferred.reject(new Error(error));
+                } else {
+                    deferred.resolve(text);
+                }
+            });
+
+        // use /index.js instead
         } else {
-            deferred.resolve(text);
+            FS.readFile(indexPath, "utf-8", function (error, text) {
+                if (error) {
+                    deferred.reject(new Error(error));
+                } else {
+                    deferred.resolve(text);
+                }
+            });
         }
-    });
+    }); 
     return deferred.promise;
 };
 
