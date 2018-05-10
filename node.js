@@ -33,34 +33,37 @@ Require.directoryPathToLocation = function directoryPathToLocation(path) {
     return path;
 };
 
+var jsIndexPrefix = '/index.js',
+    jsPreffix = '.js';
 Require.read = function read(location) {
-    var deferred = Promise.defer();
-    var path = Require.locationToPath(location),
-        indexPath = path.replace('.js', '/index.js');
-
-    // Check if file exists
-    FS.stat(path, function(err) { 
-        if (!err) { 
-            FS.readFile(path, "utf-8", function (error, text) {
-                if (error) {
-                    deferred.reject(new Error(error));
+    return new Promise(function (resolve, reject) {
+        var path = Require.locationToPath(location);
+        FS.readFile(path, "utf-8", function (error, text) {
+            if (error) {
+                // Re-use xhr on read on .js failure if not /index.js file and
+                // retry on /index.js dynamically.
+                if (
+                    path.indexOf(jsPreffix) !== -1 && // is .js
+                        path.indexOf(jsIndexPrefix) === -1 // is not /index.js
+                ) {
+                    path = path.replace(jsPreffix, jsIndexPrefix);
+                    
+                    // Attempt to read if file exists
+                    FS.readFile(path, "utf-8", function (error, text) {
+                        if (error) {
+                            reject(new Error(error));   
+                        } else {
+                            resolve(text);
+                        }
+                    });
                 } else {
-                    deferred.resolve(text);
+                    reject(new Error(error));   
                 }
-            });
-
-        // use /index.js instead
-        } else {
-            FS.readFile(indexPath, "utf-8", function (error, text) {
-                if (error) {
-                    deferred.reject(new Error(error));
-                } else {
-                    deferred.resolve(text);
-                }
-            });
-        }
-    }); 
-    return deferred.promise;
+            } else {
+                resolve(text);
+            }
+        });
+    });
 };
 
 // Compiles module text into a function.
