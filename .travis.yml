@@ -8,7 +8,6 @@ node_js:
   - "6"
   - "4"
 before_script:
-  - npm prune
   - npm run lint
   - npm run test:nsp
 script: npm run $COMMAND
