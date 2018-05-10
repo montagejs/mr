@@ -9,8 +9,8 @@ node_js:
   - "4"
 before_script:
   - npm prune
-  - npm lint
-  - npm test:nsp
+  - npm run lint
+  - npm run test:nsp
 script: npm run $COMMAND
 env:
   - COMMAND=test
