@@ -9,11 +9,19 @@ node_js:
   - "4"
 before_script:
   - npm prune
-script:
-  - npm run lint
-  - npm run test
-  - npm run test:karma
-  - npm run test:nsp
-  #- MR_VERSION=. MOP_VERSION="0.13" npm run integration
-  - MR_VERSION=. MOP_VERSION="latest" npm run integration
-  - MR_VERSION=. MOP_VERSION="#master" npm run integration
+  - npm lint
+  - npm test:nsp
+script: npm run $COMMAND
+env:
+  - COMMAND=test
+  - COMMAND=test:karma
+  #- COMMAND=integration MR_VERSION=. MOP_VERSION=0.13
+  - COMMAND=integration MR_VERSION=. MOP_VERSION=latest
+  - COMMAND=integration MR_VERSION=. MOP_VERSION="#master"
+notifications:
+  irc:
+    channels:
+      - "chat.freenode.net#montage"
+    on_success: false
+    template:
+      - "%{author} broke the %{repository} tests on %{branch}: %{build_url}"
