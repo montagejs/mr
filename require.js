@@ -959,8 +959,9 @@
 
     // Extracts dependencies by parsing code and looking for "require" (currently using a simple regexp)
     var requirePattern = /(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g,
-        escapeSimpleComment = /^\/\/.*/gm,
-        escapeMultiComment = /^\/\*[\S\s]*?\*\//gm;
+        escapeSimpleComment = /\/\/(.*)$/gm,
+        escapeMultiComment = /\/\*([\s\S]*?)\*\//g;
+
 
     // Require.parseDependencies = function parseDependencies(factory) {
     //     var o = {};
