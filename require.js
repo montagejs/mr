@@ -1112,8 +1112,8 @@
                     }
                 });
             });
-        }
-    }    
+        };
+    };
 
     Require.JsonCompiler = function (config, compile) {
         var jsonPattern = /\.json$/;

@@ -63,22 +63,35 @@ bootstrap("require/browser", function (require) {
         } else {
             xhr.onerror(event);
         }
-        //This clears the response from memory
-        xhr.abort();
-        xhr.url = null;
-        xhr.module = null;
     }
     onload.xhrPool = xhrPool;
 
+    var jsIndexPrefix = '/index.js',
+        jsPreffix = '.js';
     function onerror(event) {
       var xhr = event.target,
           url = xhr.url;
-        xhr.reject(new Error("Can't XHR " + JSON.stringify(url)));
-        onerror.xhrPool.push(xhr);
-        //This clears the response from memory
-        xhr.abort();
-        xhr.url = null;
-        xhr.module = null;
+
+        // Re-use xhr on read on .js failure if not /index.js file and
+        // retry on /index.js dynamically.
+        if (
+            url.indexOf(jsPreffix) !== -1 && // is .js
+                url.indexOf(jsIndexPrefix) === -1 // is not /index.js
+        ) {
+            xhr.url = xhr.url.replace(jsPreffix, jsIndexPrefix);
+            xhr.module.location = xhr.url;
+            xhr.open(GET, xhr.url, true);
+            xhr.send(null);
+
+        } else {
+
+            xhr.reject(new Error("Can't XHR " + JSON.stringify(url)));
+            onerror.xhrPool.push(xhr);
+            //This clears the response from memory
+            xhr.abort();
+            xhr.url = null;
+            xhr.module = null;   
+        }
 
     }
     onerror.xhrPool = xhrPool;
@@ -98,11 +111,11 @@ bootstrap("require/browser", function (require) {
                 xhr.reject = reject;
             };
         }
+
         xhr.url = url;
         xhr.module = module;
 
         xhr.open(GET, url, true);
-
 
         var response = new Promise(xhr.promiseHandler);
         xhr.send(null);
