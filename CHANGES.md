@@ -1,3 +1,7 @@
+### 17.0.12
+  - Fix commented require issue
+  - Add support for require('dir') dir/index.js
+
 ### 17.0.0
   - Update Travis NodeJS to 4.8.0
   - Migrate Montage custom loaders to MontageRequire
