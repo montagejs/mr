@@ -12,8 +12,8 @@
     "loader"
   ],
   "engines": {
-    "node": "4.8.0",
-    "npm": "2.15.11"
+    "node": "<=4.9.1",
+    "npm": "<=2.15.11"
   },
   "repository": {
     "type": "git",
