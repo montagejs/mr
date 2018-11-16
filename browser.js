@@ -201,6 +201,7 @@ bootstrap("require/browser", function (require) {
     };
 
     var loadIfNotPreloaded = function (location, definition, preloaded) {
+        var loadScript = Require.delegate && Require.delegate.loadScript || Require.loadScript;
         // The package.json might come in a preloading bundle. If so, we do not
         // want to issue a script injection. However, if by the time preloading
         // has finished the package.json has not arrived, we will need to kick off
@@ -209,13 +210,13 @@ bootstrap("require/browser", function (require) {
             preloaded
             .then(function () {
                 if (definition.isPending()) {
-                    Require.loadScript(location);
+                    loadScript(location);
                 }
             });
         } else if (definition.isPending()) {
             // otherwise preloading has already completed and we don't have the
             // module, so load it
-            Require.loadScript(location);
+            loadScript(location);
         }
     };
 
