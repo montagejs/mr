@@ -30,12 +30,6 @@ meaningful to Mr:
     will cause Mr to load the Q package from `./packages/q` instead of
     `./node_modules/q`.
 
--   **overlay**: an object defining alternate configurations depending
-    on the platform.  Keys correspond to engines and values are
-    alternate properties to overwrite on the package description.  For
-    the browser, the `window`, `browser`, and `montage` engines are
-    applied.  This property is likely to be deprecated and replaced by
-    an `if` block or other content-negotiation blocks in the future.
 -   **directories**: an object containing optional `lib` and `packages`
     directory overrides.  The `lib` directory is a location relative to
     this package at which to find modules.  The `packages` directory is

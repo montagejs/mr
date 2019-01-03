@@ -301,47 +301,6 @@
             registry.set(config.name,config.location);
         }
 
-        // overlay
-        var redirects,
-            overlay = description.overlay || {};
-
-        // but first, convert "browser" field, as pioneered by Browserify, to
-        // an overlay
-        if (typeof description.browser === "string") {
-            overlay.browser = {
-                redirects: {"": description.browser}
-            };
-        } else if (typeof description.browser === "object") {
-            var bk, iBk, countBk,
-                browser = description.browser,
-                browserKeys = Object.keys(browser);
-
-            overlay.browser = {redirects:{}};
-            redirects = overlay.browser.redirects;
-            for(iBk=0;(bk = browserKeys[iBk]);iBk++) {
-                if (browser[bk] !== false) {
-                    redirects[bk] = browser[bk];
-                }
-            }
-            // overlay.browser = {
-            //     redirects: description.browser
-            // };
-        }
-
-        // overlay continued...
-        var layer, overlays, engine, name;
-        overlays = config.overlays = config.overlays || Require.overlays;
-        for(var i=0, countI=overlays.length;i<countI;i++) {
-            if (layer = overlay[(engine = overlays[i])]) {
-                for (name in layer) {
-                    if (layer.hasOwnProperty(name)) {
-                        description[name] = layer[name];
-                    }
-                }
-            }
-        }
-        delete description.overlay;
-
         if (config.strategy === 'flat') {
             config.packagesDirectory = URL.resolve(config.mainPackageLocation, "node_modules/");
         } else {
@@ -362,7 +321,7 @@
         };
 
         //Deal with redirects
-        redirects = description.redirects;
+        var redirects = description.redirects;
         if (redirects !== void 0) {
             for (name in redirects) {
                 if (redirects.hasOwnProperty(name)) {
@@ -384,7 +343,9 @@
         }
 
         // mappings
-        for(var m=0, mKeys = Object.keys(mappings);(name = mKeys[m]);m++) {
+        var name,
+            mKeys = Object.keys(mappings);
+        for(var m = 0; (name = mKeys[m]); m++) {
             mappings[name] = normalizeDependency(
                 mappings[name],
                 config,

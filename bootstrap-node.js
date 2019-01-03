@@ -13,8 +13,6 @@ var Promise = require("bluebird");
 var FS = require("fs");
 var PATH = require("path");
 
-Require.overlays = ["node", "server", "montage"];
-
 var bootstrap = function () {
     var command = process.argv.slice(0, 3);
     var args = process.argv.slice(2);
