@@ -284,12 +284,7 @@
         config.name = description.name;
         config.location = location || Require.getLocation();
         config.packageDescription = description;
-        config.useScriptInjection = description.useScriptInjection;
         config.strategy = parent.strategy || inferStrategy(description);
-
-        if (description.production !== void 0) {
-            config.production = description.production;
-        }
 
         // explicitly mask definitions and modules, which must
         // not apply to child packages
@@ -319,27 +314,10 @@
             location: config.location
         };
 
-        //Deal with redirects
-        var redirects = description.redirects;
-        if (redirects !== void 0) {
-            for (name in redirects) {
-                if (redirects.hasOwnProperty(name)) {
-                    modules[name] = {
-                        id: name,
-                        redirect: normalizeId(resolve(redirects[name], name)),
-                        location: URL.resolve(location, name)
-                    };
-                }
-            }
-        }
-
         // mappings, link this package to other packages.
-        var mappings = description.mappings || {};
-        // dependencies, devDependencies if not in production
-        processMappingDependencies(description.dependencies,mappings);
-        if (!config.production) {
-            processMappingDependencies(description.devDependencies,mappings);
-        }
+        var mappings = {};
+        processMappingDependencies(description.dependencies, mappings);
+        processMappingDependencies(description.devDependencies, mappings);
 
         // mappings
         var name,

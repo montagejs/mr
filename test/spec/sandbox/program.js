@@ -12,12 +12,9 @@ return Promise.all([
     }),
     sandbox(require, "dependency/main", {
         "other": "mocked"
-    }),
-    sandbox(require, "d", {
-        "./b": "redirected"
     })
 ])
-.spread(function (sandboxedA, sandboxedDep, sandboxedD) {
+.spread(function (sandboxedA, sandboxedDep) {
     var a2 = require("./a");
     var dep2 = require("dependency/main");
 
@@ -30,8 +27,6 @@ return Promise.all([
     test.assert(dep === "other", "dep is the original");
     test.assert(sandboxedDep === "mocked", "sandboxedDep is the mock");
     test.assert(dep2 === "other", "dep2 is the original");
-
-    test.assert(sandboxedD.value === "redirected", "sandboxedD.b is redirected");
 }).then(function () {
     test.print('DONE', 'info');
 });

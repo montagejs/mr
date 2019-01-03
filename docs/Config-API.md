@@ -27,7 +27,7 @@ Mr then adds shared state for all packages to the `config`.
 
 -   **registry**: the location of each known package by name, for those
     packages that have either designated their own name, or been named
-    by a dependent package in the `dependencies` or `mappings`
+    by a dependent package in the `dependencies`
     properties of their package description.
 -   **getPackage**: returns the `require` function for a package that
     has already been loaded, or throws an error.
@@ -63,14 +63,11 @@ description, `package.json`.  This is the config that gets passed to
     both client and server side.  Really, just don't use this.  It is
     used only by `PathsLoaders` middleware to convert module identifiers
     to locations.
--   **mappings**: object mapping module identifier prefixes to
-    dependencies.  These dependencies are suitable for passing to
-    `require.loadPackage`.
 -   **packagesDirectory**: the location in which to look for unknown
     packages by name, by default `node_modules` within this package.
 -   **exposedConfigs**: an array of `config` properties instructing
     `makeRequire` to copy those properties from `config` to each
-    `require` function, by default `paths`, `mappings`, `location`,
+    `require` function, by default `paths`, `location`,
     `packageDescription`, `packages`, and `modules`.
 
 Within `Require.makeRequire(config)`, Mr uses `makeLoader`

@@ -14,9 +14,7 @@ some of the extensions from NodeJS and npm:
   supports the case where a package with the same name is already
   loaded by a parent package.  Unlike NPM, with Montage packages, you
   can override the location of the `node_modules` directory with the
-  `directories.packages` property, or use mappings to find
-  individual packages in alternate locations or give them different
-  local names.
+  `directories.packages` property
 - **devDependencies**: Development dependencies are treated the same as
   `dependencies`, except in production mode where they are ignored.
 - **JSON**: Resources with the `.json` extension can be loaded as JSON

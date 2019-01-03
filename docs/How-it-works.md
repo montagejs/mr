@@ -40,7 +40,7 @@ configuring and connecting the module systems of each package in the
 Each package has an isolated module identifier name space.  The
 `package.json` dictates how that name space forwards to other packages
 through the `dependencies` property, as well as internal aliases from
-the package's `name`, `main`, and `redirects` properties.
+the package's `name`, and `main` properties.
 
 Additionally, Montage Require is very configurable and pluggable.
 Montage itself vastly extends the capabilities of Montage Require so

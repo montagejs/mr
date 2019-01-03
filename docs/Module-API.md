@@ -29,8 +29,6 @@ The module object has the following properties:
 -   **extraDependencies**: an array of additional module identifiers for
     modules that must be loaded before calling the factory that may be
     specified through other means than `parseDependencies`.
--   **dependees**: an object with a key for every module that declares
-    this module as a dependency, populated automatically by `deepLoad`.
 -   **redirect**: the identifier of a module that stands in for this
     module, so `require` returns its exports instead.  A redirect is an
     implied dependency.  Redirect cycles should be avoided.
