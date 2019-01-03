@@ -86,7 +86,6 @@
     Module.prototype.mappingRedirect = void 0;
     Module.prototype.type = null;
     Module.prototype.text = void 0;
-    Module.prototype.dependees = null;
     Module.prototype.extraDependencies = void 0;
     Module.prototype.uuid = null;
 
@@ -124,13 +123,13 @@
         var searchLength = searchString.length;
         var pos = stringLength;
 
-            if (position !== undefined) {
-                // `ToInteger`
-                pos = position ? Number(position) : 0;
-                if (pos !== pos) { // better `isNaN`
-                    pos = 0;
-                }
+        if (position !== undefined) {
+            // `ToInteger`
+            pos = position ? Number(position) : 0;
+            if (pos !== pos) { // better `isNaN`
+                pos = 0;
             }
+        }
 
         var end = Math.min(Math.max(pos, 0), stringLength);
         var start = end - searchLength;
@@ -509,18 +508,12 @@
             .then(function () {
                 // load the transitive dependencies using the magic of
                 // recursion.
-                var promises, iModule , depId, dependees, iPromise,
+                var promises, depId, iPromise,
                     module = getModuleDescriptor(topId),
                     dependencies =  module.dependencies;
 
                 if (dependencies && dependencies.length > 0) {
                     for(var i=0;(depId = dependencies[i]);i++) {
-                        // create dependees set, purely for debug purposes
-                        // if (true) {
-                        //     iModule = getModuleDescriptor(depId);
-                        //     dependees = iModule.dependees = iModule.dependees || {};
-                        //     dependees[topId] = true;
-                        // }
                         if ((iPromise = deepLoad(normalizeId(resolve(depId, topId)), topId, loading))) {
                             /* jshint expr: true */
                             promises ? (promises.push ? promises.push(iPromise) :
@@ -785,13 +778,9 @@
 
     Require.loadPackageDescription = function (dependency, config) {
         var location = dependency.location;
-        var descriptions =
-            config.descriptions =
-                config.descriptions || {};
+        var descriptions = config.descriptions = config.descriptions || {};
         if (descriptions[location] === void 0) {
-            var descriptionLocations =
-                config.descriptionLocations =
-                    config.descriptionLocations || {};
+            var descriptionLocations = config.descriptionLocations = config.descriptionLocations || {};
             var descriptionLocation;
             if (descriptionLocations[location]) {
                 descriptionLocation = descriptionLocations[location];
@@ -1014,8 +1003,8 @@
         "packages",
         "modules"
     ];
-            
-    var syncCompilerChain;    
+
+    var syncCompilerChain;
 
     //The ShebangCompiler doesn't make sense on the client side
     if (typeof window !== "undefined") {
@@ -1060,8 +1049,8 @@
                 )
             );
         };
-    }    
-    
+    }
+
     Require.makeCompiler = function (config) {
         return function (module) {
             return new Promise(function (resolve, reject) {
