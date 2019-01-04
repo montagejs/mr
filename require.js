@@ -1648,7 +1648,12 @@
     exports.read = function read(location) {
         return new Promise(function (resolve, reject) {
             if (typeof XMLHttpRequest !== "undefined") {
-                return exports.loadXHR(location).then(resolve, reject);
+                return exports.loadXHR(location).then(
+                    resolve,
+                    function () {
+                        var indexLocation = location.replace(/\.js$/, '/index.js');
+                        return exports.loadXHR(indexLocation).then(resolve, reject);
+                    });
             } else if (typeof process !== "undefined") {
                 var path = exports.locationToPath(location);
                 var indexPath = path.replace('.js', '/index.js');
