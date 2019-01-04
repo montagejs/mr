@@ -22,10 +22,10 @@ function run(suiteRequire, modules) {
     });
 
     var promises = modules.map(function (module) {
-        
+
         var spec = this,
             packagePath = module + '/';
-        
+
         return suiteRequire.loadPackage(packagePath, {
             location: require.location
         }).then(function (pkg) {
@@ -61,7 +61,7 @@ function run(suiteRequire, modules) {
             if (global.__karma__) {
                 global.__karma__.start();
             } else {
-                jasmine.getEnv().execute();    
+                jasmine.getEnv().execute();
             }
         });
     });
@@ -119,6 +119,7 @@ module.exports = run(require, [
     "spec/flat-module-tree",
     "spec/nested-module-tree",
     "spec/serialization-compiler",
+    "spec/directory-index",
     {name: "spec/dot-js-module", node: false},
     {name: "spec/node", browser: false, karma: false}
 ]).then(function () {
