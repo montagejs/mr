@@ -1555,9 +1555,9 @@
                 extension = exports.extension(id);
             if (
                 !extension || (
-                    extension !== "js" &&
-                        extension !== "json" &&
-                            config.moduleTypes.indexOf(extension) === -1
+                extension !== "js" &&
+                extension !== "json" &&
+                config.moduleTypes.indexOf(extension) === -1
                 )
             ) {
                 path += ".js";
@@ -1651,13 +1651,16 @@
                 return exports.loadXHR(location).then(resolve, reject);
             } else if (typeof process !== "undefined") {
                 var path = exports.locationToPath(location);
+                var indexPath = path.replace('.js', '/index.js');
                 var FS = require("fs");
-                FS.readFile(path, "utf-8", function (error, text) {
-                    if (error) {
-                        reject(new Error(error));
-                    } else {
-                        resolve(text);
-                    }
+                FS.stat(path, function(err) {
+                    FS.readFile(err ? indexPath : path, "utf-8", function (error, text) {
+                        if (error) {
+                            reject(new Error(error));
+                        } else {
+                            resolve(text);
+                        }
+                    });
                 });
             } else {
                 reject(new Error("Environment not supported"));
