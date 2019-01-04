@@ -29,10 +29,6 @@ of:
 - `dependencies` version predicates are ignored.
 - `__filename` and `__dirname` are not injected into module scope. Consider
   using `module.location` and `module.directory` instead.
-- Because Mr cannot know if a URL points to a file or a directory, when you
-  require a directory `index.js` is not sought. To make a package using an
-  `index.js` compatible with Montage Require, add a `redirects` block to
-  `package.json`. See the [package API](./Package-API.md)
 
 In addition to these differences Mr adds some additional properties to
 [package.json](./Package-API.md), [module](./Module-API.md) and

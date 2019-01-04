@@ -235,40 +235,6 @@ bootstrap("require/browser", function (require) {
         document.getElementsByTagName("head")[0].appendChild(script);
     };
 
-    Require.ScriptLoader = function (config) {
-        var hash = config.packageDescription.hash;
-        return function (location, module) {
-            return Promise.try(function () {
-
-                // short-cut by predefinition
-                if (definitions[hash] && definitions[hash][module.id]) {
-                    return definitions[hash][module.id];
-                }
-
-                if (/\.js$/.test(location)) {
-                    location = location.replace(/\.js$/, ".load.js");
-                } else {
-                    location += ".load.js";
-                }
-
-                var definition = getDefinition(hash, module.id);
-                loadIfNotPreloaded(location, definition, config.preloaded);
-
-                return definition;
-            })
-            .then(function (definition) {
-                /*jshint -W089 */
-                delete definitions[hash][module.id];
-                for (var name in definition) {
-                    module[name] = definition[name];
-                }
-                module.location = location;
-                module.directory = URL.resolve(location, ".");
-                /*jshint +W089 */
-            });
-        };
-    };
-
     // old version
     var loadPackageDescription = Require.loadPackageDescription;
     Require.loadPackageDescription = function (dependency, config) {
@@ -286,22 +252,9 @@ bootstrap("require/browser", function (require) {
     };
 
     Require.makeLoader = function (config) {
-        var Loader;
-        if (config.useScriptInjection) {
-            Loader = Require.ScriptLoader;
-        } else {
-            Loader = Require.XhrLoader;
-        }
-        return Require.ReelLoader(config,
-            Require.MappingsLoader(
-                config,
-                Require.LocationLoader(
-                    config,
-                    Require.MemoizedLoader(
-                        config,
-                        Loader(config)
-                    )
-                )
+        return Require.LocationLoader(config,
+            Require.MemoizedLoader(config,
+                Require.XhrLoader(config)
             )
         );
     };

@@ -16,16 +16,6 @@ module.exports = function (parentRequire, sandboxId, sandboxDependencies) {
     var topId = parentRequire.resolve(sandboxId);
     var originalModule = parentRequire.getModuleDescriptor(topId);
 
-    while (originalModule.redirect || originalModule.mappingRedirect) {
-        if (originalModule.redirect) {
-            topId = originalModule.redirect;
-        } else {
-            parentRequire = originalModule.mappingRequire;
-            topId = originalModule.mappingRedirect;
-        }
-        originalModule = parentRequire.getModuleDescriptor(topId);
-    }
-
     return parentRequire.deepLoad(topId)
     .then(function () {
         // delete the exports to cause the factory to get called again

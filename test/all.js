@@ -90,7 +90,6 @@ module.exports = run(require, [
     "spec/comments",
     "spec/identify",
     "spec/dev-dependencies",
-    "spec/production",
     "spec/case-sensitive",
     "spec/inject",
     "spec/inject-dependency",
@@ -112,7 +111,6 @@ module.exports = run(require, [
     "spec/module-error",
     "spec/module-metadata",
     "spec/flat-module-tree",
-    "spec/nested-module-tree",
     "spec/serialization-compiler",
     "spec/directory-index",
     {name: "spec/dot-js-module", node: false}

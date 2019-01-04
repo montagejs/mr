@@ -5,8 +5,7 @@ var ExtensionLoader = function (config, load) {
     return function (id, module) {
         var match = extensionRe.exec(id);
         if (match) {
-            module.redirect = id + "/" + match[1];
-            return module;
+            return load(id + "/" + match[1], module);
         } else {
             return load(id, module);
         }

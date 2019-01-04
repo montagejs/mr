@@ -47,17 +47,17 @@ Require.read = function read(location) {
                         path.indexOf(jsIndexPrefix) === -1 // is not /index.js
                 ) {
                     path = path.replace(jsPreffix, jsIndexPrefix);
-                    
+
                     // Attempt to read if file exists
                     FS.readFile(path, "utf-8", function (error, text) {
                         if (error) {
-                            reject(new Error(error));   
+                            reject(new Error(error));
                         } else {
                             resolve(text);
                         }
                     });
                 } else {
-                    reject(new Error(error));   
+                    reject(new Error(error));
                 }
             } else {
                 resolve(text);
@@ -123,18 +123,10 @@ Require.NodeLoader = function NodeLoader(config) {
 };
 
 Require.makeLoader = function makeLoader(config) {
-    return Require.ReelLoader(config,
-        Require.MappingsLoader(
-            config,
-            Require.LocationLoader(
-                config,
-                Require.MemoizedLoader(
-                    config,
-                    Require.Loader(
-                        config,
-                        Require.NodeLoader(config)
-                    )
-                )
+    return Require.LocationLoader(config,
+        Require.MemoizedLoader(config,
+            Require.Loader(config,
+                Require.NodeLoader(config)
             )
         )
     );

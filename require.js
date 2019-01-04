@@ -79,11 +79,9 @@
     Module.prototype.require = null;
     Module.prototype.factory = void 0;
     Module.prototype.exports = void 0;
-    Module.prototype.redirect = void 0;
     Module.prototype.location = null;
     Module.prototype.directory = null;
     Module.prototype.injected = false;
-    Module.prototype.mappingRedirect = void 0;
     Module.prototype.type = null;
     Module.prototype.text = void 0;
     Module.prototype.extraDependencies = void 0;
@@ -310,8 +308,7 @@
         // loaded definition from the given path.
         modules[""] = {
             id: "",
-            redirect: normalizeId(resolve(description.main, "")),
-            location: config.location
+            location: normalizeId(resolve(description.main, ""))
         };
 
         // mappings, link this package to other packages.
@@ -416,8 +413,6 @@
             module.exports = exports;
             module.directory = URL.resolve(module.location, "./");
             module.injected = true;
-            module.redirect = void 0;
-            module.mappingRedirect = void 0;
             module.error = void 0;
             // delete module.redirect;
             // delete module.mappingRedirect;
@@ -459,10 +454,6 @@
             .then(function () {
                 // compile and analyze dependencies
                 return config.compile(module).then(function () {
-                    if (module.redirect !== void 0) {
-                        module.dependencies = module.dependencies || [];
-                        module.dependencies.push(module.redirect);
-                    }
                     if (module.extraDependencies !== void 0) {
                         module.dependencies = module.dependencies || [];
                         Array.prototype.push.apply(module.dependencies, module.extraDependencies);
@@ -528,18 +519,9 @@
                     " via " + JSON.stringify(viaId) +
                     " because " + module.error.message
                 );
+                error.stack = module.error.stack;
                 error.cause = module.error;
                 throw error;
-            }
-
-            // handle redirects
-            if (module.redirect !== void 0) {
-                return getExports(module.redirect, viaId);
-            }
-
-            // handle cross-package linkage
-            if (module.mappingRedirect !== void 0) {
-                return module.mappingRequire(module.mappingRedirect, viaId);
             }
 
             // do not reinitialize modules
@@ -1223,54 +1205,6 @@
 
     // Built-in loader "middleware":
 
-    // Using mappings hash to load modules that match a mapping.
-    Require.MappingsLoader = function(config, load) {
-        config.mappings = config.mappings || {};
-        config.name = config.name;
-
-        // finds a mapping to follow, if any
-        return function (id, module) {
-
-            if (Require.isAbsolute(id)) {
-                return load(id, module);
-            }
-
-            var mappings = config.mappings;
-            var prefixes = Object.keys(mappings);
-            var length = prefixes.length;
-
-            function loadMapping(mappingRequire) {
-                var rest = id.slice(prefix.length + 1);
-                config.mappings[prefix].mappingRequire = mappingRequire;
-                module.mappingRedirect = rest;
-                module.mappingRequire = mappingRequire;
-                return mappingRequire.deepLoad(rest, config.location);
-            }
-
-            // TODO: remove this when all code has been migrated off of the autonomous name-space problem
-            if (
-                config.name !== void 0 &&
-                id.indexOf(config.name) === 0 &&
-                id.charAt(config.name.length) === "/"
-            ) {
-                console.warn("Package reflexive module ignored:", id);
-            }
-            var i, prefix;
-            for (i = 0; i < length; i++) {
-                prefix = prefixes[i];
-                if (
-                    id === prefix || (
-                        id.indexOf(prefix) === 0 &&
-                            id.charAt(prefix.length) === "/"
-                    )
-                ) {
-                    return config.loadPackage(mappings[prefix], config).then(loadMapping);
-                }
-            }
-            return load(id, module);
-        };
-    };
-
     Require.LocationLoader = function (config, load) {
         function locationLoader(id, module) {
             var location, result,
@@ -1299,28 +1233,5 @@
 
     Require.MemoizedLoader = function (config, load) {
         return memoize(load, config.cache);
-    };
-
-    /**
-     * Allows reel directories to load the contained eponymous JavaScript
-     * module.
-     * @see Loader middleware in require/require.js
-     * @param config
-     * @param loader the next loader in the chain
-     */
-    var reelExpression = /([^\/]+)\.reel$/,
-        dotREEL = ".reel",
-        SLASH = "/";
-    Require.ReelLoader = function(config, load) {
-        return function reelLoader(id, module) {
-            if (endsWith(id, dotREEL)) {
-                module.redirect = id;
-                module.redirect += SLASH;
-                module.redirect += reelExpression.exec(id)[1];
-                return module;
-            } else {
-                return load(id, module);
-            }
-        };
     };
 });
