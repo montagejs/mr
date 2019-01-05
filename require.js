@@ -36,6 +36,9 @@
         global = globalEval('this');
         /*jshint evil:false */
 
+    // Needed for modules that want to use global directly
+    global.global = global;
+
     // Non-CommonJS Promise
     Promise.prototype['finally'] = Promise.prototype['finally'] || function finallyPolyfill(callback) {
         var constructor = this.constructor;
@@ -289,22 +292,18 @@
                     JSON.stringify(dependency)
                 );
             }
-            // TODO: Eventually these should be switched: flatLocation should
-            // become location, location should become nestedLocation so that
-            // we try flat first then nested.
-            dependency.strategy = "nested";
-            // for npm 3+
-            if (config.mainPackageLocation) {
-                dependency.flatLocation = URL.resolve(
+            if (config.strategy === "flat" && config.mainPackageLocation) {
+                dependency.location = URL.resolve(
                     config.mainPackageLocation,
                     dependency.location
                 );
+            } else {
+                // npm 2
+                dependency.location = URL.resolve(
+                    config.location,
+                    dependency.location
+                );
             }
-            // for npm 2 (nested)
-            dependency.location = URL.resolve(
-                config.location,
-                dependency.location
-            );
         }
 
         // register the package name so the location can be reused
