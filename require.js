@@ -1152,8 +1152,9 @@
 
     // Extracts dependencies by parsing code and looking for "require" (currently using a simple regexp)
     var requirePattern = /(?:^|[^\w\$_.])require\s*\(\s*["']([^"']*)["']\s*\)/g,
-        escapeSimpleComment = /^\/\/.*/gm,
-        escapeMultiComment = /^\/\*[\S\s]*?\*\//gm;
+        escapeSimpleComment = /\/\/(.*)$/gm,
+        escapeMultiComment = /\/\*([\s\S]*?)\*\//g;
+
 
     // exports.parseDependencies = function parseDependencies(factory) {
     //    // Clear commented require calls
@@ -1341,6 +1342,9 @@
         };
     };
 
+    var dotMJSON = ".mjson",
+        dotMJSONLoadJs = ".mjson.load.js";
+
     /**
      * Allows the .meta and .mjson files to be loaded as json
      * @see Compiler middleware in require/require.js
@@ -1350,11 +1354,19 @@
     exports.MetaCompiler = function (module) {
         if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
             if (typeof module.exports !== "object" && typeof module.text === "string") {
-                if (exports.delegate && typeof exports.delegate.requireWillCompileMJSONFile === "function") {
-                    return exports.delegate.requireWillCompileMJSONFile(
+                if (exports.delegate && typeof exports.delegate.compileMJSONFile === "function") {
+                    return exports.delegate.compileMJSONFile(
                         module.text, module.require, module.id
                     ).then(function (root) {
-                        module.exports = root || JSON.parse(module.text);
+                        module.exports = JSON.parse(module.text);
+                        if (module.exports.montageObject) {
+                            throw new Error(
+                                'using reserved word as property name, \'montageObject\' at: ' +
+                                module.location
+                            );
+                        }
+
+                        module.exports.montageObject = root;
                         return module;
                     });
                 } else {
@@ -1542,9 +1554,9 @@
                 extension = exports.extension(id);
             if (
                 !extension || (
-                    extension !== "js" &&
-                        extension !== "json" &&
-                            config.moduleTypes.indexOf(extension) === -1
+                extension !== "js" &&
+                extension !== "json" &&
+                config.moduleTypes.indexOf(extension) === -1
                 )
             ) {
                 path += ".js";
@@ -1635,16 +1647,24 @@
     exports.read = function read(location) {
         return new Promise(function (resolve, reject) {
             if (typeof XMLHttpRequest !== "undefined") {
-                return exports.loadXHR(location).then(resolve, reject);
+                return exports.loadXHR(location).then(
+                    resolve,
+                    function () {
+                        var indexLocation = location.replace(/\.js$/, '/index.js');
+                        return exports.loadXHR(indexLocation).then(resolve, reject);
+                    });
             } else if (typeof process !== "undefined") {
                 var path = exports.locationToPath(location);
+                var indexPath = path.replace('.js', '/index.js');
                 var FS = require("fs");
-                FS.readFile(path, "utf-8", function (error, text) {
-                    if (error) {
-                        reject(new Error(error));
-                    } else {
-                        resolve(text);
-                    }
+                FS.stat(path, function(err) {
+                    FS.readFile(err ? indexPath : path, "utf-8", function (error, text) {
+                        if (error) {
+                            reject(new Error(error));
+                        } else {
+                            resolve(text);
+                        }
+                    });
                 });
             } else {
                 reject(new Error("Environment not supported"));

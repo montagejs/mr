@@ -28,9 +28,16 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 </copyright> */
-// require("a");
- // require("a");
-/* require("b"); */
- /* require("b"); */
+
 var test = require('test');
+var bar = require('bar');
+
+// Should all resolve same module
+var foo1 = require('foo');
+var foo2 = require('foo/index');
+var foo3 = require('foo/index.js');
+
+test.assert(foo1.program() === exports, 'exact exports');
+test.assert(foo2.program() === exports, 'exact exports');
+test.assert(foo3.program() === exports, 'exact exports');
 test.print('DONE', 'info');
