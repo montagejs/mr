@@ -79,7 +79,9 @@ bootstrap("require/browser", function (require) {
             url.indexOf(jsIndexPrefix) !== url.length - 9 // does not end in /index.js
         ) {
             xhr.url = xhr.url.replace(jsPreffix, jsIndexPrefix);
-            xhr.module.location = xhr.url;
+            if (xhr.module) {
+                xhr.module.location = xhr.url;
+            }
             xhr.open(GET, xhr.url, true);
             xhr.send(null);
         } else {
