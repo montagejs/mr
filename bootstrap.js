@@ -222,12 +222,10 @@
         // Handle preload
         // TODO rename to MontagePreload
         if (!global.preload) {
-            var mrLocation = resolve(window.location, params.mrLocation),
-                promiseLocation = params.promiseLocation || resolve(mrLocation, pending.promise);
+            var mrLocation = resolve(window.location, params.mrLocation);
 
             // Special Case bluebird for now:
-            load(promiseLocation, function() {
-
+            var onLoadBluebird = function () {
                 //global.bootstrap cleans itself from window once all known are loaded. "bluebird" is not known, so needs to do it first
                 global.bootstrap("bluebird", function (mrRequire, exports) {
                     return window.Promise;
@@ -236,7 +234,20 @@
                 global.bootstrap("promise", function (mrRequire, exports) {
                     return window.Promise;
                 });
-            });
+            };
+            if (params.promiseLocation) {
+                load(params.promiseLocation, onLoadBluebird);
+            } else {
+                // First assume the app was installed with npm 3+ and without
+                // --legacy-bundling, in which case bluebird should be under
+                // the app's node_modules
+                load(resolve(window.location, pending.promise), onLoadBluebird, function () {
+                    // If that failed, it's possible the app was installed with
+                    // npm 2 or --legacy-bundling, in which case bluebird should
+                    // be under mr's node_modules
+                    load(resolve(mrLocation, pending.promise), onLoadBluebird);
+                });
+            }
 
             // Load other module and skip promise
             for (var id in pending) {
