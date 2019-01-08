@@ -1676,7 +1676,7 @@
                     });
             } else if (typeof process !== "undefined") {
                 var path = exports.locationToPath(location);
-                var indexPath = path.replace('.js', '/index.js');
+                var indexPath = path.replace(/.js$/, '/index.js');
                 var FS = require("fs");
                 FS.stat(path, function(err) {
                     FS.readFile(err ? indexPath : path, "utf-8", function (error, text) {
