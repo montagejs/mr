@@ -340,12 +340,6 @@
         }
     }
 
-    function inferStrategy(description) {
-        // The existence of an _args or _requested property in package.json distinguishes
-        // packages that were installed with npm version 3 or higher.
-        return description._args || description._requested ? 'flat' : 'nested';
-    }
-
     function inferOverlay(description) {
         return (typeof window !== "undefined" ? ["window", "browser", "montage"] : ["node", "server", "montage"]);
     }
@@ -366,7 +360,6 @@
         config.location = location || exports.getLocation();
         config.packageDescription = description;
         config.useScriptInjection = description.useScriptInjection;
-        config.strategy = config.strategy || inferStrategy(description);
         config.overlays = config.overlays || inferOverlay(description);
 
         if (description.production !== void 0) {
