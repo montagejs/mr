@@ -87,6 +87,7 @@ module.exports = run(require, [
     "spec/load-package",
     "spec/load-package-name",
     "spec/load-package-digit",
+    "spec/multiple-versions",
     {name: "spec/not-found", node: false},
     "spec/redirects",
     "spec/redirects-package",

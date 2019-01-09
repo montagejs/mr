@@ -69,6 +69,12 @@ Verifies that a module can replace its exports by assigning directly to
 Verifies that a module will be executed even if it fails to load.  The
 execution will throw an error.
 
+## multiple-versions
+
+Verifies that dependencies get the correct version of packages they depend
+on when the node_modules tree contains multiple versions of the same
+package.
+
 ## not-found
 
 Verifies that a module will be executed even if it fails to load.  The
