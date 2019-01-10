@@ -1,5 +1,7 @@
 {
-	"dependencies": {
-	    "nested":"*"
-	}
+	"_args": [],
+    "dependencies": {
+        "http-server": "1",
+        "url": "2"
+    }
 }
