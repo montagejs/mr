@@ -293,18 +293,10 @@
                     JSON.stringify(dependency)
                 );
             }
-            if (config.strategy === "flat" && config.mainPackageLocation) {
-                dependency.location = URL.resolve(
-                    config.mainPackageLocation,
-                    dependency.location
-                );
-            } else {
-                // npm 2
-                dependency.location = URL.resolve(
-                    config.location,
-                    dependency.location
-                );
-            }
+            dependency.location = URL.resolve(
+                config.location,
+                dependency.location
+            );
         }
 
         // register the package name so the location can be reused
@@ -426,11 +418,7 @@
         }
         delete description.overlay;
 
-        if (config.strategy === 'flat') {
-            config.packagesDirectory = URL.resolve(config.mainPackageLocation, "node_modules/");
-        } else {
-            config.packagesDirectory = URL.resolve(location, "node_modules/");
-        }
+        config.packagesDirectory = URL.resolve(location, "node_modules/");
 
         // The default "main" module of a package is 'index' by default.
         description.main = description.main || 'index';
@@ -1013,55 +1001,119 @@
         descriptionLocations[location] = descriptionLocation;
     };
 
-    exports.loadPackageDescription = function (dependency, config) {
+    // 'node_modules' character codes reversed
+    var nmChars = [ 115, 101, 108, 117, 100, 111, 109, 95, 101, 100, 111, 110 ];
+    var nmLen = nmChars.length;
+    var CHAR_FORWARD_SLASH = 47;
+    /**
+     * Generate the next location that a node_module could be located at.
+     * The next pair of /node_modules/ path parts are replaced with a single
+     * /node_modules/, resulting in the same location, one package up.
+     * This is more or less equivalent to doing
+     * `location.replace(/node_modules\/[^/]+\/node_modules/, "node_modules")`,
+     * except that the replacement is made from the end of the string rather
+     * than the front, and performs better than regex.
+     * @param {string} location
+     * @return {string|null}
+     */
+    function nextModuleLocation(location) {
+        var end = location.length - 1,
+            rest = end,
+            p = 0,
+            nmFound = 0,
+            i, code;
+        for (i = end; i >= 0 && nmFound < 2; --i) {
+            code = location.charCodeAt(i);
+            if (code === CHAR_FORWARD_SLASH) {
+                if (p === nmLen) {
+                    nmFound++;
+                } else if (nmFound === 0) {
+                    rest = i + 1;
+                }
+                p = 0;
+            } else if (p !== -1) {
+                if (nmChars[p] === code) {
+                    ++p;
+                } else {
+                    p = -1;
+                }
+            }
+        }
+        if (nmFound === 2) {
+            return location.substring(0, i + nmLen + 3) + location.substring(rest);
+        }
+        return null;
+    }
 
-        var location;
+    /**
+     * Try loading a package.json file. If the package.json cannot be read
+     * at the given location, the next possible package location is tried
+     * until all possibilities are exhausted.
+     *
+     * This is what provides support for projects installed with npm 3+.
+     */
+    function tryPackage(location, dependency, config) {
+        var descriptionLocations, descriptionLocation, promise, read;
+
+        descriptionLocations = config.descriptionLocations = config.descriptionLocations || {};
+        if (descriptionLocations[location]) {
+            descriptionLocation = descriptionLocations[location];
+        } else {
+            descriptionLocation = URL.resolve(location, "package.json");
+        }
+
+        if (exports.delegate && typeof exports.delegate.requireWillLoadPackageDescriptionAtLocation === "function") {
+            promise = exports.delegate.requireWillLoadPackageDescriptionAtLocation(descriptionLocation, dependency, config);
+        }
+        if (!promise) {
+            read = config.read || exports.read;
+            promise = read(descriptionLocation).then(function (content) {
+                dependency.location = location;
+                try {
+                    return JSON.parse(content);
+                } catch (error) {
+                    error.message = "Loading package description at '" + location + "' failed cause: " + error.message + " in " + JSON.stringify(descriptionLocation);
+                    throw error;
+                }
+            }, function (err) {
+                var nextLocation = nextModuleLocation(location);
+                if (nextLocation) {
+                    return tryPackage(nextLocation, dependency, config);
+                } else {
+                    throw err;
+                }
+            });
+        }
+        return promise;
+    }
+
+    exports.loadPackageDescription = function (dependency, config) {
+        var location, definition, promise, descriptions;
+
         if (dependency.hash) { // use script injection
-            var definition = exports.getDefinition(dependency.hash, "package.json");
+            definition = exports.getDefinition(dependency.hash, "package.json");
             location = URL.resolve(dependency.location, "package.json.load.js");
             exports.loadIfNotPreloaded(location, definition, config.preloaded);
             return definition.get("exports");
         } else {
             location = dependency.location;
-            var descriptions =
-                config.descriptions =
-                    config.descriptions || {};
-            if (descriptions[location] === void 0) {
-                var descriptionLocations =
-                    config.descriptionLocations =
-                        config.descriptionLocations || {};
-                var descriptionLocation;
-                if (descriptionLocations[location]) {
-                    descriptionLocation = descriptionLocations[location];
-                } else {
-                    descriptionLocation = URL.resolve(location, "package.json");
-                }
-
-                var promise;
-                if (exports.delegate && typeof exports.delegate.requireWillLoadPackageDescriptionAtLocation === "function") {
-                    promise = exports.delegate.requireWillLoadPackageDescriptionAtLocation(descriptionLocation,dependency, config);
-                }
-                if (!promise) {
-                    promise = (config.read || exports.read)(descriptionLocation);
-                }
-
-                descriptions[location] = promise.then(function (json) {
-                    try {
-                        return JSON.parse(json);
-                    } catch (error) {
-                        error.message = "Loading package description at '" + location + "' failed cause: " + error.message + " in " + JSON.stringify(descriptionLocation);
-                        throw error;
-                    }
-                });
+            descriptions = config.descriptions = config.descriptions || {};
+            if (descriptions[location] !== void 0) {
+                return descriptions[location];
             }
-            return descriptions[location];
+            promise = tryPackage(location, dependency, config);
+            descriptions[location] = promise;
+            promise.then(function (result) {
+                // Dependency location may change while being loaded, cache
+                // the description at its final location too
+                descriptions[dependency.location] = promise;
+                return result;
+            });
+            return (descriptions[location] = promise);
         }
     };
 
     exports.loadPackage = function (dependency, config, packageDescription) {
-
-        //console.log('loadPackage', dependency);
-
         config = config || {
             location: URL.resolve(exports.getLocation(), dependency)
         };
@@ -1116,7 +1168,8 @@
             var location = dependency.location;
             if (!loadingPackages[location]) {
                 loadingPackages[location] = exports.loadPackageDescription(dependency, config).then(function (packageDescription) {
-                    return exports.injectLoadedPackageDescription(location, packageDescription, config);
+                    // loadPackageDescription may have mutated dependency.location
+                    return exports.injectLoadedPackageDescription(dependency.location, packageDescription, config);
                 });
             }
             return loadingPackages[location];
