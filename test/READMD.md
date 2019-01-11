@@ -47,6 +47,12 @@ Verifies that a module burried in a directory tree can be required.
 Verifies that an exported object can be imported and exported from
 module to module.
 
+## versions
+
+Verifies that a package gets the correct version of a dependency it
+requested, even if a different version of that dependency was already
+loaded by another package.
+
 
 # CommonJS Modules Amendments
 
