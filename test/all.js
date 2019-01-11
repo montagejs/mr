@@ -81,6 +81,7 @@ module.exports = run(require, [
     "spec/transitive",
     "spec/module-exports",
     "spec/return",
+    "spec/versions",
     {name: "spec/named-packages", node: true},
     {name: "spec/named-mappings", node: true},
     "spec/named-parent-package",
