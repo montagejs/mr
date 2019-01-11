@@ -195,6 +195,8 @@
 
     var isRelativePattern = /\/$/;
     function normalizeDependency(dependency, config, name) {
+        var versions;
+
         config = config || {};
         if (typeof dependency === "string") {
             dependency = {
@@ -206,13 +208,12 @@
         }
         // if the named dependency has already been found at another
         // location, refer to the same eventual instance
-        // TODO this has to add a test on version
-        if (
-            dependency.name &&
-                config.registry &&
-                    config.registry.has(dependency.name)
-        ) {
-            dependency.location = config.registry.get(dependency.name);
+        if (dependency.name) {
+            dependency.version = dependency.version || "*";
+            versions = config.registry && config.registry.get(dependency.name);
+            if (versions && versions.has(dependency.version)) {
+                dependency.location = versions.get(dependency.version);
+            }
         }
 
         // default location
@@ -247,7 +248,16 @@
 
         // register the package name so the location can be reused
         if (dependency.name) {
-            config.registry.set(dependency.name,dependency.location);
+            if (!versions) {
+                versions = new Map();
+                config.registry.set(dependency.name, versions);
+            }
+            versions.set(dependency.version, dependency.location);
+            if (dependency.version !== "*") {
+                // Make sure packages who require any version of this dependency get the copy
+                // that is found last (i.e. furthest down in the tree)
+                versions.set("*", dependency.location);
+            }
         }
 
         return dependency;
@@ -283,6 +293,7 @@
 
         var config = Object.create(parent);
         config.name = description.name;
+        config.version = description.version || "*";
         config.location = location || Require.getLocation();
         config.packageDescription = description;
         config.useScriptInjection = description.useScriptInjection;
@@ -297,8 +308,18 @@
         var modules = config.modules = config.modules || {};
 
         var registry = config.registry;
-        if (config.name !== void 0 && !registry.has(config.name)) {
-            registry.set(config.name,config.location);
+        if (config.name !== void 0 && config.version !== void 0) {
+            var versions = registry.get(config.name);
+            if (!versions) {
+                versions = new Map();
+                registry.set(config.name, versions);
+            }
+            if (!versions.has(config.version)) {
+                versions.set(config.version, config.location);
+                if (config.version !== "*") {
+                    versions.set("*", config.location);
+                }
+            }
         }
 
         // overlay
@@ -1053,8 +1074,8 @@
         "packages",
         "modules"
     ];
-            
-    var syncCompilerChain;    
+
+    var syncCompilerChain;
 
     //The ShebangCompiler doesn't make sense on the client side
     if (typeof window !== "undefined") {
@@ -1099,8 +1120,8 @@
                 )
             );
         };
-    }    
-    
+    }
+
     Require.makeCompiler = function (config) {
         return function (module) {
             return new Promise(function (resolve, reject) {
