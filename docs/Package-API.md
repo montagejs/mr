@@ -36,11 +36,6 @@ meaningful to Mr:
     the browser, the `window`, `browser`, and `montage` engines are
     applied.  This property is likely to be deprecated and replaced by
     an `if` block or other content-negotiation blocks in the future.
--   **directories**: an object containing optional `lib` and `packages`
-    directory overrides.  The `lib` directory is a location relative to
-    this package at which to find modules.  The `packages` directory is
-    a location relative to this package in which to find unknown
-    packages by name.
 -   **main**: the module identifier of the module that represents this
     package when required in other packages by the mapping module
     identier, or in this package by its own name.
