@@ -119,6 +119,7 @@ module.exports = run(require, [
     "spec/module-metadata",
     "spec/flat-module-tree",
     "spec/nested-module-tree",
+    "spec/mixed-module-tree",
     "spec/serialization-compiler",
     "spec/directory-index",
     {name: "spec/dot-js-module", node: false},
