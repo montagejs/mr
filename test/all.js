@@ -22,10 +22,10 @@ function run(suiteRequire, modules) {
     });
 
     var promises = modules.map(function (module) {
-
+        
         var spec = this,
             packagePath = module + '/';
-
+        
         return suiteRequire.loadPackage(packagePath, {
             location: require.location
         }).then(function (pkg) {
@@ -61,7 +61,7 @@ function run(suiteRequire, modules) {
             if (global.__karma__) {
                 global.__karma__.start();
             } else {
-                jasmine.getEnv().execute();
+                jasmine.getEnv().execute();    
             }
         });
     });
@@ -81,7 +81,6 @@ module.exports = run(require, [
     "spec/transitive",
     "spec/module-exports",
     "spec/return",
-    "spec/versions",
     {name: "spec/named-packages", node: false},
     {name: "spec/named-mappings", node: false},
     "spec/named-parent-package",
