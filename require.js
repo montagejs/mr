@@ -246,8 +246,34 @@
         return resolved.get(baseId).get(id);
     }
 
+    var NODE_MODULES_SLASH = "node_modules/";
+    var SLASH_NODE_MODULES_SLASH = "/node_modules/";
+    function findLongestDependencyPath(packageName, parent, packageLock) {
+        var pathParts = parent.split("/"),
+            directory = NODE_MODULES_SLASH,
+            bestDirectory = null,
+            i = 0,
+            part;
+        while (packageLock && packageLock.dependencies) {
+            if (packageName in packageLock.dependencies) {
+                bestDirectory = directory;
+            }
+            i += 2;  // skip node_modules
+            part = pathParts[i];
+            directory += part;
+            directory += SLASH_NODE_MODULES_SLASH;
+            packageLock = packageLock.dependencies[part];
+        }
+        if (bestDirectory) {
+            bestDirectory += packageName;
+        }
+        return bestDirectory;
+    }
+
     var isRelativePattern = /\/$/;
     function normalizeDependency(dependency, config, name) {
+        var configPath, dependencyPath;
+
         config = config || {};
         if (typeof dependency === "string") {
             dependency = {
@@ -256,25 +282,28 @@
         }
         if (dependency.main) {
             dependency.location = config.mainPackageLocation;
-        }
-        // if the named dependency has already been found at another
-        // location, refer to the same eventual instance
-        // TODO this has to add a test on version
-        if (
-            dependency.name &&
-                config.registry &&
-                    config.registry.has(dependency.name)
-        ) {
-            dependency.location = config.registry.get(dependency.name);
+        } else if (dependency.name) {
+            // if the named dependency has already been found at another
+            // location, refer to the same eventual instance
+            // TODO this has to add a test on version
+            if (config.registry && config.registry.has(dependency.name)) {
+                dependency.location = config.registry.get(dependency.name);
+            } else if (config.packageLock) {
+                configPath = config.location.slice(config.mainPackageLocation.length - 1);
+                dependencyPath = findLongestDependencyPath(dependency.name, configPath, config.packageLock);
+                if (dependencyPath) {
+                    dependency.location = URL.resolve(config.mainPackageLocation, dependencyPath);
+                }
+            } else if (!dependency.location && config.packagesDirectory) {
+                // default location
+                dependency.location = URL.resolve(
+                    config.packagesDirectory,
+                    dependency.name + "/"
+                );
+            }
         }
 
-        // default location
-        if (!dependency.location && config.packagesDirectory && dependency.name) {
-            dependency.location = URL.resolve(
-                config.packagesDirectory,
-                dependency.name + "/"
-            );
-        } else if (!dependency.location) {
+        if (!dependency.location) {
             return dependency; // partially completed
         }
 
@@ -1094,6 +1123,22 @@
         }
     };
 
+    exports.loadPackageLock = function (dependency, config) {
+        var read = config.read || exports.read,
+            packageLockLocation = URL.resolve(dependency.location, "package-lock.json");
+        return read(packageLockLocation)
+        .then(function (content) {
+            try {
+                return JSON.parse(content);
+            } catch (error) {
+                error.message = "Unable to parse package-lock.json at '" + dependency.location + "'";
+                throw error;
+            }
+        }, function () {
+            return null;
+        });
+    };
+
     exports.loadPackage = function (dependency, config, packageDescription) {
         config = config || {
             location: URL.resolve(exports.getLocation(), dependency)
@@ -1159,9 +1204,14 @@
         var pkg;
         if (typeof packageDescription === "object") {
             pkg = exports.injectLoadedPackageDescription(location, packageDescription, config);
-        }
-        else {
-            pkg = config.loadPackage(dependency);
+        } else {
+            pkg = exports.loadPackageLock(dependency, config)
+            .then(function (packageLock) {
+                if (packageLock) {
+                    config.packageLock = packageLock;
+                }
+                return config.loadPackage(dependency);
+            });
         }
         if (typeof pkg.then === "function") {
             pkg = pkg.then(function (pkg) {
