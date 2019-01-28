@@ -1124,7 +1124,7 @@
     };
 
     exports.loadPackageLock = function (dependency, config) {
-        var read = config.read || exports.read,
+        var read = (config && config.read) || exports.read,
             packageLockLocation = URL.resolve(dependency.location, "package-lock.json");
         return read(packageLockLocation)
         .then(function (content) {
@@ -1205,13 +1205,7 @@
         if (typeof packageDescription === "object") {
             pkg = exports.injectLoadedPackageDescription(location, packageDescription, config);
         } else {
-            pkg = exports.loadPackageLock(dependency, config)
-            .then(function (packageLock) {
-                if (packageLock) {
-                    config.packageLock = packageLock;
-                }
-                return config.loadPackage(dependency);
-            });
+            pkg = config.loadPackage(dependency);
         }
         if (typeof pkg.then === "function") {
             pkg = pkg.then(function (pkg) {

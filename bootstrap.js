@@ -37,7 +37,7 @@
         function finallyHandler() {
             // remove clutter
             if (script.parentNode) {
-                script.parentNode.removeChild(script);   
+                script.parentNode.removeChild(script);
             }
         }
 
@@ -64,11 +64,11 @@
             }
         } else {
             throw new Error("Platform not supported");
-        }   
+        }
     }
 
     exports.initBrowser = function initBrowser() {
-        
+
         return  {
 
             resolveUrl: (function makeResolveUrl() {
@@ -118,7 +118,7 @@
 
                 if (!params) {
                     params = this._params = {};
-                    
+
                     // Find the <script> that loads us, so we can divine our
                     // parameters from its attributes.
                     var i, j, match, script, attr, name,
@@ -172,7 +172,7 @@
 
                 return params;
             },
-            
+
             loadPackage: function (dependency, config, packageDescription) {
                 return mr.loadPackage(dependency, config, packageDescription);
             },
@@ -221,8 +221,8 @@
                     var module = dependencies[id];
 
                     if (
-                        module && 
-                            moduleHasExport(module) === false && 
+                        module &&
+                            moduleHasExport(module) === false &&
                                 typeof module.factory === "function"
                     ) {
                         module.exports = module.factory(bootModule, (module.exports = {})) || module.exports;
@@ -241,9 +241,9 @@
                     if (!dependencies.hasOwnProperty(id)) {
                         return;
                     }
-                    
+
                     dependencies[id].factory = factory;
-                    
+
                     for (id in dependencies) {
                         if (dependencies.hasOwnProperty(id)) {
                             // this causes the function to exit if there are any remaining
@@ -262,7 +262,7 @@
 
                     // Restore inital Boostrap
                     if (initalBoostrap) {
-                        global.bootstrap = initalBoostrap;   
+                        global.bootstrap = initalBoostrap;
                     }
 
                     // At least bootModule in order
@@ -275,10 +275,10 @@
 
                 // This define if the script should be loaded has "nested" of "flat" dependencies in packagesLocation.
                 // Change to "nested" for npm 2 support or add data-packages-strategy="nested" on montage.js script tag.
-                var defaultStrategy = params.packagesStrategy || 'nested'; 
+                var defaultStrategy = params.packagesStrategy || 'nested';
 
                 function bootstrapModuleScript(module, strategy) {
-                    module.strategy = strategy || defaultStrategy; 
+                    module.strategy = strategy || defaultStrategy;
                     var locationRoot = strategy === "flat" ? params.packagesLocation : params.location;
                     module.script = resolveUrl(locationRoot, module.location);
                     loadScript(module.script, function (err, script) {
@@ -293,7 +293,7 @@
                             defaultStrategy = module.strategy;
                             bootstrapModule(module.id, function (bootRequire, exports) {
                                 if (module.export) {
-                                    exports[module.export] = global[module.global]; 
+                                    exports[module.export] = global[module.global];
                                 } else {
                                     return global[module.global];
                                 }
@@ -319,11 +319,11 @@
                                 location: module
                             };
                         } else {
-                            module.id = id;   
+                            module.id = id;
                         }
 
                         // Update dependency
-                        dependencies[id] = module;  
+                        dependencies[id] = module;
                         // Update locatiom from param
                         module.location = params.hasOwnProperty(paramModuleLocation) ? params[paramModuleLocation] : module.location;
 
@@ -336,7 +336,7 @@
                             bootstrapModuleScript(module);
                         }
                     }
-                } 
+                }
             }
         };
     };
@@ -363,7 +363,7 @@
                     params.location = params[paramNamespace + 'Location'] = location;
                     // Detect command line
                     if (
-                        typeof process !== "undefined" && 
+                        typeof process !== "undefined" &&
                             typeof process.argv !== "undefined"
                     ) {
 
@@ -381,12 +381,12 @@
                             }
 
                             params.module = PATH.basename(module);
-                            params.package = PATH.dirname(FS.realpathSync(module)) + "/";  
+                            params.package = PATH.dirname(FS.realpathSync(module)) + "/";
                         }
                     }
                 }
 
-                return params; 
+                return params;
             },
 
             loadPackage: function (dependency, config, packageDescription) {
@@ -394,7 +394,7 @@
             },
 
             bootstrap: function (callback) {
-                
+
 
                 var self = this,
                     params = self.getParams();
@@ -437,7 +437,8 @@
                 params = platform.getParams(),
                 location = params.location,
                 applicationModuleId = params.module || "",
-                applicationLocation = miniURL.resolve(mrRequire.getLocation(), params.package || ".");
+                applicationLocation = miniURL.resolve(mrRequire.getLocation(), params.package || "."),
+                loadRequire, loadPackageLock;
 
             // execute the preloading plan and stall the fallback module loader
             // until it has finished
@@ -451,11 +452,11 @@
                 global.montageDefine = function (hash, id, module) {
                     return getDefinition(hash, id).resolve(module);
                 };
-                
+
                 global.bundleLoaded = function (name) {
                     return getDefinition(name).resolve();
                 };
-                
+
                 var preloading = Promise.resolve();
                 config.preloaded = preloading.promise;
 
@@ -477,10 +478,19 @@
                 }));
             }
 
-            return mrRequire.loadPackage({
+            loadRequire = mrRequire.loadPackage({
                 location: params.location,
                 hash: params.hash
-            }, config).then(function (boostrapRequire) {
+            }, config);
+
+            loadPackageLock = mrRequire.loadPackageLock({
+                location: applicationLocation
+            });
+
+            return mrPromise.all([loadRequire, loadPackageLock])
+            .then(function (res) {
+                var bootstrapRequire = res[0],
+                    packageLock = res[1];
 
                 if ("autoPackage" in params) {
                     mrRequire.injectPackageDescription(applicationLocation, {
@@ -490,17 +500,17 @@
                     }, config);
                 }
 
-                return boostrapRequire.loadPackage({
+                return bootstrapRequire.loadPackage({
                     location: applicationLocation,
                     hash: params.applicationHash
-                }).then(function (applicationRequire) {
-
+                }, { packageLock: packageLock })
+                .then(function (applicationRequire) {
                     // Self exports
                     applicationRequire.inject("bootstrap", exports);
 
                     // Default free module
                     applicationRequire.inject("mini-url", miniURL);
-                    applicationRequire.inject("promise", mrPromise); 
+                    applicationRequire.inject("promise", mrPromise);
                     applicationRequire.inject("require", applicationRequire);
 
                     return applicationRequire.async(applicationModuleId);
@@ -510,7 +520,7 @@
     };
 
     if (
-        typeof window !== "undefined" || 
+        typeof window !== "undefined" ||
             (typeof module === 'object' && module.exports &&
                 typeof require !== "undefined")
     ) {
