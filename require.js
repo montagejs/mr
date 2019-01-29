@@ -1018,7 +1018,14 @@
                 loadingPackages[location] = Require.loadPackageDescription(dependency, config)
                 .then(function (packageDescription) {
                     // loadPackageDescription may have mutated dependency.location
-                    return Require.injectLoadedPackageDescription(dependency.location, packageDescription, config);
+                    var pkg = Require.injectLoadedPackageDescription(dependency.location, packageDescription, config);
+                    var rewriteLocation = location !== dependency.location;
+                    if (rewriteLocation) {
+                        loadingPackages[dependency.location] = loadingPackages[location];
+                        // config.packages[dependency.location] is set by injectLoadedPackageDescription
+                        config.packages[location] = config.packages[dependency.location];
+                    }
+                    return pkg;
                 });
             }
             return loadingPackages[location];
