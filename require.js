@@ -1194,8 +1194,15 @@
             var location = dependency.location;
             if (!loadingPackages[location]) {
                 loadingPackages[location] = exports.loadPackageDescription(dependency, config).then(function (packageDescription) {
-                    // loadPackageDescription may have mutated dependency.location
-                    return exports.injectLoadedPackageDescription(dependency.location, packageDescription, config);
+                    // loadPackageDescription may mutate dependency.location
+                    var pkg = exports.injectLoadedPackageDescription(dependency.location, packageDescription, config);
+                    var rewriteLocation = location !== dependency.location;
+                    if (rewriteLocation) {
+                        loadingPackages[dependency.location] = loadingPackages[location];
+                        // config.packages[location] is set by injectLoadedPackageDescription
+                        config.packages[dependency.location] = config.packages[location];
+                    }
+                    return pkg;
                 });
             }
             return loadingPackages[location];
