@@ -15,8 +15,8 @@ env:
   - COMMAND=test
   - COMMAND=test:mr
   - COMMAND=test:karma
-  - COMMAND=integration MR_VERSION=. MOP_VERSION=latest
-  - COMMAND=integration MR_VERSION=. MOP_VERSION="#master"
+  - COMMAND=integration MOP_VERSION=latest
+  - COMMAND=integration MOP_VERSION="#master"
 notifications:
   irc:
     channels:

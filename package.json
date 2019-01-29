@@ -23,7 +23,7 @@
   "scripts": {
     "test": "node test/run-node.js",
     "test:mr": "./bin/mr test/run-node.js",
-    "integration": "mop-integration",
+    "integration": "MR_VERSION=. mop-integration",
     "lint": "jshint *.js",
     "test:karma": "karma start --no-auto-watch --single-run",
     "test:karma-firefox": "karma start --no-auto-watch --single-run --browsers=Firefox",
