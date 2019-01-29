@@ -1199,8 +1199,8 @@
                     var rewriteLocation = location !== dependency.location;
                     if (rewriteLocation) {
                         loadingPackages[dependency.location] = loadingPackages[location];
-                        // config.packages[location] is set by injectLoadedPackageDescription
-                        config.packages[dependency.location] = config.packages[location];
+                        // config.packages[dependency.location] is set by injectLoadedPackageDescription
+                        config.packages[location] = config.packages[dependency.location];
                     }
                     return pkg;
                 });
