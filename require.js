@@ -74,7 +74,7 @@ Require.Compiler = function Compiler(config) {
             var factory = globalEval(
                 "(function(" + names.join(",") + "){" +
                 module.text +
-                "\n//*/\n})\n//@ sourceURL=" + module.location
+                "\n//*/\n})\n//# sourceURL=" + module.location
             );
             module.factory = function (require, exports, module) {
                 Array.prototype.push.apply(arguments, scopeNames.map(function (name) {
