@@ -150,10 +150,7 @@ Require.makeLoader = function makeLoader(config) {
             Require.NodeLoader(config)
         )
     );
-
-    return returnValue;
 };
-
 
 Require.SerializationCompiler = function(config, compile) {
     return function(module) {

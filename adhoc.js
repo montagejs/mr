@@ -1,4 +1,4 @@
-/* global URL:true */
+/* global -URL */
 
 var URL = require("url");
 var QS = require("qs");
