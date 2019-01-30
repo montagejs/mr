@@ -1,6 +1,9 @@
 {
   "name": "mr",
   "version": "17.0.12",
+  "publishConfig": {
+      "tag": "future"
+  },
   "description": "A refresh-only CommonJS module system for browsers, used in Montage",
   "license": "BSD-3-Clause",
   "keywords": [
@@ -19,22 +22,34 @@
     "type": "git",
     "url": "https://github.com/montagejs/mr.git"
   },
-  "main": "require",
+  "main": "./require",
+  "browser": {
+      "require": "./browser",
+      "url": "./mini-url.js"
+  },
   "scripts": {
-    "test": "node test/run-node.js",
+    "build": "node bin/mrs.js boot/require.js -e '().done()' > boot.js",
+    "test": "jasminum test",
+    "test:phantom": "(cd node_modules/mr && jasminum-phantom test)",
     "lint": "jshint .",
     "integration": "mop-integration",
-    "test:karma": "karma start --no-auto-watch --single-run",
+    "test:karma": "npm run build && karma start --no-auto-watch --single-run",
     "test:karma-dev": "karma start --auto-watch --no-single-run",
-    "test:jasmine": "concurrently \"http-server -p 8081\" \"open http://localhost:8081/test/run.html\"",
-    "test:demo": "concurrently \"http-server -a localhost -p 8082\" \"open http://localhost:8082/demo/\""
+    "test:jasmine": "npm run build && concurrently \"http-server -p 8081\" \"open http://localhost:8081/test/run.html\"",
+    "test:demo": "npm run build && concurrently \"http-server -a localhost -p 8082\" \"open http://localhost:8082/demo/\""
   },
   "bin": {
-    "mr": "bin/mr"
+    "mr": "bin/mr.js",
+    "mr-phantom": "bin/mr-phantom.js",
+    "mrs": "bin/mrs.js"
   },
   "production": true,
   "dependencies": {
-    "bluebird": "~3.4.7"
+    "bluebird": "~3.4.7",
+    "optimist": "~0.6.1",
+    "util": "^0.10.3",
+    "colors": "^0.6.2",
+    "istanbul": "^0.1.34"
   },
   "devDependencies": {
     "concurrently": "^3.4.0",
@@ -42,6 +57,7 @@
     "jasmine-console-reporter": "^1.2.7",
     "jasmine-core": "^2.5.2",
     "jshint": "^2.9.5",
+    "jasminum": "^2.0.0",
     "karma": "^1.5.0",
     "karma-chrome-launcher": "^2.0.0",
     "karma-coverage": "^1.1.1",
@@ -49,13 +65,13 @@
     "karma-jasmine": "^1.1.0",
     "karma-phantomjs-launcher": "^1.0.2",
     "mop-integration": "git://github.com/montagejs/mop-integration.git#master",
-    "open": "0.0.5"
+    "open": "0.0.5",
+    "websocket.io": "~0.2.1"
   },
   "exclude": [
     "README.md",
     "CHANGES.md",
     "LICENSE.md",
-    "bootstrap-node.js",
     "node.js",
     "adhoc.*",
     "bin",

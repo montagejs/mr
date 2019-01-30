@@ -1,1 +1,6 @@
-{}
+{
+    "name": "module-types",
+    "mappings": {
+        "bluebird": "../../../node_modules/bluebird"
+    }
+}

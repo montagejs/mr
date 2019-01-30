@@ -1,4 +1,5 @@
 var test = require('test');
+var Promise = require('bluebird');
 
 var config = {
     moduleTypes: ["plus-one"],

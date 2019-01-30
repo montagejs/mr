@@ -2,3 +2,5 @@
 **/test/spec/**
 **/report/**
 **/packages/**
+boot/boilerplate.js
+boot.js

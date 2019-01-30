@@ -24,9 +24,9 @@ if (global.__karma__) {
     global.jasmine = jasmine;
     for (var property in jasmineInterface) {
         if (jasmineInterface.hasOwnProperty(property)) {
-            global[property] = jasmineInterface[property];   
+            global[property] = jasmineInterface[property];
         }
-    }   
+    }
 
     // Default reporter
     jasmineEnv.addReporter(jasmineInterface.jsApiReporter);
@@ -77,10 +77,10 @@ function injectScript(src, module, callback) {
     script.addEventListener('load', function () {
     	callback(null, module);
     });
-    script.addEventListener('error', function(err) { 
+    script.addEventListener('error', function(err) {
         callback(err, module);
     });
-    script.addEventListener('abort', function(err) {    
+    script.addEventListener('abort', function(err) {
         callback(err, module);
     });
     document.head.appendChild(script);
@@ -93,7 +93,7 @@ function injectBase(href) {
 }
 
 injectBase('/base/test/');
-injectScript('../bootstrap.js', 'all', function (err) {
+injectScript('../boot.js', './all', function (err) {
     if (err) {
         throw err;
     }
