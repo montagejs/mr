@@ -76,7 +76,63 @@ module.exports = function(config) {
     // start these browsers
     // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
     //browsers: ['PhantomJS', 'Chrome'],
-    browsers: ['PhantomJS'],
+    // start these browsers
+    // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
+    //browsers: ['PhantomJS', 'Chrome', 'Firefox', 'Safari'],
+    browsers: ['phantomjsLauncher'],
+
+    // you can define custom flags
+    customLaunchers: {
+        phantomjsLauncher: {
+            // Have phantomjs exit if a ResourceError is encountered (useful if karma exits without killing phantom)
+            exitOnResourceError: true,
+            base: 'PhantomJS',
+            options: {
+                settings: {
+                    webSecurityEnabled: false,
+                    ignoreSSLErrors: true
+                }
+            },
+            flags: [
+                '--ssl-protocol=tlsv1',
+                '--load-images=no',
+                '--ignore-ssl-errors=yes'
+            ]
+        },
+        PhantomJS_debug: {
+            base: 'PhantomJS',
+            debug: true,
+            options: {
+                settings: {
+                    webSecurityEnabled: false,
+                    ignoreSSLErrors: true
+                }
+            },
+            flags: [
+                '--web-security=false',
+                '--ssl-protocol=tlsv1',
+                '--load-images=no',
+                '--ignore-ssl-errors=yes',
+                '--ssl-client-certificate-file=./development/origin-server/rest-accelerator.example.com.crt',
+                '--ssl-client-key-file=./development/origin-server/rest-accelerator.example.com.key'
+            ]
+        },
+        firefoxLauncher: {
+            base: 'Firefox',
+            prefs: {
+                'security.ssl.enable_ocsp_stapling': false
+            }
+        },
+        Chrome_without_security: {
+            base: 'Chrome',
+            flags: [
+                '--ignore-certificate-errors=true',
+                '--user-data-dir=./tmp',
+                '--allow-insecure-localhost',
+                '--allow-running-insecure-content'
+            ]
+        }
+    },
 
     // Continuous Integration mode
     // if true, Karma captures browsers, runs the tests and exits

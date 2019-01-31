@@ -1,6 +1,6 @@
 {
   "name": "mr",
-  "version": "17.0.12",
+  "version": "18.0.0",
   "description": "A refresh-only CommonJS module system for browsers, used in Montage",
   "license": "BSD-3-Clause",
   "keywords": [
@@ -22,9 +22,13 @@
   "main": "require",
   "scripts": {
     "test": "node test/run-node.js",
-    "lint": "jshint .",
-    "integration": "mop-integration",
+    "test:mr": "./bin/mr test/run-node.js",
+    "integration": "MR_VERSION=. mop-integration",
+    "lint": "jshint *.js",
     "test:karma": "karma start --no-auto-watch --single-run",
+    "test:karma-firefox": "karma start --no-auto-watch --single-run --browsers=Firefox",
+    "test:karma-chrome": "karma start --no-auto-watch --single-run --browsers=Chrome",
+    "test:karma-debug": "karma start --auto-watch --no-single-run --browsers=PhantomJS_debug",
     "test:karma-dev": "karma start --auto-watch --no-single-run",
     "test:jasmine": "concurrently \"http-server -p 8081\" \"open http://localhost:8081/test/run.html\"",
     "test:demo": "concurrently \"http-server -a localhost -p 8082\" \"open http://localhost:8082/demo/\""
@@ -34,7 +38,7 @@
   },
   "production": true,
   "dependencies": {
-    "bluebird": "~3.4.7"
+    "bluebird": "~3.5.0"
   },
   "devDependencies": {
     "concurrently": "^3.4.0",
@@ -55,8 +59,6 @@
     "README.md",
     "CHANGES.md",
     "LICENSE.md",
-    "bootstrap-node.js",
-    "node.js",
     "adhoc.*",
     "bin",
     "demo",
