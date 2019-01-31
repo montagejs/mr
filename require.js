@@ -1035,13 +1035,17 @@
         if (typeof packageDescription === "object") {
             pkg = Require.injectLoadedPackageDescription(location, packageDescription, config);
         } else {
-            pkg = Require.loadPackageLock(dependency, config)
-            .then(function (packageLock) {
-                if (packageLock) {
-                    config.packageLock = packageLock;
-                }
-                return config.loadPackage(dependency);
-            });
+            if (config.preloaded) {
+                pkg = config.loadPackage(dependency);
+            } else {
+                pkg = Require.loadPackageLock(dependency, config)
+                .then(function (packageLock) {
+                    if (packageLock) {
+                        config.packageLock = packageLock;
+                    }
+                    return config.loadPackage(dependency);
+                });
+            }
         }
         if (typeof pkg.then === "function") {
             pkg = pkg.then(function (pkg) {
