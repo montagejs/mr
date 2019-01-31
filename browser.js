@@ -75,16 +75,14 @@ bootstrap("require/browser", function (require) {
         // Re-use xhr on read on .js failure if not /index.js file and
         // retry on /index.js dynamically.
         if (
-            url.indexOf(jsPreffix) !== -1 && // is .js
-                url.indexOf(jsIndexPrefix) === -1 // is not /index.js
+            url.indexOf(jsPreffix) === url.length - 3 && // ends in .js
+            url.indexOf(jsIndexPrefix) !== url.length - 9 // does not end in /index.js
         ) {
             xhr.url = xhr.url.replace(jsPreffix, jsIndexPrefix);
             xhr.module.location = xhr.url;
             xhr.open(GET, xhr.url, true);
             xhr.send(null);
-
         } else {
-
             xhr.reject(new Error("Can't XHR " + JSON.stringify(url)));
             onerror.xhrPool.push(xhr);
             //This clears the response from memory
@@ -92,7 +90,6 @@ bootstrap("require/browser", function (require) {
             xhr.url = null;
             xhr.module = null;
         }
-
     }
     onerror.xhrPool = xhrPool;
 
