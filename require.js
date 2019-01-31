@@ -1050,8 +1050,8 @@
         "packages",
         "modules"
     ];
-            
-    var syncCompilerChain;    
+
+    var syncCompilerChain;
 
     //The ShebangCompiler doesn't make sense on the client side
     if (typeof window !== "undefined") {
@@ -1096,8 +1096,8 @@
                 )
             );
         };
-    }    
-    
+    }
+
     Require.makeCompiler = function (config) {
         return function (module) {
             return new Promise(function (resolve, reject) {
@@ -1246,10 +1246,10 @@
     Require.executeCompiler = function (factory, require, exports, module) {
         var returnValue;
 
-        module.directory = URL.resolve(module.location, "./"); 
+        module.directory = URL.resolve(module.location, "./");
         module.filename = URL.resolve(module.location, module.location);
         module.exports = exports || {};
-       
+
         // Execute the factory function:
         // TODO use config.scope
         returnValue = factory.call(global,
