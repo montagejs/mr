@@ -89,7 +89,7 @@
 
             // remove clutter
             if (script.parentNode) {
-                script.parentNode.removeChild(script);   
+                script.parentNode.removeChild(script);
             }
         }
 
@@ -114,7 +114,7 @@
         } else {
             errorCallback(new Error("document not supported"));
             finallyHandler();
-        }   
+        }
     }
 
     // mini-url library
@@ -224,10 +224,10 @@
         if (!global.preload) {
             var mrLocation = resolve(window.location, params.mrLocation),
                 promiseLocation = params.promiseLocation || resolve(mrLocation, pending.promise);
-                
+
             // Special Case bluebird for now:
             load(promiseLocation, function() {
-                
+
                 //global.bootstrap cleans itself from window once all known are loaded. "bluebird" is not known, so needs to do it first
                 global.bootstrap("bluebird", function (mrRequire, exports) {
                     return window.Promise;
@@ -242,10 +242,10 @@
             for (var id in pending) {
                 if (pending.hasOwnProperty(id)) {
                     if (id !== 'promise') {
-                        load(resolve(mrLocation, pending[id]));   
+                        load(resolve(mrLocation, pending[id]));
                     }
                 }
-            }       
+            }
         }
 
         // register module definitions for deferred, serial execution
@@ -315,12 +315,17 @@
                         bundleDefinitions[name] ||
                             Promise.resolve();
                 };
-                
+
                 global.bundleLoaded = function (name) {
                     return getDefinition(name).resolve();
                 };
-                
-                var preloading = Promise.resolve();
+
+                var preloading = {
+                    promise: new Promise(function (resolve, reject) {
+                        preloading.resolve = resolve;
+                        preloading.reject = reject;
+                    })
+                };
                 config.preloaded = preloading.promise;
                 // preload bundles sequentially
 
@@ -346,7 +351,7 @@
                 hash: params.mrHash
             }, config).then(function (mrRequire) {
                 mrRequire.inject("mini-url", URL);
-                mrRequire.inject("promise", Promise); 
+                mrRequire.inject("promise", Promise);
                 mrRequire.inject("require", mrRequire);
 
                 if ("autoPackage" in params) {
@@ -360,7 +365,7 @@
 
                     // Expose global require and mr
                     global.require = global.mr = pkg;
-                    
+
                     return pkg.async(applicationModuleId);
                 });
             });
