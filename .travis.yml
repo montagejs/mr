@@ -13,6 +13,7 @@ env:
 - COMMAND=test:karma
 - COMMAND=integration MR_VERSION=. MOP_VERSION=latest
 - COMMAND=integration MR_VERSION=. MOP_VERSION="#master"
+- COMMAND=integration MR_VERSION=. MOP_VERSION="#feature/npm3"
 jobs:
     include:
       - stage: lint
