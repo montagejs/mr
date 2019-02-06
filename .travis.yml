@@ -7,13 +7,26 @@ node_js:
   - "8"
   - "6"
   - "4"
-script: npm run $COMMAND
-env:
-  - COMMAND=lint
-  - COMMAND=test
-  - COMMAND=test:karma
-  - COMMAND=integration MR_VERSION=. MOP_VERSION=latest
-  - COMMAND=integration MR_VERSION=. MOP_VERSION="#master"
+jobs:
+    include:
+      - stage: lint
+        node_js: 8
+        script: npm run lint
+      - stage: test
+        script: npm run $COMMAND
+        env:
+        - COMMAND=test
+        - COMMAND=test:karma
+        - COMMAND=integration MR_VERSION=. MOP_VERSION=latest
+        - COMMAND=integration MR_VERSION=. MOP_VERSION="#master"
+      - stage: deploy
+        script: skip
+        deploy:
+            provider: npm
+            email: "${NPM_EMAIL}"
+            api_key: "${NPM_API_KEY}"
+            on:
+                tags: true
 notifications:
   irc:
     channels:
@@ -21,9 +34,3 @@ notifications:
     on_success: false
     template:
       - "%{author} broke the %{repository} tests on %{branch}: %{build_url}"
-deploy:
-    provider: npm
-    email: "${NPM_EMAIL}"
-    api_key: "${NPM_API_KEY}"
-    on:
-        tags: true
