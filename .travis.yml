@@ -7,26 +7,32 @@ node_js:
   - "8"
   - "6"
   - "4"
+script: npm run $COMMAND
+env:
+- COMMAND=test
+- COMMAND=test:karma
+- COMMAND=integration MR_VERSION=. MOP_VERSION=latest
+- COMMAND=integration MR_VERSION=. MOP_VERSION="#master"
 jobs:
     include:
       - stage: lint
-        node_js: 8
-        script: npm run lint
-      - stage: test
-        script: npm run $COMMAND
+        node_js: 9
         env:
-        - COMMAND=test
-        - COMMAND=test:karma
-        - COMMAND=integration MR_VERSION=. MOP_VERSION=latest
-        - COMMAND=integration MR_VERSION=. MOP_VERSION="#master"
+        script: npm run lint
       - stage: deploy
+        node_js: 9
         script: skip
+        env:
         deploy:
             provider: npm
             email: "${NPM_EMAIL}"
             api_key: "${NPM_API_KEY}"
             on:
                 tags: true
+stages:
+  - lint
+  - test
+  - deploy
 notifications:
   irc:
     channels:
