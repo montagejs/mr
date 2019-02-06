@@ -24,3 +24,9 @@ notifications:
     on_success: false
     template:
       - "%{author} broke the %{repository} tests on %{branch}: %{build_url}"
+deploy:
+    provider: npm
+    email: "${NPM_EMAIL}"
+    api_key: "${NPM_API_KEY}"
+    on:
+        tags: true
