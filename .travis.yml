@@ -20,7 +20,7 @@ jobs:
         env:
         script: npm run lint
       - stage: deploy
-        node_js: 9
+        node_js: 4
         script: skip
         env:
         deploy:
