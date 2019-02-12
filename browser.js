@@ -5,6 +5,20 @@
  </copyright> */
 /*global bootstrap,montageDefine:true */
 /*jshint -W015, evil:true, camelcase:false */
+
+
+// polyfill:
+// This method has been added to the ECMAScript 6 specification and may not be available in all JavaScript implementations yet. However, you can polyfill String.prototype.endsWith() with the following snippet:
+
+if (!String.prototype.endsWith) {
+	String.prototype.endsWith = function(search, this_len) {
+		if (this_len === undefined || this_len > this.length) {
+			this_len = this.length;
+		}
+		return this.substring(this_len - search.length, this_len) === search;
+	};
+}
+
 bootstrap("require/browser", function (require) {
 
     var Require = require("require");
@@ -144,6 +158,10 @@ bootstrap("require/browser", function (require) {
 
     Require.Compiler = function (config) {
         return function(module) {
+            if (module.location && (module.location.endsWith(".meta") || module.location.endsWith(".mjson"))) {
+                return module;
+            }
+
             if (module.factory || module.text === void 0) {
                 return module;
             }

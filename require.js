@@ -420,7 +420,7 @@
 
     var isLowercasePattern = /^[a-z]+$/;
     Require.makeRequire = function (config) {
-        var require;
+        var require, makeRequire, requireForId;
 
         // Configuration defaults:
         config = config || {};
@@ -439,6 +439,7 @@
         config.parseDependencies = config.parseDependencies || Require.parseDependencies;
         config.read = config.read || Require.read;
         config.strategy = config.strategy || 'nested';
+        config.requireById = config.requireById || new Map();
 
         // Modules: { exports, id, location, directory, factory, dependencies,
         // dependees, text, type }
@@ -592,6 +593,33 @@
                             Promise.all(promises)) : null;
             }, function (error) {
                 getModuleDescriptor(topId).error = error;
+            }).then(function (value) {
+                var module = getModuleDescriptor(topId);
+                if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
+                    if (typeof module.exports !== "object" && typeof module.text === "string") {
+                        if (Require.delegate && typeof Require.delegate.compileMJSONFile === "function") {
+                            return Require.delegate.compileMJSONFile(
+                                module.text, requireForId(module.id), module.id
+                            ).then(function (root) {
+                                module.exports = JSON.parse(module.text);
+                                if (module.exports.montageObject) {
+                                    throw new Error(
+                                        'using reserved word as property name, \'montageObject\' at: ' +
+                                        module.location
+                                    );
+                                }
+
+                                module.exports.montageObject = root;
+                                return value;
+                            });
+                        } else {
+                            module.exports = JSON.parse(module.text);
+                        }
+                    }
+                }
+                return value;
+            },function (error) {
+                getModuleDescriptor(topId).error = error;
             });
         }
 
@@ -641,14 +669,14 @@
                     " via " + JSON.stringify(viaId)
                 );
             }
-
+            requireForId
             module.directory = URL.resolve(module.location, "./"); // EXTENSION
             module.exports = {};
 
             var returnValue;
             try {
                 // Execute the factory function:
-                returnValue = config.executeCompiler(module.factory, makeRequire(topId), module.exports, module);
+                returnValue = config.executeCompiler(module.factory, requireForId(topId), module.exports, module);
             } catch (_error) {
                 // Delete the exports so that the factory is run again if this
                 // module is required again
@@ -793,6 +821,8 @@
 
             return require;
         }
+
+        config.requireForId = requireForId = memoize(makeRequire,config.requireById);
 
         require = makeRequire("");
         return require;
@@ -1119,12 +1149,46 @@
     };
 
 
+    Require.parseMJSONDependencies = function parseMJSONDependencies(jsonRoot) {
+
+        // Clear commented require calls
+        var rootEntries = Object.keys(jsonRoot),
+            i=0, iLabel, dependencies = [], iLabelObject;
+        while ((iLabel = rootEntries[i])) {
+            iLabelObject = jsonRoot[iLabel];
+            if(iLabelObject.hasOwnProperty("prototype")) {
+                dependencies.push(iLabelObject["prototype"]);
+            }
+            else if(iLabelObject.hasOwnProperty("object")) {
+                dependencies.push(iLabelObject["object"]);
+            }
+            i++;
+        }
+        return dependencies;
+    };
+
+
     // Built-in compiler/preprocessor "middleware":
 
     Require.DependenciesCompiler = function(config, compile) {
         return function(module) {
             if (!module.dependencies && module.text !== void 0) {
-                module.dependencies = config.parseDependencies(module.text);
+                if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
+
+                    if (typeof module.exports !== "object" && typeof module.text === "string") {
+                        module.parsedText = JSON.parse(module.text);
+                        if (module.parsedText.montageObject) {
+                            throw new Error(
+                                'using reserved word as property name, \'montageObject\' at: ' +
+                                module.location
+                            );
+                        }
+                    }
+                    module.dependencies = Require.parseMJSONDependencies(module.parsedText);
+
+                } else {
+                    module.dependencies = config.parseDependencies(module.text);
+                }
             }
             compile(module);
             if (module && !module.dependencies) {
@@ -1228,15 +1292,16 @@
 
     Require.makeCompiler = function (config) {
         return function (module) {
-            return new Promise(function (resolve, reject) {
-                return Require.MetaCompiler(module).then(function () {
-                    if (typeof module.exports === "object") {
-                        resolve(module);
-                    } else {
-                        resolve(syncCompilerChain(config)(module));
-                    }
-                });
-            });
+            // return new Promise(function (resolve, reject) {
+            //     return Require.MetaCompiler(module).then(function () {
+            //         if (typeof module.exports === "object") {
+            //             resolve(module);
+            //         } else {
+            //             resolve(syncCompilerChain(config)(module));
+            //         }
+            //     });
+            // });
+            return Promise.resolve(syncCompilerChain(config)(module));
         };
     };
 
