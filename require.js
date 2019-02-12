@@ -669,7 +669,7 @@
                     " via " + JSON.stringify(viaId)
                 );
             }
-
+            requireForId
             module.directory = URL.resolve(module.location, "./"); // EXTENSION
             module.exports = {};
 
