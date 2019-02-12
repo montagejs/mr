@@ -669,7 +669,7 @@
                     " via " + JSON.stringify(viaId)
                 );
             }
-            requireForId
+
             module.directory = URL.resolve(module.location, "./"); // EXTENSION
             module.exports = {};
 
@@ -1151,7 +1151,6 @@
 
     Require.parseMJSONDependencies = function parseMJSONDependencies(jsonRoot) {
 
-        // Clear commented require calls
         var rootEntries = Object.keys(jsonRoot),
             i=0, iLabel, dependencies = [], iLabelObject;
         while ((iLabel = rootEntries[i])) {
@@ -1292,15 +1291,6 @@
 
     Require.makeCompiler = function (config) {
         return function (module) {
-            // return new Promise(function (resolve, reject) {
-            //     return Require.MetaCompiler(module).then(function () {
-            //         if (typeof module.exports === "object") {
-            //             resolve(module);
-            //         } else {
-            //             resolve(syncCompilerChain(config)(module));
-            //         }
-            //     });
-            // });
             return Promise.resolve(syncCompilerChain(config)(module));
         };
     };
