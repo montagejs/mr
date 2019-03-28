@@ -179,17 +179,14 @@ bootstrap("require/browser", function (require) {
             // 3. set displayName property on the factory function (Safari, Chrome)
 
             // Prevent method to start with number to avoid Unexpected number
-            var displayName = [DoubleUnderscore, module.require.config.name, Underscore, module.id].join('').replace(nameRegex, Underscore);
-
-            globalConcatenator[1] = displayName;
+            globalConcatenator[1] = [DoubleUnderscore, module.require.config.name, Underscore, module.id].join('').replace(nameRegex, Underscore);
             globalConcatenator[3] = module.text;
             globalConcatenator[5] = module.location;
 
             module.factory = globalEval(globalConcatenator.join(''));
-            module.factory.displayName = displayName;
+            module.factory.displayName = globalConcatenator[1];
 
-            module.text = null;
-            globalConcatenator[1] = globalConcatenator[3] = globalConcatenator[5] = null;
+            module.text = globalConcatenator[1] = globalConcatenator[3] = globalConcatenator[5] = null;
         };
     };
 
