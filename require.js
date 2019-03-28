@@ -94,26 +94,29 @@
         normalizeIdCache = new Map();
     function normalizeId(id) {
         var result;
-        if (!normalizeIdCache.has(id)) {
+        if (!(result = normalizeIdCache.get(id))) {
             result = normalizePattern.exec(id);
             result = ( result ? result[1] : id);
             normalizeIdCache.set(id, result);
-        } else {
-            result = normalizeIdCache.get(id);
         }
         return result;
     }
 
     function memoize(callback, cache) {
-        function _memoize(key, arg) {
-            var result;
-            if (!cache.has(key)) {
-                result = callback(key, arg);
-                cache.set(key, result);
-            } else {
-                result = cache.get(key);
+        var _memoize = cache.get(callback);
+        if (!_memoize) {
+
+            _memoize = function _memoize(key, arg) {
+                var result;
+                if (!cache.has(key)) {
+                    result = callback(key, arg);
+                    cache.set(key, result);
+                } else {
+                    result = cache.get(key);
+                }
+                return result;
             }
-            return result;
+            cache.set(callback,_memoize);
         }
         return _memoize;
     }
@@ -153,8 +156,8 @@
 
     function _resolveItem(source, part, target) {
         /*jshint -W035 */
-        if (part === "" || part === ".") {
-        } else if (part === "..") {
+        if (part === EMPTY_STRING || part === DOT) {
+        } else if (part === DOT_DOT) {
             if (target.length) {
                 target.pop();
             }
@@ -164,19 +167,24 @@
         /*jshint +W035 */
     }
 
+    var EMPTY_STRING = "",
+        SLASH = "/",
+        DOT = ".",
+        DOT_DOT = "..";
+
     function resolve(id, baseId) {
-        if (id === "" && baseId === "") {
-            return "";
+        if (id === EMPTY_STRING && baseId === EMPTY_STRING) {
+            return EMPTY_STRING;
         }
         var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map())) && resolved) || resolved;
         var i, ii;
         if (!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
             id = String(id);
-            var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source) || source,
-                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split("/"))) && parts || parts),
+            var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split(SLASH))) && source) || source,
+                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split(SLASH))) && parts || parts),
                 resolveItem = _resolveItem;
 
-            if (source.length && source[0] === "." || source[0] === "..") {
+            if (source.length && source[0] === DOT || source[0] === DOT_DOT) {
                 for (i = 0, ii = parts.length-1; i < ii; i++) {
                     resolveItem(parts, parts[i], _target);
                 }
@@ -187,7 +195,7 @@
             if (!resolved.get(baseId)) {
                 resolved.set(baseId, new Map());
             }
-            resolved.get(baseId).set(id, _target.join("/"));
+            resolved.get(baseId).set(id, _target.join(SLASH));
             _target.length = 0;
         }
         return resolved.get(baseId).get(id);
@@ -449,17 +457,19 @@
         // up through loading and execution, ultimately serving as the
         // ``module`` free variable inside the corresponding module.
         function getModuleDescriptor(id) {
-            var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
-            if (!(lookupId in modules)) {
-                var aModule = new Module();
-                modules[lookupId] = aModule;
-                aModule.id = id;
-                aModule.display = (config.name || config.location); // EXTENSION
-                aModule.display += "#"; // EXTENSION
-                aModule.display += id; // EXTENSION
-                aModule.require = require;
+            var aModule = modules[id];
+            if(!aModule) {
+                var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
+                if (!(aModule = modules[lookupId])) {
+                    aModule = modules[lookupId] = new Module();
+                    aModule.id = id;
+                    aModule.display = (config.name || config.location); // EXTENSION
+                    aModule.display += "#"; // EXTENSION
+                    aModule.display += id; // EXTENSION
+                    aModule.require = require;
+                }
             }
-            return modules[lookupId];
+            return aModule
         }
 
 
@@ -565,22 +575,24 @@
             }
             loading[topId] = true; // this has happened before
             return load(topId, viaId)
-            .then(function () {
+            .then(function deepLoad_then() {
                 // load the transitive dependencies using the magic of
                 // recursion.
-                var promises, iModule , depId, dependees, iPromise,
+                var promises , depId, iPromise,
                     module = getModuleDescriptor(topId),
-                    dependencies =  module.dependencies;
+                    dependencies =  module.dependencies,
+                    scopedTopId = topId,
+                    scopedLoading = loading;
 
                 if (dependencies && dependencies.length > 0) {
                     for(var i=0;(depId = dependencies[i]);i++) {
                         // create dependees set, purely for debug purposes
                         // if (true) {
-                        //     iModule = getModuleDescriptor(depId);
-                        //     dependees = iModule.dependees = iModule.dependees || {};
+                        //     var iModule = getModuleDescriptor(depId);
+                        //     var dependees = iModule.dependees = iModule.dependees || {};
                         //     dependees[topId] = true;
                         // }
-                        if ((iPromise = deepLoad(normalizeId(resolve(depId, topId)), topId, loading))) {
+                        if ((iPromise = deepLoad(normalizeId(resolve(depId, scopedTopId)), scopedTopId, scopedLoading))) {
                             /* jshint expr: true */
                             promises ? (promises.push ? promises.push(iPromise) :
                                 (promises = [promises, iPromise])) : (promises = iPromise);
@@ -592,33 +604,6 @@
                 return promises ? (promises.push === void 0 ? promises :
                             Promise.all(promises)) : null;
             }, function (error) {
-                getModuleDescriptor(topId).error = error;
-            }).then(function (value) {
-                var module = getModuleDescriptor(topId);
-                if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
-                    if (typeof module.exports !== "object" && typeof module.text === "string") {
-                        if (Require.delegate && typeof Require.delegate.compileMJSONFile === "function") {
-                            return Require.delegate.compileMJSONFile(
-                                module.text, requireForId(module.id), module.id
-                            ).then(function (root) {
-                                module.exports = JSON.parse(module.text);
-                                if (module.exports.montageObject) {
-                                    throw new Error(
-                                        'using reserved word as property name, \'montageObject\' at: ' +
-                                        module.location
-                                    );
-                                }
-
-                                module.exports.montageObject = root;
-                                return value;
-                            });
-                        } else {
-                            module.exports = JSON.parse(module.text);
-                        }
-                    }
-                }
-                return value;
-            },function (error) {
                 getModuleDescriptor(topId).error = error;
             });
         }
@@ -1148,46 +1133,12 @@
         return o;
     };
 
-
-    Require.parseMJSONDependencies = function parseMJSONDependencies(jsonRoot) {
-
-        var rootEntries = Object.keys(jsonRoot),
-            i=0, iLabel, dependencies = [], iLabelObject;
-        while ((iLabel = rootEntries[i])) {
-            iLabelObject = jsonRoot[iLabel];
-            if(iLabelObject.hasOwnProperty("prototype")) {
-                dependencies.push(iLabelObject["prototype"]);
-            }
-            else if(iLabelObject.hasOwnProperty("object")) {
-                dependencies.push(iLabelObject["object"]);
-            }
-            i++;
-        }
-        return dependencies;
-    };
-
-
     // Built-in compiler/preprocessor "middleware":
 
     Require.DependenciesCompiler = function(config, compile) {
         return function(module) {
             if (!module.dependencies && module.text !== void 0) {
-                if (module.location && (endsWith(module.location, ".meta") || endsWith(module.location, ".mjson"))) {
-
-                    if (typeof module.exports !== "object" && typeof module.text === "string") {
-                        module.parsedText = JSON.parse(module.text);
-                        if (module.parsedText.montageObject) {
-                            throw new Error(
-                                'using reserved word as property name, \'montageObject\' at: ' +
-                                module.location
-                            );
-                        }
-                    }
-                    module.dependencies = Require.parseMJSONDependencies(module.parsedText);
-
-                } else {
-                    module.dependencies = config.parseDependencies(module.text);
-                }
+                module.dependencies = config.parseDependencies(module.text);
             }
             compile(module);
             if (module && !module.dependencies) {
@@ -1255,9 +1206,12 @@
                         config,
                         Require.DependenciesCompiler(
                             config,
-                            Require.LintCompiler(
+                            Require.DelegateCompiler(
                                 config,
-                                Require.Compiler(config)
+                                Require.LintCompiler(
+                                    config,
+                                    Require.Compiler(config)
+                                )
                             )
                         )
                     )
@@ -1277,9 +1231,12 @@
                             config,
                             Require.DependenciesCompiler(
                                 config,
-                                Require.LintCompiler(
+                                Require.DelegateCompiler(
                                     config,
-                                    Require.Compiler(config)
+                                    Require.LintCompiler(
+                                        config,
+                                        Require.Compiler(config)
+                                    )
                                 )
                             )
                         )
@@ -1294,6 +1251,18 @@
             return Promise.resolve(syncCompilerChain(config)(module));
         };
     };
+
+    Require.DelegateCompiler = function (config, compile) {
+        if ( Require.delegate && typeof Require.delegate.Compiler === "function") {
+            return Require.delegate.Compiler(config, compile);
+        } else {
+            return function(module) {
+                var result = compile(module);
+                return result;
+            };
+        }
+    };
+
 
     Require.JsonCompiler = function (config, compile) {
         var jsonPattern = /\.json$/;
@@ -1311,52 +1280,6 @@
                 return result;
             }
         };
-    };
-
-    var dotMJSON = ".mjson",
-        dotMJSONLoadJs = ".mjson.load.js";
-
-    /**
-     * Allows the .meta and .mjson files to be loaded as json
-     * @see Compiler middleware in require/require.js
-     * @param config
-     * @param compile
-     */
-    Require.MetaCompiler = function (module) {
-        if (module.location && (endsWith(module.location, ".meta") ||
-            endsWith(module.location, dotMJSON) ||
-            endsWith(module.location, dotMJSONLoadJs)
-        )) {
-            if (Require.delegate && typeof Require.delegate.compileMJSONFile === "function") {
-                return Require.delegate.compileMJSONFile(
-                    module.text || module.exports, module.require, module.id
-                ).then(function (root) {
-                    if (typeof module.text === "string") {
-                        module.exports = JSON.parse(module.text);
-                    }
-
-                    if (module.exports.montageObject) {
-                        throw new Error(
-                            'using reserved word as property name, \'montageObject\' at: ' +
-                            module.location
-                        );
-                    }
-
-                    Object.defineProperty(module.exports, 'montageObject', {
-                        value: root,
-                        enumerable: false,
-                        configurable: true,
-                        writable: true
-                    });
-                    return module;
-                });
-            } else {
-                module.exports = module.text ? JSON.parse(module.text) :
-                    module.exports;
-            }
-        }
-
-        return Promise.resolve(module);
     };
 
     /**
