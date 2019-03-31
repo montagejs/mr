@@ -1316,12 +1316,14 @@
         };
     };
 
-    var MontageMetaData = function(require, id, name) {
+    var MontageMetaData = function(require, id, name, isInstance) {
         this.require = require;
         this.module = id;
         this.property = name;
+        if (typeof isInstance !== undefined) {
+            this.isInstance = isInstance;
+        }
         //this.aliases = [name];
-        //this.isInstance = false;
         return this;
     };
 
@@ -1405,7 +1407,7 @@
                             //object._montage_metadata.objectName = name;
                             //jshint +W106
                         } else if (!Object.isSealed(object)) {
-                            object[_MONTAGE_METADATA] = new MontageMetaData(require, module.id.replace(reverseReelExpression, reverseReelFunction), name);
+                            object[_MONTAGE_METADATA] = new MontageMetaData(require, module.id.replace(reverseReelExpression, reverseReelFunction), name,/*isInstance*/(typeof object !== "function"));
                         }
                     }
                 }
