@@ -457,19 +457,16 @@
         // up through loading and execution, ultimately serving as the
         // ``module`` free variable inside the corresponding module.
         function getModuleDescriptor(id) {
-            var aModule = modules[id];
-            if(!aModule) {
-                var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
-                if (!(aModule = modules[lookupId])) {
-                    aModule = modules[lookupId] = new Module();
-                    aModule.id = id;
-                    aModule.display = (config.name || config.location); // EXTENSION
-                    aModule.display += "#"; // EXTENSION
-                    aModule.display += id; // EXTENSION
-                    aModule.require = require;
-                }
+            var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
+            if (!(lookupId in modules)) {
+                var aModule = modules[lookupId] = new Module();
+                aModule.id = id;
+                aModule.display = (config.name || config.location); // EXTENSION
+                aModule.display += "#"; // EXTENSION
+                aModule.display += id; // EXTENSION
+                aModule.require = require;
             }
-            return aModule
+            return modules[lookupId];
         }
 
 
