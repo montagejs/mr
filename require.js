@@ -992,6 +992,7 @@
         config.mainPackageLocation = config.mainPackageLocation || location;
 
         config.hasPackage = function (dependency) {
+            if(!dependency) return false;
             dependency = normalizeDependency(dependency, config);
             if (!dependency.location) {
                 return false;
