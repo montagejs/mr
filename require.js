@@ -925,6 +925,7 @@
     var tryPackage = function (location, dependency, config) {
         var descriptionLocations, descriptionLocation;
 
+
         descriptionLocations = config.descriptionLocations = config.descriptionLocations || {};
         if (descriptionLocations[location]) {
             descriptionLocation = descriptionLocations[location];
