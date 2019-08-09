@@ -428,7 +428,7 @@
 
     var isLowercasePattern = /^[a-z]+$/;
     Require.makeRequire = function (config) {
-        var require, makeRequire, requireForId;
+        var require, requireForId;
 
         // Configuration defaults:
         config = config || {};
@@ -572,7 +572,7 @@
             }
             loading[topId] = true; // this has happened before
             return load(topId, viaId)
-            .then(function deepLoad_then() {
+            .then(function deepLoadhen() {
                 // load the transitive dependencies using the magic of
                 // recursion.
                 var promises , depId, iPromise,
