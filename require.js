@@ -115,7 +115,7 @@
                     result = cache.get(key);
                 }
                 return result;
-            }
+                };
             cache.set(callback,_memoize);
         }
         return _memoize;
@@ -992,7 +992,9 @@
         config.mainPackageLocation = config.mainPackageLocation || location;
 
         config.hasPackage = function (dependency) {
-            if(!dependency) return false;
+            if(!dependency) {
+                return false;
+            }
             dependency = normalizeDependency(dependency, config);
             if (!dependency.location) {
                 return false;
