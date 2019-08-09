@@ -5,6 +5,20 @@
  </copyright> */
 /*global bootstrap,montageDefine:true */
 /*jshint -W015, evil:true, camelcase:false */
+
+
+// polyfill:
+// This method has been added to the ECMAScript 6 specification and may not be available in all JavaScript implementations yet. However, you can polyfill String.prototype.endsWith() with the following snippet:
+
+if (!String.prototype.endsWith) {
+	String.prototype.endsWith = function(search, this_len) {
+		if (this_len === undefined || this_len > this.length) {
+			this_len = this.length;
+		}
+		return this.substring(this_len - search.length, this_len) === search;
+	};
+}
+
 bootstrap("require/browser", function (require) {
 
     var Require = require("require");
@@ -144,6 +158,10 @@ bootstrap("require/browser", function (require) {
 
     Require.Compiler = function (config) {
         return function(module) {
+            if (module.location && (module.location.endsWith(".meta") || module.location.endsWith(".mjson"))) {
+                return module;
+            }
+
             if (module.factory || module.text === void 0) {
                 return module;
             }
@@ -161,17 +179,14 @@ bootstrap("require/browser", function (require) {
             // 3. set displayName property on the factory function (Safari, Chrome)
 
             // Prevent method to start with number to avoid Unexpected number
-            var displayName = [DoubleUnderscore, module.require.config.name, Underscore, module.id].join('').replace(nameRegex, Underscore);
-
-            globalConcatenator[1] = displayName;
+            globalConcatenator[1] = [DoubleUnderscore, module.require.config.name, Underscore, module.id].join('').replace(nameRegex, Underscore);
             globalConcatenator[3] = module.text;
             globalConcatenator[5] = module.location;
 
             module.factory = globalEval(globalConcatenator.join(''));
-            module.factory.displayName = displayName;
+            module.factory.displayName = globalConcatenator[1];
 
-            module.text = null;
-            globalConcatenator[1] = globalConcatenator[3] = globalConcatenator[5] = null;
+            module.text = globalConcatenator[1] = globalConcatenator[3] = globalConcatenator[5] = null;
         };
     };
 

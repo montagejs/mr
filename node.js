@@ -47,17 +47,17 @@ Require.read = function read(location) {
                         path.indexOf(jsIndexPrefix) === -1 // is not /index.js
                 ) {
                     path = path.replace(jsPreffix, jsIndexPrefix);
-                    
+
                     // Attempt to read if file exists
                     FS.readFile(path, "utf-8", function (error, text) {
                         if (error) {
-                            reject(new Error(error));   
+                            reject(new Error(error));
                         } else {
                             resolve(text);
                         }
                     });
                 } else {
-                    reject(new Error(error));   
+                    reject(new Error(error));
                 }
             } else {
                 resolve(text);
@@ -74,6 +74,11 @@ Require.Compiler = function Compiler(config) {
     var scopeNames = Object.keys(config.scope);
     names.push.apply(names, scopeNames);
     return function (module) {
+
+        if (module.location && (module.location.endsWith(".meta") || module.location.endsWith(".mjson"))) {
+            return module;
+        }
+
         if (module.factory) {
             return module;
         } else if (

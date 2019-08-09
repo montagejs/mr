@@ -94,26 +94,29 @@
         normalizeIdCache = new Map();
     function normalizeId(id) {
         var result;
-        if (!normalizeIdCache.has(id)) {
+        if (!(result = normalizeIdCache.get(id))) {
             result = normalizePattern.exec(id);
             result = ( result ? result[1] : id);
             normalizeIdCache.set(id, result);
-        } else {
-            result = normalizeIdCache.get(id);
         }
         return result;
     }
 
     function memoize(callback, cache) {
-        function _memoize(key, arg) {
-            var result;
-            if (!cache.has(key)) {
-                result = callback(key, arg);
-                cache.set(key, result);
-            } else {
-                result = cache.get(key);
-            }
-            return result;
+        var _memoize = cache.get(callback);
+        if (!_memoize) {
+
+            _memoize = function _memoize(key, arg) {
+                var result;
+                if (!cache.has(key)) {
+                    result = callback(key, arg);
+                    cache.set(key, result);
+                } else {
+                    result = cache.get(key);
+                }
+                return result;
+                };
+            cache.set(callback,_memoize);
         }
         return _memoize;
     }
@@ -153,8 +156,8 @@
 
     function _resolveItem(source, part, target) {
         /*jshint -W035 */
-        if (part === "" || part === ".") {
-        } else if (part === "..") {
+        if (part === EMPTY_STRING || part === DOT) {
+        } else if (part === DOT_DOT) {
             if (target.length) {
                 target.pop();
             }
@@ -164,19 +167,24 @@
         /*jshint +W035 */
     }
 
+    var EMPTY_STRING = "",
+        SLASH = "/",
+        DOT = ".",
+        DOT_DOT = "..";
+
     function resolve(id, baseId) {
-        if (id === "" && baseId === "") {
-            return "";
+        if (id === EMPTY_STRING && baseId === EMPTY_STRING) {
+            return EMPTY_STRING;
         }
         var resolved = _resolved.get(id) || (_resolved.set(id, (resolved = new Map())) && resolved) || resolved;
         var i, ii;
         if (!(resolved.has(baseId)) || !(id in resolved.get(baseId))) {
             id = String(id);
-            var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split("/"))) && source) || source,
-                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split("/"))) && parts || parts),
+            var source = _resolveStringtoArray.get(id) || (_resolveStringtoArray.set(id, (source = id.split(SLASH))) && source) || source,
+                parts = _resolveStringtoArray.get(baseId) || (_resolveStringtoArray.set(baseId,(parts = baseId.split(SLASH))) && parts || parts),
                 resolveItem = _resolveItem;
 
-            if (source.length && source[0] === "." || source[0] === "..") {
+            if (source.length && source[0] === DOT || source[0] === DOT_DOT) {
                 for (i = 0, ii = parts.length-1; i < ii; i++) {
                     resolveItem(parts, parts[i], _target);
                 }
@@ -187,7 +195,7 @@
             if (!resolved.get(baseId)) {
                 resolved.set(baseId, new Map());
             }
-            resolved.get(baseId).set(id, _target.join("/"));
+            resolved.get(baseId).set(id, _target.join(SLASH));
             _target.length = 0;
         }
         return resolved.get(baseId).get(id);
@@ -420,7 +428,7 @@
 
     var isLowercasePattern = /^[a-z]+$/;
     Require.makeRequire = function (config) {
-        var require;
+        var require, requireForId;
 
         // Configuration defaults:
         config = config || {};
@@ -439,6 +447,7 @@
         config.parseDependencies = config.parseDependencies || Require.parseDependencies;
         config.read = config.read || Require.read;
         config.strategy = config.strategy || 'nested';
+        config.requireById = config.requireById || new Map();
 
         // Modules: { exports, id, location, directory, factory, dependencies,
         // dependees, text, type }
@@ -450,8 +459,7 @@
         function getModuleDescriptor(id) {
             var lookupId = isLowercasePattern.test(id) ? id : id.toLowerCase();
             if (!(lookupId in modules)) {
-                var aModule = new Module();
-                modules[lookupId] = aModule;
+                var aModule = modules[lookupId] = new Module();
                 aModule.id = id;
                 aModule.display = (config.name || config.location); // EXTENSION
                 aModule.display += "#"; // EXTENSION
@@ -564,22 +572,24 @@
             }
             loading[topId] = true; // this has happened before
             return load(topId, viaId)
-            .then(function () {
+            .then(function deepLoadhen() {
                 // load the transitive dependencies using the magic of
                 // recursion.
-                var promises, iModule , depId, dependees, iPromise,
+                var promises , depId, iPromise,
                     module = getModuleDescriptor(topId),
-                    dependencies =  module.dependencies;
+                    dependencies =  module.dependencies,
+                    scopedTopId = topId,
+                    scopedLoading = loading;
 
                 if (dependencies && dependencies.length > 0) {
                     for(var i=0;(depId = dependencies[i]);i++) {
                         // create dependees set, purely for debug purposes
                         // if (true) {
-                        //     iModule = getModuleDescriptor(depId);
-                        //     dependees = iModule.dependees = iModule.dependees || {};
+                        //     var iModule = getModuleDescriptor(depId);
+                        //     var dependees = iModule.dependees = iModule.dependees || {};
                         //     dependees[topId] = true;
                         // }
-                        if ((iPromise = deepLoad(normalizeId(resolve(depId, topId)), topId, loading))) {
+                        if ((iPromise = deepLoad(normalizeId(resolve(depId, scopedTopId)), scopedTopId, scopedLoading))) {
                             /* jshint expr: true */
                             promises ? (promises.push ? promises.push(iPromise) :
                                 (promises = [promises, iPromise])) : (promises = iPromise);
@@ -648,7 +658,7 @@
             var returnValue;
             try {
                 // Execute the factory function:
-                returnValue = config.executeCompiler(module.factory, makeRequire(topId), module.exports, module);
+                returnValue = config.executeCompiler(module.factory, requireForId(topId), module.exports, module);
             } catch (_error) {
                 // Delete the exports so that the factory is run again if this
                 // module is required again
@@ -794,6 +804,8 @@
             return require;
         }
 
+        config.requireForId = requireForId = memoize(makeRequire,config.requireById);
+
         require = makeRequire("");
         return require;
     };
@@ -913,6 +925,7 @@
     var tryPackage = function (location, dependency, config) {
         var descriptionLocations, descriptionLocation;
 
+
         descriptionLocations = config.descriptionLocations = config.descriptionLocations || {};
         if (descriptionLocations[location]) {
             descriptionLocation = descriptionLocations[location];
@@ -980,6 +993,9 @@
         config.mainPackageLocation = config.mainPackageLocation || location;
 
         config.hasPackage = function (dependency) {
+            if(!dependency) {
+                return false;
+            }
             dependency = normalizeDependency(dependency, config);
             if (!dependency.location) {
                 return false;
@@ -1118,7 +1134,6 @@
         return o;
     };
 
-
     // Built-in compiler/preprocessor "middleware":
 
     Require.DependenciesCompiler = function(config, compile) {
@@ -1192,9 +1207,12 @@
                         config,
                         Require.DependenciesCompiler(
                             config,
-                            Require.LintCompiler(
+                            Require.DelegateCompiler(
                                 config,
-                                Require.Compiler(config)
+                                Require.LintCompiler(
+                                    config,
+                                    Require.Compiler(config)
+                                )
                             )
                         )
                     )
@@ -1214,9 +1232,12 @@
                             config,
                             Require.DependenciesCompiler(
                                 config,
-                                Require.LintCompiler(
+                                Require.DelegateCompiler(
                                     config,
-                                    Require.Compiler(config)
+                                    Require.LintCompiler(
+                                        config,
+                                        Require.Compiler(config)
+                                    )
                                 )
                             )
                         )
@@ -1228,17 +1249,21 @@
 
     Require.makeCompiler = function (config) {
         return function (module) {
-            return new Promise(function (resolve, reject) {
-                return Require.MetaCompiler(module).then(function () {
-                    if (typeof module.exports === "object") {
-                        resolve(module);
-                    } else {
-                        resolve(syncCompilerChain(config)(module));
-                    }
-                });
-            });
+            return Promise.resolve(syncCompilerChain(config)(module));
         };
     };
+
+    Require.DelegateCompiler = function (config, compile) {
+        if ( Require.delegate && typeof Require.delegate.Compiler === "function") {
+            return Require.delegate.Compiler(config, compile);
+        } else {
+            return function(module) {
+                var result = compile(module);
+                return result;
+            };
+        }
+    };
+
 
     Require.JsonCompiler = function (config, compile) {
         var jsonPattern = /\.json$/;
@@ -1256,52 +1281,6 @@
                 return result;
             }
         };
-    };
-
-    var dotMJSON = ".mjson",
-        dotMJSONLoadJs = ".mjson.load.js";
-
-    /**
-     * Allows the .meta and .mjson files to be loaded as json
-     * @see Compiler middleware in require/require.js
-     * @param config
-     * @param compile
-     */
-    Require.MetaCompiler = function (module) {
-        if (module.location && (endsWith(module.location, ".meta") ||
-            endsWith(module.location, dotMJSON) ||
-            endsWith(module.location, dotMJSONLoadJs)
-        )) {
-            if (Require.delegate && typeof Require.delegate.compileMJSONFile === "function") {
-                return Require.delegate.compileMJSONFile(
-                    module.text || module.exports, module.require, module.id
-                ).then(function (root) {
-                    if (typeof module.text === "string") {
-                        module.exports = JSON.parse(module.text);
-                    }
-
-                    if (module.exports.montageObject) {
-                        throw new Error(
-                            'using reserved word as property name, \'montageObject\' at: ' +
-                            module.location
-                        );
-                    }
-
-                    Object.defineProperty(module.exports, 'montageObject', {
-                        value: root,
-                        enumerable: false,
-                        configurable: true,
-                        writable: true
-                    });
-                    return module;
-                });
-            } else {
-                module.exports = module.text ? JSON.parse(module.text) :
-                    module.exports;
-            }
-        }
-
-        return Promise.resolve(module);
     };
 
     /**
@@ -1341,12 +1320,14 @@
         };
     };
 
-    var MontageMetaData = function(require, id, name) {
+    var MontageMetaData = function(require, id, name, isInstance) {
         this.require = require;
         this.module = id;
         this.property = name;
+        if (typeof isInstance !== undefined) {
+            this.isInstance = isInstance;
+        }
         //this.aliases = [name];
-        //this.isInstance = false;
         return this;
     };
 
@@ -1430,7 +1411,7 @@
                             //object._montage_metadata.objectName = name;
                             //jshint +W106
                         } else if (!Object.isSealed(object)) {
-                            object[_MONTAGE_METADATA] = new MontageMetaData(require, module.id.replace(reverseReelExpression, reverseReelFunction), name);
+                            object[_MONTAGE_METADATA] = new MontageMetaData(require, module.id.replace(reverseReelExpression, reverseReelFunction), name,/*isInstance*/(typeof object !== "function"));
                         }
                     }
                 }
@@ -1528,8 +1509,7 @@
      * @param loader the next loader in the chain
      */
     var reelExpression = /([^\/]+)\.reel$/,
-        dotREEL = ".reel",
-        SLASH = "/";
+        dotREEL = ".reel";
     Require.ReelLoader = function(config, load) {
         return function reelLoader(id, module) {
             if (endsWith(id, dotREEL)) {
