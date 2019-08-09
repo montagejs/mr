@@ -1509,8 +1509,7 @@
      * @param loader the next loader in the chain
      */
     var reelExpression = /([^\/]+)\.reel$/,
-        dotREEL = ".reel",
-        SLASH = "/";
+        dotREEL = ".reel";
     Require.ReelLoader = function(config, load) {
         return function reelLoader(id, module) {
             if (endsWith(id, dotREEL)) {
