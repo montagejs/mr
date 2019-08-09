@@ -116,8 +116,9 @@ module.exports = run(require, [
     "spec/module-mjson",
     "spec/module-error",
     "spec/module-metadata",
+    "spec/legacy-bundling",
     "spec/flat-module-tree",
-    "spec/nested-module-tree",
+    "spec/package-lock",
     "spec/serialization-compiler",
     "spec/directory-index",
     {name: "spec/dot-js-module", node: false}

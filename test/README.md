@@ -38,10 +38,6 @@ using objects as maps.
 Verifies that the functions exported by a module are not implicitly
 bound to an object, albeit the exports or the module object.
 
-## nested
-
-Verifies that a module burried in a directory tree can be required.
-
 ## transitive
 
 Verifies that an exported object can be imported and exported from
@@ -119,6 +115,26 @@ return functioning promises.
 
 As a byproduct, also verifies that module exports reassignment works
 properly.
+
+## legacy-bundling
+
+Verifies that dependencies can be loaded from a directory installed
+with legacy bundling, i.e. using npm <=2 or npm 3+ with the
+--legacy-bundling flag. In either of these situations, dependencies
+are installed without flattening.
+
+## flat-module-tree
+
+Verifies that dependencies can be loaded from a directory installed
+with flattening, i.e. using npm 3+ without the --legacy-bundling
+flag. In this situation, dependencies will be installed as close to
+the root package as possible without causing version conflicts, and
+under npm 5+ a package-lock.json file is present that .
+
+## package-lock
+
+Verifies that if a package-lock.json file exists, it is used to
+determine the locations of dependencies.
 
 ## load-package-name
 
