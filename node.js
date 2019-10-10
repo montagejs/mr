@@ -35,7 +35,7 @@ Require.directoryPathToLocation = function directoryPathToLocation(path) {
 
 var jsIndexPrefix = '/index.js',
     jsPreffix = '.js';
-Require.read = function read(location) {
+Require.read = function read(location, module) {
     return new Promise(function (resolve, reject) {
         var path = Require.locationToPath(location);
         FS.readFile(path, "utf-8", function (error, text) {
@@ -53,6 +53,10 @@ Require.read = function read(location) {
                         if (error) {
                             reject(new Error(error));
                         } else {
+                            //We found a folder/index.js, we need to update the module to reflect that somehow
+                            module.location = location.replace(jsPreffix, jsIndexPrefix);
+                            module.redirect = module.id;
+                            module.redirect += "/index";
                             resolve(text);
                         }
                     });
@@ -105,11 +109,13 @@ Require.Compiler = function Compiler(config) {
 
 Require.Loader = function Loader(config, load) {
     return function (location, module) {
-        return config.read(location)
+        return config.read(location, module)
         .then(function (text) {
             module.type = "javascript";
             module.text = text;
-            module.location = location;
+            //module.location is now possibly changed by read if it encounters the pattern of
+            //folder/index.js when it couldn't find folder.js, so we don't want to override that.
+            //module.location = location;
         }, function (reason, error, rejection) {
             return load(location, module);
         });
