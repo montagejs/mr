@@ -35,7 +35,7 @@ bootstrap("require/worker", function (require) {
         return location;
     };
 
-    Require.overlays = ["window", "montage"];
+    Require.overlays = ["browser", "montage"];
 
     function shouldTryIndexJS(url) {
         return url.indexOf(jsPreffix) === url.length - 3 && // ends in .js
