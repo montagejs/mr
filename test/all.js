@@ -2,7 +2,6 @@
 console.log('mr-testing', 'Start');
 
 function run(suiteRequire, modules) {
-
     // Filter node:false
     modules = modules.filter(function (module) {
         if (typeof module === "object") {
@@ -22,10 +21,10 @@ function run(suiteRequire, modules) {
     });
 
     var promises = modules.map(function (module) {
-        
+
         var spec = this,
             packagePath = module + '/';
-        
+
         return suiteRequire.loadPackage(packagePath, {
             location: require.location
         }).then(function (pkg) {
@@ -61,7 +60,7 @@ function run(suiteRequire, modules) {
             if (global.__karma__) {
                 global.__karma__.start();
             } else {
-                jasmine.getEnv().execute();    
+                jasmine.getEnv().execute();
             }
         });
     });

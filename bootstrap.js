@@ -1,4 +1,4 @@
-/*global module: false, define, callbackApplication */
+/*global module: false, define, callbackApplication, importScripts, worker, PATH_TO_MR, self */
 (function (root, factory) {
     if (typeof define === 'function' && define.amd) {
         // AMD. Register as an anonymous module.
@@ -119,6 +119,7 @@
 
     // mini-url library
     var isAbsolutePattern = /^[\w\-]+:/;
+    var resolve;
     function makeResolve() {
         var baseElement = document.querySelector("base"),
             existingBaseElement = baseElement;
@@ -157,15 +158,11 @@
         };
     }
 
-    var resolve = makeResolve();
 
-    //
-    //
-    //
 
     var readyStatePattern = /interactive|complete/;
     var bootstrap = function (callback) {
-
+        resolve = makeResolve();
         callback = callback || callbackApplication;
 
         var domLoaded, Require, Promise, URL,
@@ -281,6 +278,9 @@
     exports.getPlatform = function() {
         if (typeof window !== "undefined" && window && window.document) {
             return browser;
+        } else if (typeof importScripts !== "undefined") {
+            importScripts(PATH_TO_MR + "./worker-platform.js");
+            return worker;
         } else if (typeof process !== "undefined") {
             return require("./node.js");
         } else {
@@ -299,7 +299,6 @@
 
         // Platform dependent
         return platform.bootstrap(function(mrRequire, Promise, URL) {
-
             var config = {},
                 params = platform.getParams(),
                 applicationModuleId = params.module || "",
@@ -372,7 +371,7 @@
         });
     };
 
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" || typeof importScripts !== "undefined") {
         if (global.__MONTAGE_REQUIRE_LOADED__) {
             console.warn("MontageRequire already loaded!");
         } else {

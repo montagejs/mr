@@ -25,6 +25,7 @@
                 var Promise = require("promise").Promise;
                 var URL = require("mini-url");
                 definition(exports, Promise, URL);
+                require("require/worker");
             });
         }
 
