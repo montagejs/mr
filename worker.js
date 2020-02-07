@@ -130,9 +130,6 @@ bootstrap("require/worker", function (require) {
             if (module.factory || module.text === void 0) {
                 return module;
             }
-            if (config.useScriptInjection) {
-                throw new Error("Can't use eval.");
-            }
 
             // Here we use a couple tricks to make debugging better in various browsers:
             // TODO: determine if these are all necessary / the best options
@@ -169,6 +166,42 @@ bootstrap("require/worker", function (require) {
         };
     };
 
+
+    Require.CachedFetchLoader = function (config) {
+        var hash = config.packageDescription.hash;
+
+        return function (location, module) {
+            return Promise.try(function () {
+                if (definitions[hash] && definitions[hash][module.id]) {
+                    return definitions[hash][module.id];
+                }
+
+                if (/\.js$/.test(location)) {
+                    location = location.replace(/\.js$/, ".load.js");
+                } else {
+                    location += ".load.js";
+                }
+
+                var definition = getDefinition(hash, module.id);
+                loadIfNotPreloaded(location, definition, config.preloaded);
+
+                return config.read(location, module).then(function () {
+                    return definition;
+                });
+            }).then(function (definition) {
+
+                /*jshint -W089 */
+                delete definitions[hash][module.id];
+                for (var name in definition) {
+                    module[name] = definition[name];
+                }
+                module.location = location;
+                module.directory = URL.resolve(location, ".");
+                /*jshint +W089 */
+            });
+        }
+    };
+
     var definitions = {};
     var getDefinition = function (hash, id) {
         var defHash = definitions[hash] = definitions[hash] || {};
@@ -202,8 +235,9 @@ bootstrap("require/worker", function (require) {
         }
     };
 
+
     // global
-    montageDefine = function (hash, id, module) {
+    self.montageDefine = function (hash, id, module) {
         getDefinition(hash, id).resolve(module);
     };
 
@@ -230,6 +264,12 @@ bootstrap("require/worker", function (require) {
     };
 
     Require.makeLoader = function (config) {
+        var Loader;
+        if (config.useScriptInjection) {
+            Loader = Require.CachedFetchLoader;
+        } else {
+            Loader = Require.FetchLoader;
+        }
         return Require.ReelLoader(config,
             Require.MappingsLoader(
                 config,
@@ -237,7 +277,7 @@ bootstrap("require/worker", function (require) {
                     config,
                     Require.MemoizedLoader(
                         config,
-                        Require.FetchLoader(config)
+                        Loader(config)
                     )
                 )
             )

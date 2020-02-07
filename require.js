@@ -1055,7 +1055,7 @@
     var syncCompilerChain;
 
     //The ShebangCompiler doesn't make sense on the client side
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" || typeof importScripts !== "undefined") {
         syncCompilerChain = function(config) {
             return Require.SerializationCompiler(
                 config,

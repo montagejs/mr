@@ -47,25 +47,23 @@ var worker;
             var mainPath, path;
             if (!this._params) {
 
-                //TODO
-                // 1. Replicate montage sniffing logic for worker
-                //    a. data-montage-location
-                //    b. Sniffing available scripts
-                // 2. Replicate dataset attribute in worker
-
-                // Find the <script> that loads us, so we can divine our
-                // parameters from its attributes.
-                mainPath = self.registration.scope.replace(/[^\/]*\.html$/, "");
-                path = PATH_TO_MR;
-                if (!path) {
-                    path = mainPath.replace(/[^\/]*\/?$/, "");
+                if (self.MontageParams) {
+                    this._params = Object.assign({}, self.MontageParams);
                 } else {
-                    path = this.resolve(mainPath, path);
+                    mainPath = self.registration.scope.replace(/[^\/]*\.html$/, "");
+                    path = PATH_TO_MR;
+                    if (!path) {
+                        path = mainPath.replace(/[^\/]*\/?$/, "");
+                    } else {
+                        path = this.resolve(mainPath, path);
+                    }
+                    this._params = {
+                        montageLocation: path
+                    };
                 }
-                this._params = {
-                    mrLocation: path,
-                    module: "/all.js"
-                };
+                if (self.MAIN_MODULE) {
+                    this._params.module = self.MAIN_MODULE;
+                }
             }
             return this._params;
         },

@@ -13,6 +13,7 @@
  // the code to register and manager the worker could be
  // moved to montage
  var PATH_TO_MR = "../";
+ var MAIN_MODULE = "/all.js"
  importScripts("../node_modules/jasmine-core/lib/jasmine-core/jasmine.js");
  importScripts("jasmine-console-reporter.js");
 
