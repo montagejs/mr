@@ -76,41 +76,4 @@ for (var property in jasmineInterface) {
  importScripts("../bootstrap.js");
 
 
-//  var jasmine = jasmineRequire.core(jasmineRequire),
-//             jasmineEnv = jasmine.getEnv(),
-//             JasmineConsoleReporter = jasmineRequire.ConsoleReporter(),
-//             jasmineInterface = jasmineRequire.interface(jasmine, jasmineEnv);
-//             global.jasmine = jasmine;
-//             global.jasmineRequire = jasmineRequire;
-//             for (var property in jasmineInterface) {
-//                 if (jasmineInterface.hasOwnProperty(property)) {
-//                     global[property] = jasmineInterface[property];
-//                 }
-//             }
-
-//             // Default reporter
-//             jasmineEnv.addReporter(jasmineInterface.jsApiReporter);
-//             jasmineEnv.addReporter(new JasmineConsoleReporter({
-//                 colors: 1,
-//                 cleanStack: 1,
-//                 verbosity: 4,
-//                 listStyle: 'indent',
-//                 activity: false,
-//                 print: console.log
-//             }));
-
-//         return self.isReadyPromise.then(function (options) {
-//             var queryParameters = options.parameters,
-//                 specString = queryParameters && queryParameters.spec || "",
-//                 filterString = specString.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'),
-//                 filterPattern = new RegExp(filterString);
-
-//             jasmineEnv.specFilter = function (spec) {
-//                 return filterPattern.test(spec.getFullName());
-//             };
-//             return mr.async("all");
-//         });
-
-
-
 

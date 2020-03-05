@@ -58,7 +58,7 @@ var worker;
                         path = this.resolve(mainPath, path);
                     }
                     this._params = {
-                        montageLocation: path
+                        mrLocation: path
                     };
                 }
                 if (self.MAIN_MODULE) {
