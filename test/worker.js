@@ -13,10 +13,9 @@
  // the code to register and manager the worker could be
  // moved to montage
  var PATH_TO_MR = "../";
- var MAIN_MODULE = "/all.js"
+ var MAIN_MODULE = "/all.js";
  importScripts("../node_modules/jasmine-core/lib/jasmine-core/jasmine.js");
  importScripts("jasmine-console-reporter.js");
-
 
  self.addEventListener("message", function (event) {
     var string = event.data,
@@ -44,11 +43,11 @@
      jasmineEnv = jasmine.getEnv(),
      jasmineInterface = jasmineRequire.interface(jasmine, jasmineEnv);
 
-global.jasmine = jasmine;
-global.jasmineRequire = jasmineRequire;
+self.jasmine = jasmine;
+self.jasmineRequire = jasmineRequire;
 for (var property in jasmineInterface) {
     if (jasmineInterface.hasOwnProperty(property)) {
-        global[property] = jasmineInterface[property];
+        self[property] = jasmineInterface[property];
     }
 }
 

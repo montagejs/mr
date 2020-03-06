@@ -25,13 +25,13 @@ var WORKER_PATH = "worker.js",
             promises = [];
 
         return registrationsPromise.then(function (workerRegistrations) {
+            var registrationsToCheck, candidate, match;
                 if (workerRegistrations && workerRegistrations.length > 0) {
                     registrationsToCheck = workerRegistrations.slice();
 
                     while (registrationsToCheck.length) {
                         candidate = registrationsToCheck.shift();
                         match = doesRegistrationMatchURL(candidate, workerURL);
-
                         if (match) {
                             promises.push(candidate.unregister());
                         }
@@ -98,4 +98,17 @@ var WORKER_PATH = "worker.js",
             return null;
         });
     };
+
+    window.onload = function () {
+        var registerButton = document.getElementById("register"),
+            unregisterButton = document.getElementById("unregister");
+
+        registerButton.addEventListener("click", function () {
+            initializeWorker();
+        });
+
+        unregisterButton.addEventListener("click", function () {
+            teardownWorker();
+        });
+    }
 })();
