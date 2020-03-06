@@ -30,7 +30,7 @@ bootstrap("require/worker", function (require) {
         if (!location) {
             activeWorker = self.serviceWorker || self.registration.active;
             scriptURL = activeWorker.scriptURL;
-            applicationPath = scriptURL.replace(/\/([\.A-Za-z0-9_-]+)*$/, "") + "/";
+            applicationPath = scriptURL.replace(/\/([\.A-Za-z0-9_-])*$/, "") + "/";
             location = URL.resolve(applicationPath, ".");
         }
         return location;

@@ -125,7 +125,7 @@ var worker;
                 if (!global.preload) {
                     var activeWorker = self.serviceWorker || self.registration.active,
                         scriptURL = activeWorker.scriptURL,
-                        applicationPath = scriptURL.replace(/\/([\.A-Za-z0-9_-]+)*$/, "") + "/",
+                        applicationPath = scriptURL.replace(/\/([\.A-Za-z0-9_-])*$/, "") + "/",
                         mrLocation = resolve(applicationPath, params.mrLocation),
                         promiseLocation = params.promiseLocation || resolve(mrLocation, pending.promise);
 
