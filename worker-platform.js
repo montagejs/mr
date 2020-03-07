@@ -80,57 +80,60 @@ var worker;
                     callback(Require, Promise, URL);
                 }
             }
+
+            var pending = {
+                "promise": "node_modules/bluebird/js/browser/bluebird.min.js",
+                "require": "require.js",
+                "require/worker": "worker.js",
+            };
+
+            var definitions = {};
+            var bootModules = {};
+            var applicationPath;
+
+            function bootRequire(id) {
+                if (!bootModules[id] && definitions[id]) {
+                    var exports = bootModules[id] = {};
+                    bootModules[id] = definitions[id](bootRequire, exports) || exports;
+                }
+                return bootModules[id];
+            }
+
+            // execute bootstrap scripts
+            function allModulesLoaded() {
+                URL = bootRequire("mini-url");
+                Promise = bootRequire("promise");
+                Require = bootRequire("require");
+                Require.getLocation = function () {
+                    return applicationPath;
+                };
+                callbackIfReady();
+            }
+
+            global.bootstrap = function (id, factory) {
+                definitions[id] = factory;
+                delete pending[id];
+                for (var module in pending) {
+                    if (pending.hasOwnProperty(module)) {
+                        // this causes the function to exit if there are any remaining
+                        // scripts loading, on the first iteration.  consider it
+                        // equivalent to an array length check
+                        return;
+                    }
+                }
+                allModulesLoaded();
+            };
+
             self.addEventListener("install", function () {
                 self.skipWaiting();
                 var activeWorker = self.serviceWorker || self.registration.installing || self.registration.active,
-                    scriptURL = activeWorker.scriptURL,
-                    applicationPath = scriptURL.replace(/\/([\.A-Za-z0-9_-])*$/, "") + "/";
+                    scriptURL = activeWorker.scriptURL;
+
+                applicationPath = scriptURL.replace(/\/([\.A-Za-z0-9_-])*$/, "") + "/";
 
                 var mrLocation, promiseLocation;
                 // determine which scripts to load
-                var pending = {
-                    "promise": "node_modules/bluebird/js/browser/bluebird.min.js",
-                    "require": "require.js",
-                    "require/worker": "worker.js",
-                };
-                // miniature module system
-                var definitions = {};
-                var bootModules = {};
 
-                function bootRequire(id) {
-                    if (!bootModules[id] && definitions[id]) {
-                        var exports = bootModules[id] = {};
-                        bootModules[id] = definitions[id](bootRequire, exports) || exports;
-                    }
-                    return bootModules[id];
-                }
-
-                // execute bootstrap scripts
-                function allModulesLoaded() {
-                    URL = bootRequire("mini-url");
-                    Promise = bootRequire("promise");
-                    Require = bootRequire("require");
-                    Require.getLocation = function () {
-                        return applicationPath;
-                    };
-                    callbackIfReady();
-                }
-
-                // register module definitions for deferred,
-                // serial execution
-                global.bootstrap = function (id, factory) {
-                    definitions[id] = factory;
-                    delete pending[id];
-                    for (var module in pending) {
-                        if (pending.hasOwnProperty(module)) {
-                            // this causes the function to exit if there are any remaining
-                            // scripts loading, on the first iteration.  consider it
-                            // equivalent to an array length check
-                            return;
-                        }
-                    }
-                    allModulesLoaded();
-                };
                 if (!global.preload) {
                     mrLocation = resolve(applicationPath, params.mrLocation);
                     promiseLocation = params.promiseLocation || resolve(mrLocation, pending.promise);
