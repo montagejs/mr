@@ -80,7 +80,13 @@ var worker;
                     callback(Require, Promise, URL);
                 }
             }
-            self.addEventListener("activate", function () {
+            self.addEventListener("install", function () {
+                self.skipWaiting();
+                var activeWorker = self.serviceWorker || self.registration.installing || self.registration.active,
+                    scriptURL = activeWorker.scriptURL,
+                    applicationPath = scriptURL.replace(/\/([\.A-Za-z0-9_-])*$/, "") + "/";
+
+                var mrLocation, promiseLocation;
                 // determine which scripts to load
                 var pending = {
                     "promise": "node_modules/bluebird/js/browser/bluebird.min.js",
@@ -104,6 +110,9 @@ var worker;
                     URL = bootRequire("mini-url");
                     Promise = bootRequire("promise");
                     Require = bootRequire("require");
+                    Require.getLocation = function () {
+                        return applicationPath;
+                    };
                     callbackIfReady();
                 }
 
@@ -123,11 +132,8 @@ var worker;
                     allModulesLoaded();
                 };
                 if (!global.preload) {
-                    var activeWorker = self.serviceWorker || self.registration.active,
-                        scriptURL = activeWorker.scriptURL,
-                        applicationPath = scriptURL.replace(/\/([\.A-Za-z0-9_-])*$/, "") + "/",
-                        mrLocation = resolve(applicationPath, params.mrLocation),
-                        promiseLocation = params.promiseLocation || resolve(mrLocation, pending.promise);
+                    mrLocation = resolve(applicationPath, params.mrLocation);
+                    promiseLocation = params.promiseLocation || resolve(mrLocation, pending.promise);
 
                     // Special Case bluebird for now:
                     worker.load(promiseLocation, function() {

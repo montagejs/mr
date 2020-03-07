@@ -2,6 +2,9 @@
 console.log('mr-testing', 'Start');
 
 function run(suiteRequire, modules) {
+    if (global.willRunTestSuite) {
+        global.willRunTestSuite();
+    }
     // Filter node:false
     modules = modules.filter(function (module) {
         if (typeof module === "object") {
@@ -122,6 +125,12 @@ module.exports = run(require, [
     {name: "spec/dot-js-module", node: false}
 ]).then(function () {
     console.log('mr-testing', 'End');
+    if (global.didRunTestSuite) {
+        global.didRunTestSuite();
+    }
 }, function (err) {
+    if (global.didRunTestSuite) {
+        global.didRunTestSuite(err);
+    }
     console.log('mr-testing', 'Fail', err, err.stack);
 });

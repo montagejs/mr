@@ -1,114 +1,27 @@
+/*global self */
 
+global.isReadyPromise.then(function (options) {
+    var client = options.client,
+        jasmineEnv = global.jasmine.getEnv(),
+        queryParameters = options.parameters,
+        specString = queryParameters && queryParameters.spec || "",
+        filterString = specString.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'),
+        filterPattern = new RegExp(filterString);
 
+    jasmineEnv.specFilter = function (spec) {
+        return filterPattern.test(spec.getFullName());
+    };
 
-var WORKER_PATH = "worker.js",
-    initializeWorker, teardownWorker;
-(function () {
-    var serviceWorker = window.navigator.serviceWorker,
-        workerPath = WORKER_PATH,
-        workerURL = urlForPath(workerPath);
-
-
-    function urlForPath(path) {
-        var anchor = window.document.createElement("a");
-        anchor.href = path;
-        return anchor.href.toString();
-    }
-
-    function doesRegistrationMatchURL(registration, workerURL) {
-        var url = registration && registration.active && registration.active.scriptURL;
-        return url && String(url) === String(workerURL);
-    }
-
-    function pruneWorkerRegistrations() {
-        var registrationsPromise = serviceWorker.getRegistrations ? serviceWorker.getRegistrations() : Promise.all([serviceWorker.getRegistration()]),
-            promises = [];
-
-        return registrationsPromise.then(function (workerRegistrations) {
-            var registrationsToCheck, candidate, match;
-                if (workerRegistrations && workerRegistrations.length > 0) {
-                    registrationsToCheck = workerRegistrations.slice();
-
-                    while (registrationsToCheck.length) {
-                        candidate = registrationsToCheck.shift();
-                        match = doesRegistrationMatchURL(candidate, workerURL);
-                        if (match) {
-                            promises.push(candidate.unregister());
-                        }
-                    }
-                }
-            return Promise.all(promises);
-        });
-    }
-
-    function registerWorker() {
-        return serviceWorker.register(workerPath, {
-            scope: window.location.pathname,
-            origin: "*"
-        }).catch(function (e) {
-            console.error(e);
-        });
-    }
-
-    var serviceWorkerIsReadyPromise;
-    function serviceWorkerIsReady() {
-        if (!serviceWorkerIsReadyPromise) {
-            serviceWorkerIsReadyPromise = new Promise(function (resolve, reject) {
-                serviceWorker.ready.then(function (result) {
-                    resolve(result);
-                });
-            });
+    // Exit early if we don't get the client.
+    // Eg, if it closed.
+    self.didRunTestSuite = function (error) {
+        if (error) {
+            client.postMessage("Tests failed to run with error :" + error.message);
+        } else {
+            client.postMessage("Tests complete");
         }
-        return serviceWorkerIsReadyPromise;
-    }
-
-    function parseQueryParameters(query) {
-        var parameters = {},
-            string = query.replace(/\+/g, " "),
-            pattern = /([^&=]+)=?([^&]*)/g,
-            match;
-            while (match = pattern.exec(string)) {
-                parameters[decodeURIComponent(match[1])] = decodeURIComponent(match[2]);
-            }
-        return parameters;
-    }
-
-    initializeWorker = function() {
-        return pruneWorkerRegistrations().then(function () {
-            return registerWorker();
-        }).then(function () {
-            return serviceWorkerIsReady();
-        }).then(function (workerRegistration) {
-            var worker = workerRegistration.active;
-            console.log("ServiceWorker initialization complete", worker);
-            // debugger;
-            worker.postMessage(JSON.stringify({
-                options: {
-                    parameters: parseQueryParameters(window.location.search.substring(1))
-                },
-                name: "init"
-            }));
-            return null;
-        });
+        global.isMrSuiteDone = true;
     };
 
-    teardownWorker = function() {
-        return pruneWorkerRegistrations().then(function () {
-            console.log("ServiceWorker teardown complete");
-            return null;
-        });
-    };
-
-    window.onload = function () {
-        var registerButton = document.getElementById("register"),
-            unregisterButton = document.getElementById("unregister");
-
-        registerButton.addEventListener("click", function () {
-            initializeWorker();
-        });
-
-        unregisterButton.addEventListener("click", function () {
-            teardownWorker();
-        });
-    }
-})();
+    require.async("./all.js");
+});

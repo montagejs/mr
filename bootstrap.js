@@ -19,9 +19,6 @@
     var globalEval = eval,
         global = globalEval('this');
 
-    //
-    //
-    //
 
     function upperCaseChar(_, c) {
         return c.toUpperCase();
@@ -94,7 +91,6 @@
         }
 
         if (typeof document !== "undefined") {
-
             script = document.createElement("script");
             script.setAttribute('async', '');
             script.setAttribute('src', location);

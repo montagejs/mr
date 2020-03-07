@@ -13,13 +13,14 @@
  // the code to register and manager the worker could be
  // moved to montage
  var PATH_TO_MR = "../";
- var MAIN_MODULE = "/all.js";
+ var MAIN_MODULE = "/run-worker.js";
  importScripts("../node_modules/jasmine-core/lib/jasmine-core/jasmine.js");
  importScripts("jasmine-console-reporter.js");
 
+ var isActivated = false, options;
  self.addEventListener("message", function (event) {
     var string = event.data,
-        data, options, name;
+        data, name;
     try {
         data = JSON.parse(string);
         name = data.name; //Included so other messages can be added in the future.
@@ -27,8 +28,11 @@
     } catch (e) {
         options = {parameters: {}};
     }
-    self.isReadyDeferred.resolve(options);
+    options.client = event.source;
+    resolveIsReadyPromise();
 });
+
+
 
  self.isReadyPromise = new Promise(function (resolve, reject) {
     self.isReadyDeferred = {
@@ -37,11 +41,25 @@
     };
  });
 
+function resolveIsReadyPromise() {
+    if (global.isMrSuiteDone) {
+        options.client.postMessage("Specs were already run. Running them again requires deleting and reinstalling the worker");
+    } else if (options && isActivated) {
+        self.isReadyDeferred.resolve(options);
+    }
+}
+self.addEventListener("activate", function () {
+    isActivated = true;
+    self.clients.claim().then(function () {
+        resolveIsReadyPromise();
+    });
+});
 
 
  var jasmine = jasmineRequire.core(jasmineRequire),
      jasmineEnv = jasmine.getEnv(),
-     jasmineInterface = jasmineRequire.interface(jasmine, jasmineEnv);
+     jasmineInterface = jasmineRequire.interface(jasmine, jasmineEnv),
+     JasmineConsoleReporter = jasmineRequire.ConsoleReporter();
 
 self.jasmine = jasmine;
 self.jasmineRequire = jasmineRequire;
@@ -51,26 +69,15 @@ for (var property in jasmineInterface) {
     }
 }
 
- self.isReadyPromise.then(function (options) {
-    var queryParameters = options.parameters,
-        specString = queryParameters && queryParameters.spec || "",
-        filterString = specString.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'),
-        filterPattern = new RegExp(filterString),
-        JasmineConsoleReporter = jasmineRequire.ConsoleReporter();
-
-        jasmineEnv.specFilter = function (spec) {
-            return filterPattern.test(spec.getFullName());
-        };
-        jasmineEnv.addReporter(jasmineInterface.jsApiReporter);
-        jasmineEnv.addReporter(new JasmineConsoleReporter({
-            colors: 1,
-            cleanStack: 1,
-            verbosity: 4,
-            listStyle: 'indent',
-            activity: false,
-            print: console.log
-        }));
- });
+jasmineEnv.addReporter(jasmineInterface.jsApiReporter);
+jasmineEnv.addReporter(new JasmineConsoleReporter({
+    colors: 1,
+    cleanStack: 1,
+    verbosity: 4,
+    listStyle: 'indent',
+    activity: false,
+    print: console.log
+}));
 
  importScripts("../bootstrap.js");
 

@@ -24,18 +24,6 @@ bootstrap("require/worker", function (require) {
     var global = globalEval('this');
     /*jshint evil:false */
 
-    var location;
-    Require.getLocation = function() {
-        var activeWorker, applicationPath, scriptURL;
-        if (!location) {
-            activeWorker = self.serviceWorker || self.registration.active;
-            scriptURL = activeWorker.scriptURL;
-            applicationPath = scriptURL.replace(/\/([\.A-Za-z0-9_-])*$/, "") + "/";
-            location = URL.resolve(applicationPath, ".");
-        }
-        return location;
-    };
-
     Require.overlays = ["browser", "montage"];
 
     function shouldTryIndexJS(url) {
