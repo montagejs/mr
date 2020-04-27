@@ -272,11 +272,11 @@
 
     // Bootstrapping for multiple-platforms
     exports.getPlatform = function() {
-        if (typeof window !== "undefined" && window && window.document) {
-            return browser;
-        } else if (typeof importScripts !== "undefined") {
+        if (typeof importScripts !== "undefined") {
             importScripts(PATH_TO_MR + "./worker-platform.js");
             return worker;
+        } else if (typeof window !== "undefined" && window && window.document) {
+            return browser;
         } else if (typeof process !== "undefined") {
             return require("./node.js");
         } else {
