@@ -10,22 +10,22 @@
     // Boostrapping Browser
     if (typeof bootstrap !== "undefined") {
 
-        // Window
-        if (typeof window !== "undefined") {
-            bootstrap("require", function (require, exports) {
-                var Promise = require("promise");
-                var URL = require("mini-url");
-                definition(exports, Promise, URL);
-                require("require/browser");
-            });
-
         // Worker
-        } else {
+        if (typeof self !== "undefined" && typeof importScripts !== "undefined") {
             bootstrap("require", function (require, exports) {
                 var Promise = require("promise").Promise;
                 var URL = require("mini-url");
                 definition(exports, Promise, URL);
                 require("require/worker");
+            });
+
+        // Window
+        } else if (typeof window !== "undefined") {
+            bootstrap("require", function (require, exports) {
+                var Promise = require("promise");
+                var URL = require("mini-url");
+                definition(exports, Promise, URL);
+                require("require/browser");
             });
         }
 
